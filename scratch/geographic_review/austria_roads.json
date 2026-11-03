@@ -1,0 +1,59 @@
+[
+  {
+    "id": 118398762,
+    "dist": 60.4,
+    "length": 1392.8,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 822592410,
+    "dist": 6.1,
+    "length": 614.9,
+    "tags": {
+      "highway": "raceway",
+      "oneway": "yes",
+      "source": "geoimage",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 1187847638,
+    "dist": 73.1,
+    "length": 339.4,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1225476079,
+    "dist": 64.1,
+    "length": 843.1,
+    "tags": {
+      "area": "yes",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1263988012,
+    "dist": 95.1,
+    "length": 75.9,
+    "tags": {
+      "highway": "service",
+      "service": "parking_aisle",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 1263988013,
+    "dist": 98.9,
+    "length": 18.2,
+    "tags": {
+      "highway": "service",
+      "service": "parking_aisle",
+      "surface": "asphalt"
+    }
+  }
+]

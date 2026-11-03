@@ -1,0 +1,45 @@
+[
+  {
+    "id": 528477357,
+    "dist": 86.7,
+    "length": 238.7,
+    "tags": {
+      "foot": "yes",
+      "highway": "service",
+      "lanes": "2",
+      "lanes:backward": "1",
+      "lanes:forward": "1",
+      "lit": "yes",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 646620862,
+    "dist": 86.7,
+    "length": 72.1,
+    "tags": {
+      "foot": "yes",
+      "highway": "service",
+      "lanes": "2",
+      "lanes:backward": "1",
+      "lanes:forward": "1",
+      "lit": "yes",
+      "surface": "asphalt",
+      "turn:lanes:backward": "through",
+      "turn:lanes:forward": "through"
+    }
+  },
+  {
+    "id": 686335807,
+    "dist": 8.5,
+    "length": 863.7,
+    "tags": {
+      "access": "private",
+      "highway": "raceway",
+      "name": "Marina Bay Street Circuit",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  }
+]

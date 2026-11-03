@@ -1,0 +1,494 @@
+{
+  "australia": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/australia_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_australian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_quarantine_zone.pdf",
+    "lap_length_m": 5278.0,
+    "corner_count": 14,
+    "start_offset_from_control_m": -30.3,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      11.0,
+      15.6
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 28119448",
+    "pit_length_m": 712.4,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "china": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/china_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_chinese_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_battery_containment_area_and_red_zone.pdf",
+    "lap_length_m": 5451.0,
+    "corner_count": 16,
+    "start_offset_from_control_m": 136.3,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      13.0,
+      17.47
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 107371138",
+    "pit_length_m": 841,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224",
+    "pit_ways": [
+      107371147,
+      107371138
+    ],
+    "pit_entry_fraction": 0.949,
+    "pit_entry_note": "Entry connector leaves the T15\u2013T16 approach; the infield/back-straight junction is not the pit split."
+  },
+  "japan": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/japan_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_japanese_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_battery_containment_area_and_red_zone.pdf",
+    "lap_length_m": 5807.0,
+    "corner_count": 18,
+    "start_offset_from_control_m": 197.4,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      10.0,
+      15.3
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 120917578",
+    "pit_length_m": 888.1,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "bahrain": {
+    "reference_year": 2025,
+    "source_pdf": "circuit_maps_2026/fia_reference/bahrain_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_bahrain_grand_prix_-_event_notes_-_circuit_map_pit_lane_quarantine_zone_and_red_zones.pdf",
+    "lap_length_m": 5412.0,
+    "corner_count": 15,
+    "start_offset_from_control_m": 278.7,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      13.0,
+      21.83
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 187123422",
+    "pit_length_m": 775.1,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "saudi": {
+    "reference_year": 2025,
+    "source_pdf": "circuit_maps_2026/fia_reference/saudi_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_saudi_arabian_grand_prix_-_event_notes_-_circuit_map_pit_lane_and_quarantine_zone.pdf",
+    "lap_length_m": 6174.0,
+    "corner_count": 27,
+    "start_offset_from_control_m": 253.1,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "right",
+    "width_range_m": [
+      12.0,
+      12.0
+    ],
+    "width_source": "FIA licensed reference width; local boundary variation unavailable",
+    "pit_reference": "OpenStreetMap ways 1121870473,1257884703,1257884704",
+    "pit_length_m": 863.2,
+    "pit_tunnel_u": [
+      0.7762938230383973,
+      0.8080133555926544
+    ],
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "miami": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/miami_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_miami_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "lap_length_m": 5412.0,
+    "corner_count": 19,
+    "start_offset_from_control_m": 165.1,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      12.0,
+      12.0
+    ],
+    "width_source": "FIA licensed reference width; local boundary variation unavailable",
+    "pit_reference": "OpenStreetMap ways 1017340352",
+    "pit_length_m": 742.5,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "canada": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/canada_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_canadian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "lap_length_m": 4361.0,
+    "corner_count": 14,
+    "start_offset_from_control_m": -22.9,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      8.0,
+      8.0
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 413000959",
+    "pit_length_m": 827.7,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "monaco": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/monaco_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_monaco_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "lap_length_m": 3337.0,
+    "corner_count": 19,
+    "start_offset_from_control_m": 2.5,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "right",
+    "width_range_m": [
+      10.0,
+      10.0
+    ],
+    "width_source": "FIA licensed reference width; local boundary variation unavailable",
+    "pit_reference": "OpenStreetMap ways 850261588",
+    "pit_length_m": 358.4,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "barcelona": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/barcelona_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_barcelona-catalunya_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "lap_length_m": 4657.0,
+    "corner_count": 14,
+    "start_offset_from_control_m": 152.5,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      11.0,
+      17.53
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 33742214,178416729,178416733",
+    "pit_length_m": 1035.5,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "austria": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/austria_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_austrian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "lap_length_m": 4326.0,
+    "corner_count": 10,
+    "start_offset_from_control_m": 121.1,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      12.0,
+      13.6
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 289111668",
+    "pit_length_m": 1006.1,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "britain": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/britain_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "lap_length_m": 5891.0,
+    "corner_count": 18,
+    "start_offset_from_control_m": 134.0,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      12.0,
+      15.49
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 227902927",
+    "pit_length_m": 1129.8,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "belgium": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/belgium_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_belgian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "lap_length_m": 7004.0,
+    "corner_count": 19,
+    "start_offset_from_control_m": 210.1,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "right",
+    "width_range_m": [
+      10.0,
+      16.4
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 323851541",
+    "pit_length_m": 724.1,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "hungary": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/hungary_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_hungarian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "lap_length_m": 4381.0,
+    "corner_count": 14,
+    "start_offset_from_control_m": 42.7,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      10.0,
+      16.02
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 231417580",
+    "pit_length_m": 1069.6,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "netherlands": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/netherlands_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_dutch_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "lap_length_m": 4259.0,
+    "corner_count": 14,
+    "start_offset_from_control_m": 108.6,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      10.0,
+      10.0
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 38144527",
+    "pit_length_m": 759.5,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "italy": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/italy_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_italian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "lap_length_m": 5793.0,
+    "corner_count": 11,
+    "start_offset_from_control_m": 250.5,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      10.0,
+      12.28
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 38168747",
+    "pit_length_m": 743.4,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "madrid": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/madrid_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_spanish_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "lap_length_m": 5414.0,
+    "corner_count": 22,
+    "start_offset_from_control_m": 205.7,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      13.4,
+      13.4
+    ],
+    "width_source": "existing nominal width; no published boundary survey available",
+    "pit_reference": "OpenStreetMap ways 1552567031",
+    "pit_length_m": 901.7,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "azerbaijan": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/azerbaijan_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_azerbaijan_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "lap_length_m": 6003.0,
+    "corner_count": 20,
+    "start_offset_from_control_m": 126.1,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "right",
+    "width_range_m": [
+      9.0,
+      9.0
+    ],
+    "width_source": "FIA licensed reference width; local boundary variation unavailable",
+    "pit_reference": "OpenStreetMap ways 1513267145",
+    "pit_length_m": 738.7,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "singapore": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/singapore_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_singapore_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "lap_length_m": 4927.0,
+    "corner_count": 19,
+    "start_offset_from_control_m": 193.4,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "right",
+    "width_range_m": [
+      9.0,
+      9.0
+    ],
+    "width_source": "FIA licensed reference width; local boundary variation unavailable",
+    "pit_reference": "OpenStreetMap ways 100484287",
+    "pit_length_m": 823.8,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "usa": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/usa_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_united_states_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "lap_length_m": 5513.0,
+    "corner_count": 20,
+    "start_offset_from_control_m": 272.9,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "right",
+    "width_range_m": [
+      13.0,
+      24.0
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 514836373",
+    "pit_length_m": 950.5,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "mexico": {
+    "reference_year": 2026,
+    "source_pdf": "circuit_maps_2026/fia_reference/mexico_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_mexico_city_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "lap_length_m": 4304.0,
+    "corner_count": 17,
+    "start_offset_from_control_m": 115.1,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      14.0,
+      17.71
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 638504647,772763791",
+    "pit_length_m": 794.3,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "brazil": {
+    "reference_year": 2025,
+    "source_pdf": "circuit_maps_2026/fia_reference/brazil_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_sao_paulo_grand_prix_-_event_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_quarantine_zone_and_red_zones_map.pdf",
+    "lap_length_m": 4309.0,
+    "corner_count": 15,
+    "start_offset_from_control_m": -4.3,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "right",
+    "width_range_m": [
+      10.0,
+      17.84
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 33779109",
+    "pit_length_m": 1379.9,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "vegas": {
+    "reference_year": 2025,
+    "source_pdf": "circuit_maps_2026/fia_reference/vegas_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_las_vegas_grand_prix_-_event_notes_-_circuit_map_v2_pit_lane_drawing_emergency_map_exits_quarantine_zone_and_red_zones.pdf",
+    "lap_length_m": 6201.0,
+    "corner_count": 17,
+    "start_offset_from_control_m": 99.2,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "right",
+    "width_range_m": [
+      13.0,
+      13.0
+    ],
+    "width_source": "FIA licensed reference width; local boundary variation unavailable",
+    "pit_reference": "OpenStreetMap ways 1223479152",
+    "pit_length_m": 489.4,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "qatar": {
+    "reference_year": 2025,
+    "source_pdf": "circuit_maps_2026/fia_reference/qatar_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_qatar_grand_prix_-_event_notes_-_circuit_map._pit_lane_drawing_emergency_exits_map_ers_battery_containment_area_red_zones_map.pdf",
+    "lap_length_m": 5419.0,
+    "corner_count": 16,
+    "start_offset_from_control_m": 283.1,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "left",
+    "width_range_m": [
+      12.0,
+      12.0
+    ],
+    "width_source": "FIA licensed reference width; local boundary variation unavailable",
+    "pit_reference": "OpenStreetMap ways 196193732,1037707300",
+    "pit_length_m": 1232.7,
+    "pit_tunnel_u": null,
+    "geometry_revision": "f3ef98dfc224"
+  },
+  "abudhabi": {
+    "reference_year": 2025,
+    "source_pdf": "circuit_maps_2026/fia_reference/abudhabi_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_abu_dhabi_grand_prix_-_event_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_quarantine_zone_and_red_zones.pdf",
+    "lap_length_m": 5281.0,
+    "corner_count": 16,
+    "start_offset_from_control_m": 118.8,
+    "slot_pitch_m": 8.0,
+    "same_column_pitch_m": 16,
+    "pole_side": "right",
+    "width_range_m": [
+      12.0,
+      15.37
+    ],
+    "width_source": "TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere",
+    "pit_reference": "OpenStreetMap ways 176695253,176695254,176695255",
+    "pit_length_m": 1128.8,
+    "pit_tunnel_u": [
+      0.5692821368948247,
+      0.6393989983305509
+    ],
+    "geometry_revision": "f3ef98dfc224"
+  }
+}

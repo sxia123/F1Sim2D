@@ -1,0 +1,78 @@
+[
+  {
+    "id": 1223479152,
+    "dist": 98.1,
+    "length": 493.0,
+    "tags": {
+      "highway": "raceway",
+      "noname": "yes",
+      "oneway": "yes",
+      "raceway": "pitlane",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 1442603643,
+    "dist": 69.0,
+    "length": 197.9,
+    "tags": {
+      "access": "private",
+      "highway": "service",
+      "lit": "yes"
+    }
+  },
+  {
+    "id": 1442603644,
+    "dist": 84.0,
+    "length": 126.6,
+    "tags": {
+      "access": "private",
+      "highway": "service",
+      "lit": "yes",
+      "service": "parking_aisle"
+    }
+  },
+  {
+    "id": 1442603646,
+    "dist": 69.0,
+    "length": 16.3,
+    "tags": {
+      "access": "private",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1442603651,
+    "dist": 84.0,
+    "length": 28.2,
+    "tags": {
+      "access": "private",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1456078470,
+    "dist": 92.1,
+    "length": 91.9,
+    "tags": {
+      "highway": "raceway",
+      "name": "Las Vegas Strip Circuit",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 1456078477,
+    "dist": 92.1,
+    "length": 208.5,
+    "tags": {
+      "highway": "raceway",
+      "name": "Las Vegas Strip Circuit",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  }
+]

@@ -1,0 +1,68 @@
+[
+  {
+    "id": 1121870473,
+    "dist": 92.2,
+    "length": 673.4,
+    "tags": {
+      "highway": "raceway",
+      "name:en": "Pit Lane",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt",
+      "width": "4"
+    }
+  },
+  {
+    "id": 1359884758,
+    "dist": 74.0,
+    "length": 724.4,
+    "tags": {
+      "highway": "raceway",
+      "layer": "-1",
+      "name": "\u062d\u0644\u0628\u0629 \u0643\u0648\u0631\u0646\u064a\u0634 \u062c\u062f\u0629",
+      "name:ar": "\u062d\u0644\u0628\u0629 \u0643\u0648\u0631\u0646\u064a\u0634 \u062c\u062f\u0629",
+      "name:en": "Jeddah Corniche Circuit",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt",
+      "wikidata": "Q102141307",
+      "wikipedia": "en:Jeddah Corniche Circuit"
+    }
+  },
+  {
+    "id": 1359884759,
+    "dist": 74.0,
+    "length": 35.0,
+    "tags": {
+      "fixme": "update when satellite imagery is available: v6 is some 234m too long",
+      "highway": "raceway",
+      "layer": "-1",
+      "name": "\u062d\u0644\u0628\u0629 \u0643\u0648\u0631\u0646\u064a\u0634 \u062c\u062f\u0629",
+      "name:ar": "\u062d\u0644\u0628\u0629 \u0643\u0648\u0631\u0646\u064a\u0634 \u062c\u062f\u0629",
+      "name:en": "Jeddah Corniche Circuit",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt",
+      "wikidata": "Q102141307",
+      "wikipedia": "en:Jeddah Corniche Circuit"
+    }
+  },
+  {
+    "id": 1359884765,
+    "dist": 74.0,
+    "length": 97.4,
+    "tags": {
+      "fixme": "Formula E version",
+      "highway": "raceway",
+      "layer": "-1",
+      "name": "\u062d\u0644\u0628\u0629 \u0643\u0648\u0631\u0646\u064a\u0634 \u062c\u062f\u0629",
+      "name:ar": "\u062d\u0644\u0628\u0629 \u0643\u0648\u0631\u0646\u064a\u0634 \u062c\u062f\u0629",
+      "name:en": "Jeddah Corniche Circuit",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt",
+      "wikidata": "Q130542519",
+      "wikipedia": "en:Jeddah ePrix"
+    }
+  }
+]

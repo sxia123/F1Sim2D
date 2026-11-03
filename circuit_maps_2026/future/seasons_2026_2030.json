@@ -1,0 +1,749 @@
+{
+  "2026": {
+    "info": {
+      "status": "confirmed",
+      "note": "Published 2026 calendar; race lengths are shortened for the game.",
+      "checked_on": "2026-11-02"
+    },
+    "tracks": [
+      {
+        "id": "australia",
+        "name": "Albert Park Circuit",
+        "city": "Melbourne",
+        "sprint": false
+      },
+      {
+        "id": "china",
+        "name": "Shanghai International Circuit",
+        "city": "Shanghai",
+        "sprint": true
+      },
+      {
+        "id": "japan",
+        "name": "Suzuka International Racing Course",
+        "city": "Suzuka",
+        "sprint": false
+      },
+      {
+        "id": "miami",
+        "name": "Miami International Autodrome",
+        "city": "Miami",
+        "sprint": true
+      },
+      {
+        "id": "canada",
+        "name": "Circuit Gilles-Villeneuve",
+        "city": "Montreal",
+        "sprint": true
+      },
+      {
+        "id": "monaco",
+        "name": "Circuit de Monaco",
+        "city": "Monte Carlo",
+        "sprint": false
+      },
+      {
+        "id": "barcelona",
+        "name": "Circuit de Barcelona-Catalunya",
+        "city": "Barcelona",
+        "sprint": false
+      },
+      {
+        "id": "austria",
+        "name": "Red Bull Ring",
+        "city": "Spielberg",
+        "sprint": false
+      },
+      {
+        "id": "britain",
+        "name": "Silverstone Circuit",
+        "city": "Silverstone",
+        "sprint": true
+      },
+      {
+        "id": "belgium",
+        "name": "Circuit de Spa-Francorchamps",
+        "city": "Spa",
+        "sprint": false
+      },
+      {
+        "id": "hungary",
+        "name": "Hungaroring",
+        "city": "Budapest",
+        "sprint": false
+      },
+      {
+        "id": "netherlands",
+        "name": "Circuit Zandvoort",
+        "city": "Zandvoort",
+        "sprint": true
+      },
+      {
+        "id": "italy",
+        "name": "Autodromo Nazionale Monza",
+        "city": "Monza",
+        "sprint": false
+      },
+      {
+        "id": "madrid",
+        "name": "Circuito de Madring",
+        "city": "Madrid",
+        "sprint": false
+      },
+      {
+        "id": "azerbaijan",
+        "name": "Baku City Circuit",
+        "city": "Baku",
+        "sprint": false
+      },
+      {
+        "id": "malaysia",
+        "name": "Sepang International Circuit",
+        "city": "Sepang",
+        "sprint": false
+      },
+      {
+        "id": "singapore",
+        "name": "Marina Bay Street Circuit",
+        "city": "Singapore",
+        "sprint": true
+      },
+      {
+        "id": "usa",
+        "name": "Circuit of the Americas",
+        "city": "Austin",
+        "sprint": false
+      },
+      {
+        "id": "mexico",
+        "name": "Autodromo Hermanos Rodriguez",
+        "city": "Mexico City",
+        "sprint": false
+      },
+      {
+        "id": "brazil",
+        "name": "Autodromo Jose Carlos Pace",
+        "city": "Interlagos",
+        "sprint": false
+      },
+      {
+        "id": "vegas",
+        "name": "Las Vegas Strip Circuit",
+        "city": "Las Vegas",
+        "sprint": false
+      },
+      {
+        "id": "qatar",
+        "name": "Lusail International Circuit",
+        "city": "Lusail",
+        "sprint": false
+      },
+      {
+        "id": "abudhabi",
+        "name": "Yas Marina Circuit",
+        "city": "Abu Dhabi",
+        "sprint": false
+      }
+    ]
+  },
+  "2027": {
+    "info": {
+      "status": "confirmed",
+      "note": "Published 2027 calendar; race lengths are shortened for the game.",
+      "checked_on": "2026-11-02"
+    },
+    "tracks": [
+      {
+        "id": "bahrain",
+        "name": "Bahrain International Circuit",
+        "city": "Sakhir",
+        "sprint": true
+      },
+      {
+        "id": "saudi",
+        "name": "Jeddah Corniche Circuit",
+        "city": "Jeddah",
+        "sprint": false
+      },
+      {
+        "id": "australia",
+        "name": "Albert Park Circuit",
+        "city": "Melbourne",
+        "sprint": true
+      },
+      {
+        "id": "japan",
+        "name": "Suzuka International Racing Course",
+        "city": "Suzuka",
+        "sprint": true
+      },
+      {
+        "id": "china",
+        "name": "Shanghai International Circuit",
+        "city": "Shanghai",
+        "sprint": false
+      },
+      {
+        "id": "miami",
+        "name": "Miami International Autodrome",
+        "city": "Miami",
+        "sprint": false
+      },
+      {
+        "id": "canada",
+        "name": "Circuit Gilles-Villeneuve",
+        "city": "Montreal",
+        "sprint": true
+      },
+      {
+        "id": "monaco",
+        "name": "Circuit de Monaco",
+        "city": "Monte Carlo",
+        "sprint": true
+      },
+      {
+        "id": "portugal",
+        "name": "Autodromo Internacional do Algarve",
+        "city": "Portimao",
+        "sprint": false
+      },
+      {
+        "id": "britain",
+        "name": "Silverstone Circuit",
+        "city": "Silverstone",
+        "sprint": true
+      },
+      {
+        "id": "austria",
+        "name": "Red Bull Ring",
+        "city": "Spielberg",
+        "sprint": false
+      },
+      {
+        "id": "belgium",
+        "name": "Circuit de Spa-Francorchamps",
+        "city": "Spa",
+        "sprint": false
+      },
+      {
+        "id": "hungary",
+        "name": "Hungaroring",
+        "city": "Budapest",
+        "sprint": false
+      },
+      {
+        "id": "italy",
+        "name": "Autodromo Nazionale Monza",
+        "city": "Monza",
+        "sprint": true
+      },
+      {
+        "id": "madrid",
+        "name": "Circuito de Madring",
+        "city": "Madrid",
+        "sprint": false
+      },
+      {
+        "id": "azerbaijan",
+        "name": "Baku City Circuit",
+        "city": "Baku",
+        "sprint": false
+      },
+      {
+        "id": "turkey",
+        "name": "Istanbul Park",
+        "city": "Istanbul",
+        "sprint": false
+      },
+      {
+        "id": "singapore",
+        "name": "Marina Bay Street Circuit",
+        "city": "Singapore",
+        "sprint": false
+      },
+      {
+        "id": "usa",
+        "name": "Circuit of the Americas",
+        "city": "Austin",
+        "sprint": false
+      },
+      {
+        "id": "mexico",
+        "name": "Autodromo Hermanos Rodriguez",
+        "city": "Mexico City",
+        "sprint": false
+      },
+      {
+        "id": "brazil",
+        "name": "Autodromo Jose Carlos Pace",
+        "city": "Interlagos",
+        "sprint": true
+      },
+      {
+        "id": "vegas",
+        "name": "Las Vegas Strip Circuit",
+        "city": "Las Vegas",
+        "sprint": false
+      },
+      {
+        "id": "qatar",
+        "name": "Lusail International Circuit",
+        "city": "Lusail",
+        "sprint": true
+      },
+      {
+        "id": "abudhabi",
+        "name": "Yas Marina Circuit",
+        "city": "Abu Dhabi",
+        "sprint": true
+      }
+    ]
+  },
+  "2028": {
+    "info": {
+      "status": "projection",
+      "note": "Game schedule based on confirmed venue agreements, not a published full calendar. Order and Sprints follow 2027; Barcelona/Spa rotate. Portugal is included only through its confirmed 2028 deal. Later renewals and replacements remain unknown.",
+      "checked_on": "2026-11-02"
+    },
+    "tracks": [
+      {
+        "id": "bahrain",
+        "name": "Bahrain International Circuit",
+        "city": "Sakhir",
+        "sprint": true
+      },
+      {
+        "id": "saudi",
+        "name": "Jeddah Corniche Circuit",
+        "city": "Jeddah",
+        "sprint": false
+      },
+      {
+        "id": "australia",
+        "name": "Albert Park Circuit",
+        "city": "Melbourne",
+        "sprint": true
+      },
+      {
+        "id": "japan",
+        "name": "Suzuka International Racing Course",
+        "city": "Suzuka",
+        "sprint": true
+      },
+      {
+        "id": "china",
+        "name": "Shanghai International Circuit",
+        "city": "Shanghai",
+        "sprint": false
+      },
+      {
+        "id": "miami",
+        "name": "Miami International Autodrome",
+        "city": "Miami",
+        "sprint": false
+      },
+      {
+        "id": "canada",
+        "name": "Circuit Gilles-Villeneuve",
+        "city": "Montreal",
+        "sprint": true
+      },
+      {
+        "id": "monaco",
+        "name": "Circuit de Monaco",
+        "city": "Monte Carlo",
+        "sprint": true
+      },
+      {
+        "id": "portugal",
+        "name": "Autodromo Internacional do Algarve",
+        "city": "Portimao",
+        "sprint": false
+      },
+      {
+        "id": "britain",
+        "name": "Silverstone Circuit",
+        "city": "Silverstone",
+        "sprint": true
+      },
+      {
+        "id": "austria",
+        "name": "Red Bull Ring",
+        "city": "Spielberg",
+        "sprint": false
+      },
+      {
+        "id": "barcelona",
+        "name": "Circuit de Barcelona-Catalunya",
+        "city": "Barcelona",
+        "sprint": false
+      },
+      {
+        "id": "hungary",
+        "name": "Hungaroring",
+        "city": "Budapest",
+        "sprint": false
+      },
+      {
+        "id": "italy",
+        "name": "Autodromo Nazionale Monza",
+        "city": "Monza",
+        "sprint": true
+      },
+      {
+        "id": "madrid",
+        "name": "Circuito de Madring",
+        "city": "Madrid",
+        "sprint": false
+      },
+      {
+        "id": "azerbaijan",
+        "name": "Baku City Circuit",
+        "city": "Baku",
+        "sprint": false
+      },
+      {
+        "id": "turkey",
+        "name": "Istanbul Park",
+        "city": "Istanbul",
+        "sprint": false
+      },
+      {
+        "id": "singapore",
+        "name": "Marina Bay Street Circuit",
+        "city": "Singapore",
+        "sprint": false
+      },
+      {
+        "id": "usa",
+        "name": "Circuit of the Americas",
+        "city": "Austin",
+        "sprint": false
+      },
+      {
+        "id": "mexico",
+        "name": "Autodromo Hermanos Rodriguez",
+        "city": "Mexico City",
+        "sprint": false
+      },
+      {
+        "id": "brazil",
+        "name": "Autodromo Jose Carlos Pace",
+        "city": "Interlagos",
+        "sprint": true
+      },
+      {
+        "id": "vegas",
+        "name": "Las Vegas Strip Circuit",
+        "city": "Las Vegas",
+        "sprint": false
+      },
+      {
+        "id": "qatar",
+        "name": "Lusail International Circuit",
+        "city": "Lusail",
+        "sprint": true
+      },
+      {
+        "id": "abudhabi",
+        "name": "Yas Marina Circuit",
+        "city": "Abu Dhabi",
+        "sprint": true
+      }
+    ]
+  },
+  "2029": {
+    "info": {
+      "status": "projection",
+      "note": "Game schedule based on confirmed venue agreements, not a published full calendar. Order and Sprints follow 2027; Barcelona/Spa rotate. Portugal is included only through its confirmed 2028 deal. Later renewals and replacements remain unknown.",
+      "checked_on": "2026-11-02"
+    },
+    "tracks": [
+      {
+        "id": "bahrain",
+        "name": "Bahrain International Circuit",
+        "city": "Sakhir",
+        "sprint": true
+      },
+      {
+        "id": "saudi",
+        "name": "Jeddah Corniche Circuit",
+        "city": "Jeddah",
+        "sprint": false
+      },
+      {
+        "id": "australia",
+        "name": "Albert Park Circuit",
+        "city": "Melbourne",
+        "sprint": true
+      },
+      {
+        "id": "japan",
+        "name": "Suzuka International Racing Course",
+        "city": "Suzuka",
+        "sprint": true
+      },
+      {
+        "id": "china",
+        "name": "Shanghai International Circuit",
+        "city": "Shanghai",
+        "sprint": false
+      },
+      {
+        "id": "miami",
+        "name": "Miami International Autodrome",
+        "city": "Miami",
+        "sprint": false
+      },
+      {
+        "id": "canada",
+        "name": "Circuit Gilles-Villeneuve",
+        "city": "Montreal",
+        "sprint": true
+      },
+      {
+        "id": "monaco",
+        "name": "Circuit de Monaco",
+        "city": "Monte Carlo",
+        "sprint": true
+      },
+      {
+        "id": "britain",
+        "name": "Silverstone Circuit",
+        "city": "Silverstone",
+        "sprint": true
+      },
+      {
+        "id": "austria",
+        "name": "Red Bull Ring",
+        "city": "Spielberg",
+        "sprint": false
+      },
+      {
+        "id": "belgium",
+        "name": "Circuit de Spa-Francorchamps",
+        "city": "Spa",
+        "sprint": false
+      },
+      {
+        "id": "hungary",
+        "name": "Hungaroring",
+        "city": "Budapest",
+        "sprint": false
+      },
+      {
+        "id": "italy",
+        "name": "Autodromo Nazionale Monza",
+        "city": "Monza",
+        "sprint": true
+      },
+      {
+        "id": "madrid",
+        "name": "Circuito de Madring",
+        "city": "Madrid",
+        "sprint": false
+      },
+      {
+        "id": "azerbaijan",
+        "name": "Baku City Circuit",
+        "city": "Baku",
+        "sprint": false
+      },
+      {
+        "id": "turkey",
+        "name": "Istanbul Park",
+        "city": "Istanbul",
+        "sprint": false
+      },
+      {
+        "id": "singapore",
+        "name": "Marina Bay Street Circuit",
+        "city": "Singapore",
+        "sprint": false
+      },
+      {
+        "id": "usa",
+        "name": "Circuit of the Americas",
+        "city": "Austin",
+        "sprint": false
+      },
+      {
+        "id": "mexico",
+        "name": "Autodromo Hermanos Rodriguez",
+        "city": "Mexico City",
+        "sprint": false
+      },
+      {
+        "id": "brazil",
+        "name": "Autodromo Jose Carlos Pace",
+        "city": "Interlagos",
+        "sprint": true
+      },
+      {
+        "id": "vegas",
+        "name": "Las Vegas Strip Circuit",
+        "city": "Las Vegas",
+        "sprint": false
+      },
+      {
+        "id": "qatar",
+        "name": "Lusail International Circuit",
+        "city": "Lusail",
+        "sprint": true
+      },
+      {
+        "id": "abudhabi",
+        "name": "Yas Marina Circuit",
+        "city": "Abu Dhabi",
+        "sprint": true
+      }
+    ]
+  },
+  "2030": {
+    "info": {
+      "status": "projection",
+      "note": "Game schedule based on confirmed venue agreements, not a published full calendar. Order and Sprints follow 2027; Barcelona/Spa rotate. Portugal is included only through its confirmed 2028 deal. Later renewals and replacements remain unknown.",
+      "checked_on": "2026-11-02"
+    },
+    "tracks": [
+      {
+        "id": "bahrain",
+        "name": "Bahrain International Circuit",
+        "city": "Sakhir",
+        "sprint": true
+      },
+      {
+        "id": "saudi",
+        "name": "Jeddah Corniche Circuit",
+        "city": "Jeddah",
+        "sprint": false
+      },
+      {
+        "id": "australia",
+        "name": "Albert Park Circuit",
+        "city": "Melbourne",
+        "sprint": true
+      },
+      {
+        "id": "japan",
+        "name": "Suzuka International Racing Course",
+        "city": "Suzuka",
+        "sprint": true
+      },
+      {
+        "id": "china",
+        "name": "Shanghai International Circuit",
+        "city": "Shanghai",
+        "sprint": false
+      },
+      {
+        "id": "miami",
+        "name": "Miami International Autodrome",
+        "city": "Miami",
+        "sprint": false
+      },
+      {
+        "id": "canada",
+        "name": "Circuit Gilles-Villeneuve",
+        "city": "Montreal",
+        "sprint": true
+      },
+      {
+        "id": "monaco",
+        "name": "Circuit de Monaco",
+        "city": "Monte Carlo",
+        "sprint": true
+      },
+      {
+        "id": "britain",
+        "name": "Silverstone Circuit",
+        "city": "Silverstone",
+        "sprint": true
+      },
+      {
+        "id": "austria",
+        "name": "Red Bull Ring",
+        "city": "Spielberg",
+        "sprint": false
+      },
+      {
+        "id": "barcelona",
+        "name": "Circuit de Barcelona-Catalunya",
+        "city": "Barcelona",
+        "sprint": false
+      },
+      {
+        "id": "hungary",
+        "name": "Hungaroring",
+        "city": "Budapest",
+        "sprint": false
+      },
+      {
+        "id": "italy",
+        "name": "Autodromo Nazionale Monza",
+        "city": "Monza",
+        "sprint": true
+      },
+      {
+        "id": "madrid",
+        "name": "Circuito de Madring",
+        "city": "Madrid",
+        "sprint": false
+      },
+      {
+        "id": "azerbaijan",
+        "name": "Baku City Circuit",
+        "city": "Baku",
+        "sprint": false
+      },
+      {
+        "id": "turkey",
+        "name": "Istanbul Park",
+        "city": "Istanbul",
+        "sprint": false
+      },
+      {
+        "id": "singapore",
+        "name": "Marina Bay Street Circuit",
+        "city": "Singapore",
+        "sprint": false
+      },
+      {
+        "id": "usa",
+        "name": "Circuit of the Americas",
+        "city": "Austin",
+        "sprint": false
+      },
+      {
+        "id": "mexico",
+        "name": "Autodromo Hermanos Rodriguez",
+        "city": "Mexico City",
+        "sprint": false
+      },
+      {
+        "id": "brazil",
+        "name": "Autodromo Jose Carlos Pace",
+        "city": "Interlagos",
+        "sprint": true
+      },
+      {
+        "id": "vegas",
+        "name": "Las Vegas Strip Circuit",
+        "city": "Las Vegas",
+        "sprint": false
+      },
+      {
+        "id": "qatar",
+        "name": "Lusail International Circuit",
+        "city": "Lusail",
+        "sprint": true
+      },
+      {
+        "id": "abudhabi",
+        "name": "Yas Marina Circuit",
+        "city": "Abu Dhabi",
+        "sprint": true
+      }
+    ]
+  }
+}

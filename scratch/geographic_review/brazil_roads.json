@@ -1,0 +1,206 @@
+[
+  {
+    "id": 138534258,
+    "dist": 76.5,
+    "length": 318.6,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 138534966,
+    "dist": 84.5,
+    "length": 151.4,
+    "tags": {
+      "access": "permissive",
+      "highway": "service",
+      "oneway": "yes"
+    }
+  },
+  {
+    "id": 138534967,
+    "dist": 91.4,
+    "length": 130.4,
+    "tags": {
+      "access": "permissive",
+      "highway": "service",
+      "oneway": "yes"
+    }
+  },
+  {
+    "id": 138567241,
+    "dist": 7.6,
+    "length": 439.4,
+    "tags": {
+      "highway": "raceway",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 189535487,
+    "dist": 44.8,
+    "length": 786.0,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 189535489,
+    "dist": 44.3,
+    "length": 58.3,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 189535491,
+    "dist": 82.7,
+    "length": 1721.2,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 859127973,
+    "dist": 91.4,
+    "length": 233.4,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 967458017,
+    "dist": 59.1,
+    "length": 78.6,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1261363882,
+    "dist": 62.3,
+    "length": 148.2,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1261363884,
+    "dist": 15.2,
+    "length": 32.9,
+    "tags": {
+      "access": "no",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1261363885,
+    "dist": 92.0,
+    "length": 4.5,
+    "tags": {
+      "access": "permissive",
+      "covered": "yes",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1261363886,
+    "dist": 93.9,
+    "length": 4.6,
+    "tags": {
+      "access": "permissive",
+      "covered": "yes",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1261363887,
+    "dist": 98.4,
+    "length": 11.0,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1261363888,
+    "dist": 96.5,
+    "length": 10.8,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1261363892,
+    "dist": 74.5,
+    "length": 53.5,
+    "tags": {
+      "access": "permissive",
+      "highway": "service",
+      "layer": "-1",
+      "tunnel": "yes"
+    }
+  },
+  {
+    "id": 1263106124,
+    "dist": 39.2,
+    "length": 5.7,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1428922101,
+    "dist": 76.0,
+    "length": 35.3,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1563667184,
+    "dist": 69.5,
+    "length": 16.2,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1563667185,
+    "dist": 78.5,
+    "length": 114.1,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1563738151,
+    "dist": 81.8,
+    "length": 10.5,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1563738152,
+    "dist": 83.7,
+    "length": 7.9,
+    "tags": {
+      "access": "permissive",
+      "highway": "service",
+      "sidewalk:left": "separate"
+    }
+  }
+]

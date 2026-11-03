@@ -1,0 +1,40 @@
+  width fit australia 4.1 0.99
+australia {'reference_year': 2026, 'start_fraction': -0.0058, 'turns': 14, 'pit_length_m': 711, 'width_range_m': [np.float64(11.0), np.float64(15.6)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [28119448]}
+  width fit china 1.9 1.0
+china {'reference_year': 2026, 'start_fraction': 0.025, 'turns': 16, 'pit_length_m': 819, 'width_range_m': [np.float64(13.0), np.float64(17.5)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [107371138]}
+  width fit japan 1.7 1.0
+japan {'reference_year': 2026, 'start_fraction': 0.034, 'turns': 18, 'pit_length_m': 888, 'width_range_m': [np.float64(10.0), np.float64(15.3)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [120917578]}
+  width fit bahrain 2.7 1.0
+bahrain {'reference_year': 2025, 'start_fraction': 0.0515, 'turns': 15, 'pit_length_m': 775, 'width_range_m': [np.float64(13.0), np.float64(21.8)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [187123422]}
+saudi {'reference_year': 2025, 'start_fraction': 0.041, 'turns': 27, 'pit_length_m': 865, 'width_range_m': [np.float64(12.0), np.float64(12.0)], 'width_source': 'FIA licensed reference width; local boundary variation unavailable', 'pit_ways': [1121870473, 1257884703, 1257884704]}
+miami {'reference_year': 2026, 'start_fraction': 0.0305, 'turns': 19, 'pit_length_m': 741, 'width_range_m': [np.float64(12.0), np.float64(12.0)], 'width_source': 'FIA licensed reference width; local boundary variation unavailable', 'pit_ways': [1017340352]}
+  width fit canada 1.3 1.0
+canada {'reference_year': 2026, 'start_fraction': -0.0052, 'turns': 14, 'pit_length_m': 827, 'width_range_m': [np.float64(8.0), np.float64(8.0)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [413000959]}
+monaco {'reference_year': 2026, 'start_fraction': 0.0008, 'turns': 19, 'pit_length_m': 357, 'width_range_m': [np.float64(10.0), np.float64(10.0)], 'width_source': 'FIA licensed reference width; local boundary variation unavailable', 'pit_ways': [850261588]}
+  width fit barcelona 6.7 0.95
+barcelona {'reference_year': 2026, 'start_fraction': 0.0328, 'turns': 14, 'pit_length_m': 1036, 'width_range_m': [np.float64(11.0), np.float64(17.5)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [33742214, 178416729, 178416733]}
+  width fit austria 1.9 1.0
+austria {'reference_year': 2026, 'start_fraction': 0.028, 'turns': 10, 'pit_length_m': 1000, 'width_range_m': [np.float64(12.0), np.float64(13.6)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [289111668]}
+  width fit britain 1.7 1.0
+britain {'reference_year': 2026, 'start_fraction': 0.0227, 'turns': 18, 'pit_length_m': 1126, 'width_range_m': [np.float64(12.0), np.float64(15.5)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [227902927]}
+  width fit belgium 1.5 1.0
+belgium {'reference_year': 2026, 'start_fraction': 0.03, 'turns': 19, 'pit_length_m': 719, 'width_range_m': [np.float64(10.0), np.float64(16.4)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [323851541]}
+  width fit hungary 1.5 1.0
+hungary {'reference_year': 2026, 'start_fraction': 0.0097, 'turns': 14, 'pit_length_m': 1067, 'width_range_m': [np.float64(10.0), np.float64(16.0)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [231417580]}
+  width fit netherlands 2.6 0.99
+netherlands {'reference_year': 2026, 'start_fraction': 0.0255, 'turns': 14, 'pit_length_m': 758, 'width_range_m': [np.float64(10.0), np.float64(10.0)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [38144527]}
+  width fit italy 1.3 1.0
+italy {'reference_year': 2026, 'start_fraction': 0.0432, 'turns': 11, 'pit_length_m': 742, 'width_range_m': [np.float64(10.0), np.float64(12.3)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [38168747]}
+madrid {'reference_year': 2026, 'start_fraction': 0.038, 'turns': 22, 'pit_length_m': 904, 'width_range_m': [np.float64(13.4), np.float64(13.4)], 'width_source': 'FIA licensed reference width; local boundary variation unavailable', 'pit_ways': [1552567031]}
+azerbaijan {'reference_year': 2026, 'start_fraction': 0.021, 'turns': 20, 'pit_length_m': 737, 'width_range_m': [np.float64(9.0), np.float64(9.0)], 'width_source': 'FIA licensed reference width; local boundary variation unavailable', 'pit_ways': [1513267145]}
+singapore {'reference_year': 2026, 'start_fraction': 0.0393, 'turns': 19, 'pit_length_m': 828, 'width_range_m': [np.float64(9.0), np.float64(9.0)], 'width_source': 'FIA licensed reference width; local boundary variation unavailable', 'pit_ways': [100484287]}
+  width fit usa 1.3 1.0
+usa {'reference_year': 2026, 'start_fraction': 0.0495, 'turns': 20, 'pit_length_m': 949, 'width_range_m': [np.float64(13.0), np.float64(24.0)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [514836373]}
+  width fit mexico 2.5 1.0
+mexico {'reference_year': 2026, 'start_fraction': 0.0267, 'turns': 17, 'pit_length_m': 794, 'width_range_m': [np.float64(14.0), np.float64(17.7)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [638504647, 772763791]}
+  width fit brazil 2.4 1.0
+brazil {'reference_year': 2025, 'start_fraction': -0.001, 'turns': 15, 'pit_length_m': 1378, 'width_range_m': [np.float64(10.0), np.float64(17.8)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [33779109]}
+vegas {'reference_year': 2025, 'start_fraction': 0.016, 'turns': 17, 'pit_length_m': 491, 'width_range_m': [np.float64(13.0), np.float64(13.0)], 'width_source': 'FIA licensed reference width; local boundary variation unavailable', 'pit_ways': [1223479152]}
+qatar {'reference_year': 2025, 'start_fraction': 0.0522, 'turns': 16, 'pit_length_m': 1235, 'width_range_m': [np.float64(12.0), np.float64(12.0)], 'width_source': 'FIA licensed reference width; local boundary variation unavailable', 'pit_ways': [196193732, 1037707300]}
+  width fit abudhabi 12.6 0.92
+abudhabi {'reference_year': 2025, 'start_fraction': 0.0225, 'turns': 16, 'pit_length_m': 1129, 'width_range_m': [np.float64(12.0), np.float64(15.4)], 'width_source': 'TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere', 'pit_ways': [176695253, 176695254, 176695255]}

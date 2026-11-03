@@ -1,0 +1,71 @@
+[
+  {
+    "id": 74783507,
+    "dist": 61.7,
+    "length": 1602.6,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 74783509,
+    "dist": 84.3,
+    "length": 499.8,
+    "tags": {
+      "highway": "service",
+      "surface": "gravel"
+    }
+  },
+  {
+    "id": 174882364,
+    "dist": 41.6,
+    "length": 374.4,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 174892441,
+    "dist": 69.3,
+    "length": 294.2,
+    "tags": {
+      "highway": "service",
+      "layer": "1"
+    }
+  },
+  {
+    "id": 175175591,
+    "dist": 84.2,
+    "length": 148.5,
+    "tags": {
+      "highway": "service",
+      "service": "parking_aisle"
+    }
+  },
+  {
+    "id": 323851541,
+    "dist": 62.6,
+    "length": 719.5,
+    "tags": {
+      "highway": "raceway",
+      "name": "Pit Lane",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 613486590,
+    "dist": 23.1,
+    "length": 542.2,
+    "tags": {
+      "highway": "raceway",
+      "old_ref": "N640",
+      "oneway": "yes",
+      "operator": "Circuit de Spa-Francorchamps",
+      "owner": "R\u00e9gion wallonne",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  }
+]

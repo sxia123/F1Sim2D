@@ -1,0 +1,353 @@
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+
+GRADE 1
+ABU DHABI - YAS MARINA                       UAE         1            5.281          Right        03.12.2027          12
+ALBERT PARK                                AUS         1            5.278            Left        24.03.2028          11
+ALGARVE                                  POR         1            4.653            Left        31.12.2026          14
+AUTODROMO HERMANOS RODRIGUEZ            MEX         1            4.304            Left        15.12.2028          14
+BAHRAIN                                  BRN         1            5.412            Left        18.04.2028          13
+BAHRAIN-OASIS CIRCUIT                       BRN         1            2.554          Right        18.04.2028          13
+BAHRAIN-OUTER CIRCUIT                       BRN         1            3.543            Left        18.04.2028          13
+BAHRAIN-PADDOCK CIRCUIT                    BRN         1            3.823            Left        18.04.2028          13
+BAHRAIN "ENDURANCE"                       BRN         1            6.299            Left        18.04.2028          13
+BAKU                                          AZE         1            6.003          Right        27.04.2026           9
+BURIRAM                                   THA         1            4.554            Left        07.07.2026          13
+CATALUNYA                                      ESP          1            4.657            Left        18.02.2028          11
+CATALUNYA MGP                                 ESP          1            4.675            Left        18.02.2028          11
+DUBAI GRAND PRIX CIRCUIT                     UAE         1             5.39            Left        09.11.2028          14
+DUBAI INTERNATIONAL CIRCUIT                  UAE         1             4.29            Left        09.11.2028          14
+FUJI SPEEDWAY                                   JPN          1            4.563            Left        11.04.2029          15
+HOCKENHEIM GRAND PRIX                       GER         1            4.574            Left        03.04.2028           9
+HUNGARORING                           HUN         1            4.381            Left        28.07.2028          10
+IGORA DRIVE                                 RUS         1            5.183          Right        09.11.2026          12
+IGORA DRIVE 4.1                              RUS         1            4.086          Right        09.11.2026          12
+IMOLA                                                ITA          1            4.909            Left        15.03.2027          10
+INDIANAPOLIS GRAND PRIX                      USA         1            4.192            Left        10.05.2028         14.326
+INTERLAGOS                                 BRA         1            4.309          Right        30.10.2028          10
+JEDDAH CORNICHE CIRCUIT                        KSA         1            6.176          Right        29.03.2028          12
+JEREZ                                           ESP          1            4.428          Right        28.02.2028          11
+LAS VEGAS GRAND PRIX                        USA         1              6.2           Right        16.11.2026          13
+MAGNY-COURS                                FRA         1            4.411          Right        15.05.2028          11
+MIAMI                                     USA         1            5.412            Left        04.05.2028          12
+MONACO                           MON         1             3.34           Right        20.05.2026          10
+MONTREAL GILLES VILLENEUVE                  CAN         1            4.361            Left        16.06.2028          10
+MONZA                                               ITA          1            5.793            Left        29.09.2027          10
+MOTORLAND ARAGON                             ESP          1            5.346          Right        14.02.2028          12
+MOTORLAND ARAGON - FIM                        ESP          1             5.08           Right        14.02.2028          12
+MOTORLAND ARAGON AEROTEST FIA                 ESP          1            5.202          Right        14.02.2028          12
+MOTORLAND ARAGON AEROTEST FIA+CM             ESP          1            5.255          Right        14.02.2028          12
+MOTORLAND ARAGON AEROTEST FIM                ESP          1            4.935          Right        14.02.2028          12
+MOTORLAND ARAGON AEROTEST FIM+CM            ESP          1            4.988          Right        14.02.2028          12
+MOTORLAND ARAGON FIA+CM                      ESP          1              5.4           Right        14.02.2028          12
+MOTORLAND ARAGON FIA+CM+MONACO             ESP          1            5.598          Right        14.02.2028          12
+MOTORLAND ARAGON FIA+MONACO                 ESP          1            5.545          Right        14.02.2028          12
+MOTORLAND ARAGON FIM+CM                      ESP          1            5.133          Right        14.02.2028          12
+MOTORLAND ARAGON FIM+CM+MONACO             ESP          1            5.331          Right        14.02.2028          12
+MUGELLO                                            ITA          1            5.245          Right        08.05.2028            9.6
+NÜRBURGRING GRAND PRIX                     GER         1            5.148            Left        04.07.2028          10
+PAUL RICARD                                  FRA         1            5.822            Left        26.07.2027          12
+PAUL RICARD - 2A                               FRA         1            4.035            Left        26.07.2027          12
+PAUL RICARD - 2ASC                             FRA         1            4.042            Left        26.07.2027          12
+PAUL RICARD - 2ASC SHORT                       FRA         1            3.471            Left        26.07.2027          12
+PAUL RICARD - 3C                               FRA         1            3.826            Left        26.07.2027          12
+QATAR - LUSAIL                             QAT         1            5.418            Left        04.10.2026          12
+
+16/04/2026                                                                                                                                 1/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+RED BULL RING - SPIELBERG                     AUT         1            4.326            Left        02.07.2026          12
+SEPANG                                MAS         1            5.543          Right        15.03.2029          15
+SILVERSTONE GRAND PRIX                      GBR         1            5.891            Left        05.07.2028          12
+SINGAPORE - MARINA BAY                        SGP         1            4.927          Right        01.10.2028           9
+SPA-FRANCORCHAMPS                             BEL          1            7.004          Right        15.07.2026          10
+ZANDVOORT                                 NLD         1            4.259            Left        31.08.2026          10
+
+
+
+
+
+16/04/2026                                                                                                                                 2/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+GRADE 2
+ABU DHABI - YAS MARINA - TRACK 2                ARE         2             4.73           Right        03.12.2027          12
+ARLINGTON                                 USA         2            4.309                     12.03.2029          12
+AUTOPOLIS                                      JPN          2            4.674          Right        27.03.2027          12
+BALATON PARK CIRCUIT                     HUN         2            4.115            Left        25.04.2028          12
+BARBER MOTORSPORTS PARK                    USA         2             3.83           Right        26.03.2027          11
+BRANDS HATCH - INDY                         GBR         2            1.944          Right        22.12.2027           9
+BRANDS HATCH GRAND PRIX                    GBR         2            3.916          Right        22.12.2027           9
+BRNO                                           CZE          2            5.403            Left        06.05.2027          15
+CANADIAN TYRE MOTORSPORT PARK              CAN         2            3.957          Right        14.07.2028          12
+CATALUNYA GP SHORT CHICANE                     ESP          2            2.995            Left        18.02.2028          11
+CATALUNYA “SHORT CIRCUIT                        ESP          2            2.977            Left        18.02.2028          11
+CHENGDU TIANFU INTERNATIONAL               CHN         2            3.265          Right        29.11.2026          16
+DETROIT GRAND PRIX STREET CIRCUIT              USA         2             2.65            Left        02.06.2026          12
+DIJON-PRENOIS                                FRA         2            3.801          Right        21.04.2029          12
+DONINGTON PARK                            GBR         2            4.003          Right        21.12.2027          10
+DONINGTON PARK - NATIONAL                   GBR         2            3.185          Right        21.12.2027          10
+EUROSPEEDWAY LAUSITZ DTM                    GER         2            3.478          Right        12.05.2028          12
+EUROSPEEDWAY LAUSITZ GRAND PRIX              GER         2            4.535          Right        12.05.2028          12
+EUROSPEEDWAY LAUSITZ GRAND PRIX              GER         2            4.535          Right        12.05.2028          12
+FIORANO                                             ITA          2            2.976            Left        05.10.2026          10
+INDIANAPOLIS ROAD COURSE                    USA         2             3.91           Right        01.05.2028          12
+INJE                                      KOR         2            3.908            Left        31.12.2026          14
+JARAMA                                         ESP          2             3.85           Right        02.03.2027          12
+LAGUNA SECA RACEWAY                        USA         2            3.602          Right        16.05.2026          12
+LE MANS BUGATTI                              FRA         2             4.18            Left        10.06.2028           9
+LHIPAO                                         TPE          2             3.56            Left        08.05.2026          14
+LIME ROCK                                  USA         2            2.448          Right        06.07.2028           9
+LONG BEACH                                USA         2            3.168            Left        23.09.2027           12.5
+MADRAS                                        IND          2            3.117            Left        21.07.2026          11
+MARRAKECH MOULAY EL HASSAN              MAR         2            1.701          Right        01.05.2027          10
+MID-OHIO                                  USA         2             3.63           Right        18.05.2027          12
+MISANO ADRIATICO                                   ITA          2            4.048            Left        12.05.2028          12
+MISANO ADRIATICO (LONG TRACK)                     ITA          2            4.226            Left        12.05.2028          12
+MOST                                           CZE          2            4.212            Left        08.04.2027          12
+NAVARRA                                        ESP          2            3.933            Left        06.03.2028          12
+NINGBO SPEEDPARK                         CHN         2             4.01           Right        02.08.2028          14
+NOGARO                                     FRA         2            3.636          Right        31.10.2027          12
+NOLA                                      USA         2             4.33           Right        17.05.2028          12
+NOLA ESSES                                 USA         2            4.423          Right        17.05.2028          12
+NORISRING                                  GER         2            2.162            Left        11.07.2027          13
+NÜRBURGRING SPRINT STRECKE                   GER         2            3.629            Left        04.07.2028          10
+NÜRBURGRING "OLDTIMER"                     GER         2            4.638            Left        04.07.2028          10
+OKAYAMA                                       JPN          2            3.703            Left        24.03.2028          12
+OSCHERSLEBEN MOTORSPORT ARENA              GER         2            3.696          Right        01.09.2026          11
+PORTLAND                                  USA         2             3.16           Right        03.06.2027          12
+QINHUANGDAO                            CHN         2             3.74            Left        25.06.2027          15
+RED BULL RING - SPIELBERG- GR2                 AUT         2            4.348            Left        02.07.2026          12
+RED BULL RING BOSS                          AUT         2            4.326            Left        02.07.2026          12
+RED BULL RING SHORT TRACK                    AUT         2            2.338            Left        02.07.2026          12
+ROAD AMERICA – ELKHART LAKE                  USA         2            6.514            Left        05.04.2029          12
+ROAD ATLANTA                              USA         2            4.088          Right        15.04.2027          12
+
+16/04/2026                                                                                                                                 3/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+SEBRING                                   USA         2            6.019            Left        31.08.2027          12
+SEPANG NORTH CIRCUIT                     MAS         2            2.807            Left        15.03.2029          11
+SIDI DAOUI                             MAR         2           4482.9           Left        14.07.2026          12
+SILVERSTONE ELMS                           GBR         2            5.891            Left        01.09.2028          12
+SILVERSTONE HISTORIC                        GBR         2            5.857            Left        15.07.2028          12
+SILVERSTONE NATIONAL                        GBR         2             2.64            Left        05.07.2028          12
+SONOMA RACEWAY                           USA         2            3.685            Left        30.03.2028          10
+SPA FRANCORCHAMPS                             BEL          2            7.004          Right        15.07.2026          10
+ST. PETERSBURG                              USA         2             2.91           Right        12.03.2027           8
+SUGO                                           JPN          2            3.704            Left        31.12.2026          10
+SURFERS PARADISE, QUEENSLAND                 AUS         2            2.795            Left        27.10.2026           9
+SUZUKA "EAST COURSE"                            JPN          2            2.243            Left        30.03.2028          10
+SYDNEY MOTORSPORTS PARK - BRABHAM           AUS         2              4.5           Right        25.11.2028          11
+SYDNEY MOTORSPORTS PARK - DRUITT             AUS         2            2.843          Right        25.11.2028          11
+SYDNEY MOTORSPORTS PARK - GARDNER            AUS         2            3.905          Right        25.11.2028          11
+THE BEND MOTORSPORTS PARK                   AUS         2             7.77                      01.12.2028          12
+THE BEND MOTORSPORTS PARK                   AUS         2             4.95                      01.12.2028          12
+THE BEND MOTORSPORTS PARK                   AUS         2             3.41                      01.12.2028          12
+THERMAL CLUB                              USA         2            4.994            Left        25.02.2028          12
+TIANMA SHAOXING                          CHN         2            3.238          Right        30.05.2028          12
+TORONTO LAKESHORE CIRCUIT                  CAN         2             2.87           Right        12.07.2026          10
+TT CIRCUIT ASSEN                             NLD         2            4.555            Left        08.04.2027          10
+TWIN RING MOTEGI GRAND PRIX                    JPN          2            4.801            Left        15.03.2027          12
+VALENCIA RICARDO TORMO                         ESP          2            4.005          Right        30.06.2027          12
+VALENCIA RICARDO TORMO - EXTERNAL               ESP          2              3.1           Right        30.06.2027          10
+VALLELUNGA INTERNATIONAL                          ITA          2            4.085          Right        07.05.2027           11.5
+ZHUHAI                                  CHN         2            4.318            Left        14.11.2028          12
+ZHUZHOU INTERNATIONAL                     CHN         2            3.774            Left        12.07.2028          12
+ZOLDER                                          BEL          2            4              Left        24.04.2027          10
+
+
+
+
+
+16/04/2026                                                                                                                                 4/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+GRADE 3
+ADELAIDE-PARKLANDS                         AUS         3             3.22           Right        12.11.2027          15
+BANGSEAN                                  THA         3             3.74            Left        27.06.2026            8.2
+BARBAGALLO                                AUS         3             2.41           Right        09.04.2026           9
+DAQING INTERNATIONAL                      CHN         3            3.164          Right        29.08.2027          12
+DUBAI CLUB CIRCUIT                          UAE         3             2.46            Left        09.11.2028          14
+DUBAI NATIONAL CIRCUIT                       UAE         3             3.56            Left        09.11.2028          14
+DUBAI NATIONAL CIRCUIT                       UAE         3             3.56            Left        09.11.2028          14
+HAMPTON DOWNS                               NZL         3             2.63           Right        07.07.2026          12
+HIDDEN VALLEY                              AUS         3             2.87            Left        02.12.2028          12
+HIGHLAND MOTORSPORT PARK                     NZL         3            3.932          Right        07.07.2026          12
+MANDALIKA                                      INA          3              4.3             Left        29.04.2028          15
+MANTORP PARK                           SWE         3            3.106            Left        28.05.2026          12
+MOTORLAND ARAGON NACIONAL FIA                 ESP          3            2.594          Right        14.02.2028          12
+MOTORLAND ARAGON NACIONAL FIA+CM             ESP          3             2.64           Right        14.02.2028          12
+MOTORLAND ARAGON NACIONAL FIM                ESP          3            2.327          Right        14.02.2028          12
+MOTORLAND ARAGON NACIONAL FIM+CM            ESP          3             2.38           Right        14.02.2028          12
+MOUNT PANORAMA - BATHURST                  AUS         3            6.213            Left        26.11.2028           9
+NEW JERSEY MOTORSPORTS PARK                 USA         3            3.503          Right        10.05.2028          11
+NURBURGRING NORDSCHLEIFE                   GER         3           25.888         Right        27.05.2028           8
+OULTON PARK                               GBR         3            4.332          Right        09.03.2027           9
+OZARK INTERNATIONAL RACEWAY                 USA         3             6.43            Left        01.05.2027          12
+PAU VILLE                                     FRA         3             2.76            Left        10.05.2026            8.5
+PERGUSA                                             ITA          3             4.95            Left        16.07.2027          10
+PHILLIP ISLAND                               AUS         3             4.48           Right        25.09.2026          10
+PINGTAN INTERNATIONAL                     CHN         3            4.555                     29.08.2027          12
+RUAPUNA                                      NZL         3             3.33            Left        07.07.2026           10.5
+SACHSENRING                                GER         3            3.645            Left        08.07.2027          12
+SALZBURGRING                              AUT         3            4.241            Left        07.08.2026          10
+SAMSUNG SPEEDWAY                         KOR         3            4.346          Right        08.04.2026          11
+SHANDONG INTERNATIONAL                   CHN         3            2.909            Left        04.07.2027          12
+SNETTERTON                               GBR         3            3.141          Right        02.04.2027          10
+TAUPO                                         NZL         3            3.321          Right        07.07.2026          12
+TERETONGA                                    NZL         3             2.61            Left        07.07.2026          10
+TOWNSVILLE                                 AUS         3             3.22           Right        09.07.2028          10
+VARANO DE MELEGARI                                ITA          3             2.36           Right        09.04.2028          10
+VELO CITTA                                  BRA         3            3.493          Right        19.03.2027          12
+
+
+
+
+
+16/04/2026                                                                                                                                 5/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+GRADE 3E
+BERLIN FORMULA E                            GER         3E            2.37            Left        10.05.2027          10
+HOMESTEAD FE                              USA         3E           3.551            Left        11.04.2028          12
+JAKARTA FE                                      INA         3E             2.4             Left        03.06.2028           9
+JEDDAH CORNICHE FE                            KSA         3E            3            Right        14.01.2028          12
+MISANO WORLD E-PRIX                                ITA         3E           3.381            Left        11.04.2027          12
+SHANGHAI FE                              CHN         3E           3.501            Left        23.05.2027          12
+TOKYO E-PRIX                                    JPN         3E           2.576          Right        28.03.2027          10
+
+
+
+
+
+16/04/2026                                                                                                                                 6/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+GRADE 3R
+ANNEAU DU RHIN                              FRA         3R            3.62            Left        24.09.2026          10
+POZNAN                                      POL         3R           4.083          Right        04.04.2026          12
+
+
+
+
+
+16/04/2026                                                                                                                                 7/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+GRADE 4
+BUENOS AIRES                              ARG         4            4.186            Left        04.10.2027          10
+JYLLANDS-RINGEN                           DEN         4              2.3             Left        21.08.2028          15
+KARI MOTOR SPEEDWAY                           IND          4              2.2           Right        31.12.2027          11
+KNOCKHILL                                 GBR         4             2.09           Right        26.06.2028            9.5
+KNUTSTORP                              SWE         4             2.07            Left        20.03.2027          12
+MONDELLO PARK                                         IRL          4            3.503            Left        01.07.2026          11
+PEMBREY                                  GBR         4             2.41            Left        13.12.2026          11
+PORSCHE LEIPZIG                              GER         4            3.723          Right        25.11.2028          12
+RIJEKA GROBNIK                             HRV         4            4.168          Right        05.09.2026          12
+
+
+
+
+
+16/04/2026                                                                                                                                 8/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+GRADE 6A
+ASPAR                                           ESP        6A           0.835          Right        24.10.2027          13
+FOZ CÔA (AUTOCROSS)                        POR        6A            1              Left        03.10.2028          16
+MAGGIORA (AUTOCROSS)                              ITA         6A            0.98           Right        31.12.2026          12
+MATSCHENBERG                              GER        6A            0.82                      15.06.2028          10
+MOLLERUSSA AX                                  ESP        6A           0.985          Right        19.09.2028          15
+MUSA BAUSKA (AUTOCROSS)                       LAT        6A            0.94            Left        24.05.2028          13
+NOVA PAKA (AUTOCROSS)                          CZE        6A            0.93            Left        02.05.2026          10
+NYIRAD (AUTOCROSS)                       HUN        6A            1.04            Left        15.05.2028          14
+PREROV (AUTOCROSS)                             CZE        6A            1            Right        15.08.2026          12
+SAINT GEORGES DE MONTAIGU                    FRA        6A            0.93           Right        11.07.2028          15
+SAINT IGNY DE VERS                             FRA        6A           0.882            Left        31.08.2028          12
+SEELOW (AUTOCROSS)                        DEU        6A            0.81            Left        08.05.2026          10
+VILKYCIAI AX                                   LTU        6A           1.063          Right        16.04.2028          10
+
+
+
+
+
+16/04/2026                                                                                                                                 9/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+GRADE 6R
+ESTERING (RALLYCROSS)                        GER         6R           0.952          Right        15.05.2028          10
+HONG KONG CITY CIRCUIT                      HKG        6R           0.735            Left        10.11.2026          10
+HÖLJES RALLYCROSS                         SWE        6R            1.21           Right        29.06.2026          10
+ISTANBUL PARK                              TUR         6R           1.346            Left        08.11.2027          12
+KILLARNEY RX                                    ZAF         6R            1.06           Right        06.10.2026          10
+MAGGIORA RALLYCROSS                               ITA         6R           1.016          Right        31.12.2026          12
+METTET RALLYCROSS                               BEL         6R            1.13           Right        04.08.2027          10
+VILKYCIAI RX                                   LTU         6R           0.872          Right        16.04.2028          10
+
+
+
+
+
+16/04/2026                                                                                                                             10/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+GRADE 6RW
+KYMIRING                                           FIN      6RW           1.15           Right        20.08.2028          12
+LOUSADA (RALLYCROSS )                       POR      6RW           0.91                      29.05.2028          11
+NYIRAD RALLYCROSS                       HUN      6RW           1.29            Left        15.05.2028          15
+
+
+
+
+
+16/04/2026                                                                                                                             11/12
+                                             LIST OF FIA LICENSED CIRCUITS
+
+UPDATED ON : 2026-03-31
+
+                                                                        LAP DISTANCE      POLE      LICENCE EXPIRYCIRCUIT NAME                             COUNTRY  LICENCE GRADE                                            REFERENCE WIDTH                                                                                  (km)        POSITION        DATE
+GRADE FE
+JARAMA FE                                       ESP          FE           3.931                     20.03.2029          12
+LONDON EXCEL ARENA FE                      GBR         FE          2086          Right        24.07.2028          12
+MEXICO FE                              MEX         FE            2.63            Left        10.01.2029          10
+MIAMI LOOP FE                              USA         FE           2.323                     29.01.2029          12
+
+
+
+
+
+16/04/2026                                                                                                                             12/12

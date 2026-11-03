@@ -1,0 +1,57 @@
+[
+  {
+    "id": 168477013,
+    "dist": 23.6,
+    "length": 1671.4,
+    "tags": {
+      "highway": "raceway",
+      "name": "Yas Marina Circuit",
+      "name:en": "Yas Marina Circuit",
+      "name:fr": "Circuit Yas Marina",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 176695254,
+    "dist": 96.3,
+    "length": 646.3,
+    "tags": {
+      "highway": "raceway",
+      "name": "Pit Lane",
+      "name:en": "Pit Lane",
+      "oneway": "yes",
+      "sport": "motor"
+    }
+  },
+  {
+    "id": 188855496,
+    "dist": 64.7,
+    "length": 84.5,
+    "tags": {
+      "access": "private",
+      "highway": "service",
+      "service": "driveway"
+    }
+  },
+  {
+    "id": 188855500,
+    "dist": 98.3,
+    "length": 23.8,
+    "tags": {
+      "access": "private",
+      "highway": "service",
+      "service": "driveway"
+    }
+  },
+  {
+    "id": 188855506,
+    "dist": 64.7,
+    "length": 504.2,
+    "tags": {
+      "access": "private",
+      "highway": "service"
+    }
+  }
+]

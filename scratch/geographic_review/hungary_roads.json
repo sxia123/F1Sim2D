@@ -1,0 +1,94 @@
+[
+  {
+    "id": 230935179,
+    "dist": 89.4,
+    "length": 86.0,
+    "tags": {
+      "access": "customers",
+      "highway": "service",
+      "service": "driveway"
+    }
+  },
+  {
+    "id": 230935180,
+    "dist": 58.7,
+    "length": 309.4,
+    "tags": {
+      "access": "customers",
+      "highway": "service",
+      "service": "driveway"
+    }
+  },
+  {
+    "id": 231344936,
+    "dist": 58.8,
+    "length": 2409.3,
+    "tags": {
+      "access": "customers",
+      "highway": "service",
+      "service": "driveway"
+    }
+  },
+  {
+    "id": 231344940,
+    "dist": 86.4,
+    "length": 198.4,
+    "tags": {
+      "access": "customers",
+      "highway": "service",
+      "service": "driveway"
+    }
+  },
+  {
+    "id": 231414063,
+    "dist": 86.4,
+    "length": 760.0,
+    "tags": {
+      "access": "customers",
+      "highway": "service",
+      "service": "driveway"
+    }
+  },
+  {
+    "id": 231417580,
+    "dist": 34.5,
+    "length": 1067.4,
+    "tags": {
+      "highway": "raceway",
+      "lanes": "1",
+      "name": "Bokszutca",
+      "name:en": "Pit Lane",
+      "oneway": "yes",
+      "smoothness": "excellent",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 611998435,
+    "dist": 58.8,
+    "length": 99.6,
+    "tags": {
+      "access": "customers",
+      "highway": "service",
+      "service": "driveway"
+    }
+  },
+  {
+    "id": 1333262244,
+    "dist": 19.1,
+    "length": 778.9,
+    "tags": {
+      "highway": "raceway",
+      "lanes": "2",
+      "name": "Hungaroring",
+      "oneway": "yes",
+      "smoothness": "excellent",
+      "sport": "motor",
+      "start_date": "1986-03-24",
+      "surface": "asphalt",
+      "width": "15",
+      "wikidata": "Q171356",
+      "wikipedia": "en:Hungaroring"
+    }
+  }
+]

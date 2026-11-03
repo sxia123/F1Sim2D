@@ -1,0 +1,119 @@
+[
+  {
+    "id": 4229658,
+    "dist": 0.6,
+    "length": 40.2,
+    "tags": {
+      "highway": "service",
+      "lit": "yes",
+      "motor_vehicle": "destination",
+      "name": "Place du Casino",
+      "name:etymology": "Casino de Monte Carlo",
+      "name:etymology:wikidata": "Q1779905",
+      "name:etymology:wikipedia": "fr:Casino de Monte Carlo",
+      "oneway": "yes",
+      "sidewalk": "right",
+      "surface": "asphalt",
+      "wikidata": "Q95598843"
+    }
+  },
+  {
+    "id": 161752645,
+    "dist": 30.2,
+    "length": 27.0,
+    "tags": {
+      "bicycle": "yes",
+      "highway": "service",
+      "lit": "yes",
+      "motor_vehicle": "destination",
+      "name": "Avenue de Monte-Carlo",
+      "name:etymology": "Monte-Carlo",
+      "name:etymology:wikidata": "Q45240",
+      "name:etymology:wikipedia": "fr:Monte-Carlo",
+      "oneway": "yes",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 161769679,
+    "dist": 80.0,
+    "length": 31.3,
+    "tags": {
+      "highway": "service",
+      "service": "driveway"
+    }
+  },
+  {
+    "id": 177232619,
+    "dist": 12.5,
+    "length": 155.6,
+    "tags": {
+      "highway": "service",
+      "lit": "yes",
+      "maxspeed": "50",
+      "name": "All\u00e9es des Boulingrins",
+      "oneway": "yes",
+      "sidewalk": "right",
+      "surface": "asphalt",
+      "wikidata": "Q96216512"
+    }
+  },
+  {
+    "id": 177232625,
+    "dist": 56.1,
+    "length": 28.4,
+    "tags": {
+      "highway": "service",
+      "oneway": "yes"
+    }
+  },
+  {
+    "id": 308214646,
+    "dist": 9.5,
+    "length": 24.6,
+    "tags": {
+      "highway": "service",
+      "name": "Avenue des Beaux-Arts",
+      "oneway": "no",
+      "wikidata": "Q98924895"
+    }
+  },
+  {
+    "id": 778494662,
+    "dist": 20.6,
+    "length": 22.8,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 778494667,
+    "dist": 42.5,
+    "length": 51.0,
+    "tags": {
+      "highway": "service",
+      "oneway": "yes",
+      "smoothness": "good",
+      "surface": "paving_stones"
+    }
+  },
+  {
+    "id": 809470170,
+    "dist": 53.8,
+    "length": 35.3,
+    "tags": {
+      "highway": "service",
+      "smoothness": "excellent",
+      "surface": "paving_stones"
+    }
+  },
+  {
+    "id": 1202361379,
+    "dist": 48.8,
+    "length": 21.3,
+    "tags": {
+      "highway": "service",
+      "oneway": "yes"
+    }
+  }
+]

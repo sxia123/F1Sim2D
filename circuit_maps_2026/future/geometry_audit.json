@@ -1,0 +1,33 @@
+{
+  "portugal": {
+    "reference_year": 2021,
+    "fit_rms_px": 0.4,
+    "pit_ways": [
+      157790380
+    ],
+    "pit_length_m": 1223,
+    "start_fraction": 0.03375,
+    "turns": 15
+  },
+  "turkey": {
+    "reference_year": 2021,
+    "fit_rms_px": 16.83,
+    "pit_ways": [
+      295742111
+    ],
+    "pit_length_m": 908,
+    "start_fraction": 0.044,
+    "turns": 14
+  },
+  "malaysia": {
+    "reference_year": 2026,
+    "fit_rms_px": 1.12,
+    "pit_ways": [
+      23410526,
+      144359483
+    ],
+    "pit_length_m": 990,
+    "start_fraction": 0.02025,
+    "turns": 15
+  }
+}

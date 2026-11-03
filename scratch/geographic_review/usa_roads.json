@@ -1,0 +1,70 @@
+[
+  {
+    "id": 118258939,
+    "dist": 22.3,
+    "length": 682.7,
+    "tags": {
+      "highway": "raceway",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 514755105,
+    "dist": 64.3,
+    "length": 98.2,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 514836373,
+    "dist": 13.2,
+    "length": 949.1,
+    "tags": {
+      "highway": "raceway",
+      "name": "Pit Lane",
+      "oneway": "yes",
+      "sport": "motor"
+    }
+  },
+  {
+    "id": 741114682,
+    "dist": 95.7,
+    "length": 980.0,
+    "tags": {
+      "highway": "raceway",
+      "lit": "yes",
+      "name": "COTA Karting",
+      "oneway": "yes",
+      "sport": "karting",
+      "surface": "asphalt",
+      "website": "https://circuitoftheamericas.com/karting/"
+    }
+  },
+  {
+    "id": 847606830,
+    "dist": 57.7,
+    "length": 1566.0,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 997478694,
+    "dist": 38.9,
+    "length": 1339.9,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1146324826,
+    "dist": 67.9,
+    "length": 43.7,
+    "tags": {
+      "highway": "service"
+    }
+  }
+]

@@ -1,0 +1,199 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><title>F1Sim2D circuit geometry review</title>
+<style>body{margin:32px;background:#10131b;color:#e8edf6;font:16px system-ui}header{max-width:950px}a{color:#75d9ff}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(380px,1fr));gap:24px}article{background:#191f2b;padding:16px;border:1px solid #394052;border-radius:8px}h2{font-size:20px}img{width:100%;height:290px;object-fit:contain}.note{font-size:13px;color:#afb9ca}</style>
+<header><h1>F1Sim2D — circuit geometry review</h1>
+<p>All 24 game circuits use geographic GP centerlines and independent pit roads, with FIA start/control landmarks and turn numbering. Geographic aspect ratios are preserved. Grid slots are eight metres apart, sixteen metres in the same column.</p>
+<p>These maps are reference-matched approximations, not survey models. Fourteen circuits use spatially matched satellite-derived width variation above the FIA reference width. Others retain FIA reference widths; Madrid uses the existing nominal width. Pit speed lines and garage allocations remain simulation placements. Aero/OVT zones are simulation-generated, not verified 2026 race-control overlays.</p>
+<p>Eighteen main drawings are 2026 editions. Bahrain, Saudi Arabia, Brazil, Las Vegas, Qatar and Abu Dhabi use 2025 baselines (six editions); see each source below. Pole sides also use the FIA circuit register and explicitly labelled 2025 pit drawings. The Madrid pole side remains an assumption pending a labelled source.</p>
+<p><a href="geometry_audit.json">Machine-readable geometry audit</a> · <a href="game_maps_review.png">All maps contact sheet</a> · <a href="../sim/track_layouts.LICENSE.md">Data attribution</a></p></header><main><article><h2>Albert Park Circuit</h2>
+      <a href="../scratch/final_map_review/australia.png"><img src="../scratch/final_map_review/australia.png" alt="Albert Park Circuit game map"></a>
+      <p>2026 FIA drawing · 14 turns · 5278 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 11.0–15.6 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/australia_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/australia_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/australia.png">Starting grid</a></p></article><article><h2>Shanghai International Circuit</h2>
+      <a href="../scratch/final_map_review/china.png"><img src="../scratch/final_map_review/china.png" alt="Shanghai International Circuit game map"></a>
+      <p>2026 FIA drawing · 16 turns · 5451 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 13.0–17.5 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/china_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/china_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/china.png">Starting grid</a></p></article><article><h2>Suzuka International Racing Course</h2>
+      <a href="../scratch/final_map_review/japan.png"><img src="../scratch/final_map_review/japan.png" alt="Suzuka International Racing Course game map"></a>
+      <p>2026 FIA drawing · 18 turns · 5807 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 10.0–15.3 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/japan_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/japan_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/japan.png">Starting grid</a></p></article><article><h2>Bahrain International Circuit</h2>
+      <a href="../scratch/final_map_review/bahrain.png"><img src="../scratch/final_map_review/bahrain.png" alt="Bahrain International Circuit game map"></a>
+      <p>2025 FIA drawing · 15 turns · 5412 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 13.0–21.8 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/bahrain_2025.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/bahrain_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/bahrain.png">Starting grid</a></p></article><article><h2>Jeddah Corniche Circuit</h2>
+      <a href="../scratch/final_map_review/saudi.png"><img src="../scratch/final_map_review/saudi.png" alt="Jeddah Corniche Circuit game map"></a>
+      <p>2025 FIA drawing · 27 turns · 6174 m<br>
+      Pole: right · Grid: 8 m stagger / 16 m same column<br>
+      Width: 12.0–12.0 m</p>
+      <p class="note">FIA licensed reference width; local boundary variation unavailable</p>
+      <p><a href="../circuit_maps_2026/fia_reference/saudi_2025.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/saudi_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/saudi.png">Starting grid</a></p></article><article><h2>Miami International Autodrome</h2>
+      <a href="../scratch/final_map_review/miami.png"><img src="../scratch/final_map_review/miami.png" alt="Miami International Autodrome game map"></a>
+      <p>2026 FIA drawing · 19 turns · 5412 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 12.0–12.0 m</p>
+      <p class="note">FIA licensed reference width; local boundary variation unavailable</p>
+      <p><a href="../circuit_maps_2026/fia_reference/miami_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/miami_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/miami.png">Starting grid</a></p></article><article><h2>Circuit Gilles-Villeneuve</h2>
+      <a href="../scratch/final_map_review/canada.png"><img src="../scratch/final_map_review/canada.png" alt="Circuit Gilles-Villeneuve game map"></a>
+      <p>2026 FIA drawing · 14 turns · 4361 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 8.0–8.0 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/canada_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/canada_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/canada.png">Starting grid</a></p></article><article><h2>Circuit de Monaco</h2>
+      <a href="../scratch/final_map_review/monaco.png"><img src="../scratch/final_map_review/monaco.png" alt="Circuit de Monaco game map"></a>
+      <p>2026 FIA drawing · 19 turns · 3337 m<br>
+      Pole: right · Grid: 8 m stagger / 16 m same column<br>
+      Width: 10.0–10.0 m</p>
+      <p class="note">FIA licensed reference width; local boundary variation unavailable</p>
+      <p><a href="../circuit_maps_2026/fia_reference/monaco_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/monaco_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/monaco.png">Starting grid</a></p></article><article><h2>Circuit de Barcelona-Catalunya</h2>
+      <a href="../scratch/final_map_review/barcelona.png"><img src="../scratch/final_map_review/barcelona.png" alt="Circuit de Barcelona-Catalunya game map"></a>
+      <p>2026 FIA drawing · 14 turns · 4657 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 11.0–17.5 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/barcelona_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/barcelona_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/barcelona.png">Starting grid</a></p></article><article><h2>Red Bull Ring</h2>
+      <a href="../scratch/final_map_review/austria.png"><img src="../scratch/final_map_review/austria.png" alt="Red Bull Ring game map"></a>
+      <p>2026 FIA drawing · 10 turns · 4326 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 12.0–13.6 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/austria_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/austria_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/austria.png">Starting grid</a></p></article><article><h2>Silverstone Circuit</h2>
+      <a href="../scratch/final_map_review/britain.png"><img src="../scratch/final_map_review/britain.png" alt="Silverstone Circuit game map"></a>
+      <p>2026 FIA drawing · 18 turns · 5891 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 12.0–15.5 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/britain_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/britain_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/britain.png">Starting grid</a></p></article><article><h2>Circuit de Spa-Francorchamps</h2>
+      <a href="../scratch/final_map_review/belgium.png"><img src="../scratch/final_map_review/belgium.png" alt="Circuit de Spa-Francorchamps game map"></a>
+      <p>2026 FIA drawing · 19 turns · 7004 m<br>
+      Pole: right · Grid: 8 m stagger / 16 m same column<br>
+      Width: 10.0–16.4 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/belgium_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/belgium_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/belgium.png">Starting grid</a></p></article><article><h2>Hungaroring</h2>
+      <a href="../scratch/final_map_review/hungary.png"><img src="../scratch/final_map_review/hungary.png" alt="Hungaroring game map"></a>
+      <p>2026 FIA drawing · 14 turns · 4381 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 10.0–16.0 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/hungary_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/hungary_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/hungary.png">Starting grid</a></p></article><article><h2>Circuit Zandvoort</h2>
+      <a href="../scratch/final_map_review/netherlands.png"><img src="../scratch/final_map_review/netherlands.png" alt="Circuit Zandvoort game map"></a>
+      <p>2026 FIA drawing · 14 turns · 4259 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 10.0–10.0 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/netherlands_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/netherlands_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/netherlands.png">Starting grid</a></p></article><article><h2>Autodromo Nazionale Monza</h2>
+      <a href="../scratch/final_map_review/italy.png"><img src="../scratch/final_map_review/italy.png" alt="Autodromo Nazionale Monza game map"></a>
+      <p>2026 FIA drawing · 11 turns · 5793 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 10.0–12.3 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/italy_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/italy_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/italy.png">Starting grid</a></p></article><article><h2>Circuito de Madring</h2>
+      <a href="../scratch/final_map_review/madrid.png"><img src="../scratch/final_map_review/madrid.png" alt="Circuito de Madring game map"></a>
+      <p>2026 FIA drawing · 22 turns · 5414 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 13.4–13.4 m</p>
+      <p class="note">existing nominal width; no published boundary survey available</p>
+      <p><a href="../circuit_maps_2026/fia_reference/madrid_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/madrid_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/madrid.png">Starting grid</a></p></article><article><h2>Baku City Circuit</h2>
+      <a href="../scratch/final_map_review/azerbaijan.png"><img src="../scratch/final_map_review/azerbaijan.png" alt="Baku City Circuit game map"></a>
+      <p>2026 FIA drawing · 20 turns · 6003 m<br>
+      Pole: right · Grid: 8 m stagger / 16 m same column<br>
+      Width: 9.0–9.0 m</p>
+      <p class="note">FIA licensed reference width; local boundary variation unavailable</p>
+      <p><a href="../circuit_maps_2026/fia_reference/azerbaijan_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/azerbaijan_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/azerbaijan.png">Starting grid</a></p></article><article><h2>Marina Bay Street Circuit</h2>
+      <a href="../scratch/final_map_review/singapore.png"><img src="../scratch/final_map_review/singapore.png" alt="Marina Bay Street Circuit game map"></a>
+      <p>2026 FIA drawing · 19 turns · 4927 m<br>
+      Pole: right · Grid: 8 m stagger / 16 m same column<br>
+      Width: 9.0–9.0 m</p>
+      <p class="note">FIA licensed reference width; local boundary variation unavailable</p>
+      <p><a href="../circuit_maps_2026/fia_reference/singapore_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/singapore_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/singapore.png">Starting grid</a></p></article><article><h2>Circuit of the Americas</h2>
+      <a href="../scratch/final_map_review/usa.png"><img src="../scratch/final_map_review/usa.png" alt="Circuit of the Americas game map"></a>
+      <p>2026 FIA drawing · 20 turns · 5513 m<br>
+      Pole: right · Grid: 8 m stagger / 16 m same column<br>
+      Width: 13.0–24.0 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/usa_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/usa_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/usa.png">Starting grid</a></p></article><article><h2>Autodromo Hermanos Rodriguez</h2>
+      <a href="../scratch/final_map_review/mexico.png"><img src="../scratch/final_map_review/mexico.png" alt="Autodromo Hermanos Rodriguez game map"></a>
+      <p>2026 FIA drawing · 17 turns · 4304 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 14.0–17.7 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/mexico_2026.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/mexico_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/mexico.png">Starting grid</a></p></article><article><h2>Autodromo Jose Carlos Pace</h2>
+      <a href="../scratch/final_map_review/brazil.png"><img src="../scratch/final_map_review/brazil.png" alt="Autodromo Jose Carlos Pace game map"></a>
+      <p>2025 FIA drawing · 15 turns · 4309 m<br>
+      Pole: right · Grid: 8 m stagger / 16 m same column<br>
+      Width: 10.0–17.8 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/brazil_2025.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/brazil_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/brazil.png">Starting grid</a></p></article><article><h2>Las Vegas Strip Circuit</h2>
+      <a href="../scratch/final_map_review/vegas.png"><img src="../scratch/final_map_review/vegas.png" alt="Las Vegas Strip Circuit game map"></a>
+      <p>2025 FIA drawing · 17 turns · 6201 m<br>
+      Pole: right · Grid: 8 m stagger / 16 m same column<br>
+      Width: 13.0–13.0 m</p>
+      <p class="note">FIA licensed reference width; local boundary variation unavailable</p>
+      <p><a href="../circuit_maps_2026/fia_reference/vegas_2025.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/vegas_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/vegas.png">Starting grid</a></p></article><article><h2>Lusail International Circuit</h2>
+      <a href="../scratch/final_map_review/qatar.png"><img src="../scratch/final_map_review/qatar.png" alt="Lusail International Circuit game map"></a>
+      <p>2025 FIA drawing · 16 turns · 5419 m<br>
+      Pole: left · Grid: 8 m stagger / 16 m same column<br>
+      Width: 12.0–12.0 m</p>
+      <p class="note">FIA licensed reference width; local boundary variation unavailable</p>
+      <p><a href="../circuit_maps_2026/fia_reference/qatar_2025.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/qatar_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/qatar.png">Starting grid</a></p></article><article><h2>Yas Marina Circuit</h2>
+      <a href="../scratch/final_map_review/abudhabi.png"><img src="../scratch/final_map_review/abudhabi.png" alt="Yas Marina Circuit game map"></a>
+      <p>2025 FIA drawing · 16 turns · 5281 m<br>
+      Pole: right · Grid: 8 m stagger / 16 m same column<br>
+      Width: 12.0–15.4 m</p>
+      <p class="note">TUMFTM satellite width variation above FIA reference width; matched within 12m of unchanged roadway; FIA reference elsewhere</p>
+      <p><a href="../circuit_maps_2026/fia_reference/abudhabi_2025.pdf">Official circuit / pit drawing</a> ·
+      <a href="../scratch/accurate_review/abudhabi_overlay.png">Reference overlay</a> ·
+      <a href="../scratch/final_grid_review/abudhabi.png">Starting grid</a></p></article></main></html>

@@ -1,0 +1,95 @@
+[
+  {
+    "id": 107371138,
+    "dist": 15.1,
+    "length": 754.5,
+    "tags": {
+      "highway": "raceway",
+      "sport": "motor"
+    }
+  },
+  {
+    "id": 132638863,
+    "dist": 30.7,
+    "length": 93.6,
+    "tags": {
+      "highway": "service",
+      "layer": "-1",
+      "tunnel": "yes"
+    }
+  },
+  {
+    "id": 132638889,
+    "dist": 30.7,
+    "length": 152.9,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 156328670,
+    "dist": 26.7,
+    "length": 5459.1,
+    "tags": {
+      "highway": "raceway",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 156341852,
+    "dist": 63.2,
+    "length": 168.4,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 156341854,
+    "dist": 98.2,
+    "length": 829.4,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 156341855,
+    "dist": 29.1,
+    "length": 102.7,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 157875784,
+    "dist": 58.1,
+    "length": 387.2,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 157875810,
+    "dist": 83.2,
+    "length": 1455.1,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 157884737,
+    "dist": 15.6,
+    "length": 847.3,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1270619350,
+    "dist": 75.8,
+    "length": 409.3,
+    "tags": {
+      "highway": "service"
+    }
+  }
+]

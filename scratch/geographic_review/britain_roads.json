@@ -1,0 +1,75 @@
+[
+  {
+    "id": 3571477,
+    "dist": 6.8,
+    "length": 350.0,
+    "tags": {
+      "highway": "raceway",
+      "name": "National Pit Straight",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 126446846,
+    "dist": 68.3,
+    "length": 420.3,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 227838385,
+    "dist": 17.7,
+    "length": 1006.9,
+    "tags": {
+      "highway": "raceway",
+      "name": "National pit lane",
+      "oneway": "yes",
+      "raceway": "pit_lane",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 437429285,
+    "dist": 98.6,
+    "length": 260.4,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 507993018,
+    "dist": 17.7,
+    "length": 56.5,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 507993020,
+    "dist": 39.4,
+    "length": 56.3,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 606774713,
+    "dist": 97.1,
+    "length": 84.7,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1544835784,
+    "dist": 68.4,
+    "length": 196.2,
+    "tags": {
+      "highway": "service"
+    }
+  }
+]

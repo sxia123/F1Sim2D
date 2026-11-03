@@ -1,0 +1,126 @@
+[
+  {
+    "id": 38144527,
+    "dist": 13.5,
+    "length": 757.7,
+    "tags": {
+      "access": "private",
+      "amenity": "circuit",
+      "highway": "raceway",
+      "name": "Pitstraat",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 121541642,
+    "dist": 67.3,
+    "length": 1117.8,
+    "tags": {
+      "highway": "service",
+      "service": "parking_aisle",
+      "surface": "paved"
+    }
+  },
+  {
+    "id": 121541643,
+    "dist": 71.5,
+    "length": 15.4,
+    "tags": {
+      "highway": "service",
+      "service": "parking_aisle"
+    }
+  },
+  {
+    "id": 121541645,
+    "dist": 67.3,
+    "length": 15.2,
+    "tags": {
+      "highway": "service",
+      "service": "parking_aisle"
+    }
+  },
+  {
+    "id": 186321841,
+    "dist": 29.0,
+    "length": 364.0,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 473906386,
+    "dist": 85.5,
+    "length": 252.6,
+    "tags": {
+      "highway": "service",
+      "oneway": "no"
+    }
+  },
+  {
+    "id": 765476840,
+    "dist": 73.0,
+    "length": 182.9,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 765476845,
+    "dist": 99.0,
+    "length": 202.9,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1311522211,
+    "dist": 70.3,
+    "length": 670.0,
+    "tags": {
+      "access": "private",
+      "highway": "raceway",
+      "note": "Het Circuit is gemapt over de Bing Maps luchtfoto, die wel iets naast die van PDOK zit. De reden is dat de Bing Maps luchtfoto van latere datum was en daardoor meer liet zien van het vernieuwde circuit. (O'tR 2024)",
+      "old_name": "Vermeulen End",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt",
+      "width": "10",
+      "wikidata": "Q173083",
+      "wikipedia": "nl:Circuit Zandvoort"
+    }
+  },
+  {
+    "id": 1311522215,
+    "dist": 87.2,
+    "length": 52.7,
+    "tags": {
+      "access": "private",
+      "highway": "raceway",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt",
+      "width": "10",
+      "wikidata": "Q173083",
+      "wikipedia": "nl:Circuit Zandvoort"
+    }
+  },
+  {
+    "id": 1311522216,
+    "dist": 49.7,
+    "length": 133.3,
+    "tags": {
+      "access": "private",
+      "description": "Helling 32% / 18 graden",
+      "highway": "raceway",
+      "name": "Hugenholtzbocht",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt",
+      "width": "10",
+      "wikidata": "Q173083",
+      "wikipedia": "nl:Circuit Zandvoort"
+    }
+  }
+]

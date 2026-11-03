@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIA Formula 1 2026 World Championship — Pit Wall &amp; Broadcast Telemetry</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Titillium+Web:ital,wght@0,400;0,600;0,700;0,900;1,700;1,900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- FOM BROADCAST TOP HEADER -->
+    <header class="topbar">
+      <div class="brand-cluster">
+        <div class="f1-mark" aria-label="F1 26">
+          <svg width="54" height="20" viewBox="0 0 92 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M4 26 L22 8 H58 L51 15 H25 L14 26 Z" fill="#e10600"/>
+            <path d="M18 26 L29 15 H55 L49 21 H31 L26 26 Z" fill="#e10600"/>
+            <path d="M62 8 H75 L57 26 H45 Z" fill="#e10600"/>
+            <text x="72" y="25" font-family="Titillium Web, sans-serif" font-style="italic" font-weight="900" font-size="14" fill="#ffffff">26</text>
+          </svg>
+        </div>
+        <div class="v-divider"></div>
+        <div class="gp-meta">
+          <div class="gp-round" id="hdr-round">2026 FIA WORLD CHAMPIONSHIP | ROUND 01 / 24 <span class="reg-era-pill" id="hdr-era">2026 HYBRID ERA</span></div>
+          <div class="gp-title" id="hdr-gp">AUSTRALIAN GRAND PRIX</div>
+        </div>
+      </div>
+
+      <div class="session-cluster">
+        <div class="session-box" id="hdr-session">PRE-SESSION</div>
+        <div class="flag-box flag-green" id="hdr-flag">TRACK CLEAR</div>
+        <div class="weather-box" id="hdr-weather">
+          <span class="w-item"><small>TRK</small> <strong id="hdr-temp">24°C</strong></span>
+          <span class="w-sep"></span>
+          <span class="w-item"><small>SURF</small> <strong id="hdr-wet">DRY 0%</strong></span>
+          <span class="w-sep"></span>
+          <span class="w-item"><small>RAIN</small> <strong id="hdr-rain">18%</strong></span>
+        </div>
+      </div>
+
+      <div class="controls-cluster">
+        <div class="speed-group" role="group" aria-label="Simulation Rate">
+          <button class="spd-btn" data-speed="0" title="Hold Simulation">HOLD</button>
+          <button class="spd-btn" data-speed="0.5" title="Slow Motion (0.5x)">0.5X</button>
+          <button class="spd-btn active" data-speed="1">1X</button>
+          <button class="spd-btn" data-speed="2">2X</button>
+          <button class="spd-btn" data-speed="4">4X</button>
+          <button class="spd-btn" data-speed="8">8X</button>
+          <button class="spd-btn" data-speed="16">16X</button>
+        </div>
+        <button class="btn-outline btn-advance btn-sm" id="btn-skip" title="Fast-forward the current session, knockout stage, or race">START Q1 &gt;&gt;</button>
+
+        <div class="tp-badge" id="btn-open-team-modal" title="Switch Constructor or Reset Career">
+          <span class="tp-stripe" id="hdr-team-stripe"></span>
+          <span class="tp-logo" id="hdr-team-logo"></span>
+          <div class="tp-info">
+            <span class="tp-role">TEAM PRINCIPAL</span>
+            <strong id="hdr-team-name">Williams</strong>
+          </div>
+          <div class="tp-budget" id="hdr-budget">$102.0M</div>
+        </div>
+        <div class="server-status" id="hdr-conn">LIVE</div>
+      </div>
+    </header>
+
+    <!-- BROADCAST NAVIGATION BAR -->
+    <nav class="subnav">
+      <button class="nav-tab active" data-tab="circuit">TRACK &amp; PIT WALL</button>
+      <button class="nav-tab" data-tab="upgrades">TECHNICAL R&amp;D</button>
+      <button class="nav-tab" data-tab="drivers">DRIVER CONTRACTS &amp; TRADES</button>
+      <button class="nav-tab" data-tab="database">DRIVER DATABASE</button>
+      <button class="nav-tab" data-tab="finances">COMMERCIAL &amp; COST CAP</button>
+      <button class="nav-tab" data-tab="standings">CHAMPIONSHIP CLASSIFICATION</button>
+      <button class="nav-tab" data-tab="hall-of-fame">HALL OF FAME</button>
+    </nav>
+
+    <!-- 3-COLUMN PIT WALL WORKSPACE -->
+    <main class="workspace">
+      <!-- LEFT: OFFICIAL FOM 22-CAR TIMING TOWER -->
+      <aside class="timing-panel">
+        <div class="panel-hdr">
+          <span>TIMING TOWER</span>
+          <span class="fastest-chip" id="tower-fastest">FL --:--.---</span>
+        </div>
+        <div class="timing-legend">
+          <span>P</span>
+          <span>DRIVER</span>
+          <span>SYS</span>
+          <span>TYRE</span>
+          <span id="timing-gap-heading" style="text-align:right" title="Gap to the race leader / interval to the car ahead">GAP / INT</span>
+        </div>
+        <div class="timing-list" id="timing-list"></div>
+        <div class="timing-key">
+          <span class="time-session-best">SESSION BEST</span>
+          <span class="time-personal-best">PERSONAL BEST</span>
+          <span title="Dimmed sectors show the last completed lap until a new split is recorded">DIM: LAST LAP</span>
+        </div>
+      </aside>
+
+      <!-- CENTER: MAIN VIEWPORT -->
+      <section class="center-stage">
+        <!-- TAB 1: LIVE CIRCUIT & PIT WALL -->
+        <div class="tab-pane active" id="tab-circuit">
+          <div class="canvas-wrap" id="canvas-wrap">
+            <canvas id="track-canvas"></canvas>
+            <a class="map-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors · ODbL</a>
+
+            <div class="canvas-hud-top">
+              <div class="cam-group">
+                <button class="cam-btn active" data-cam="full">CIRCUIT MAP</button>
+                <button class="cam-btn" data-cam="battle">BATTLE CAM</button>
+                <button class="cam-btn" data-cam="leader">LEADER</button>
+                <button class="cam-btn" data-cam="team">TEAM FEED</button>
+                <button class="cam-btn" data-cam="selected">ONBOARD</button>
+              </div>
+              <div class="map-legend">
+                <span><i class="ind ind-aero"></i>STRAIGHT AERO</span>
+                <span><i class="ind ind-ovt"></i>OVERTAKE MODE</span>
+                <span><i class="ind ind-det"></i>DETECTION GATE</span>
+              </div>
+            </div>
+
+            <!-- FIA 5 RED START LIGHTS GANTRY -->
+            <div class="lights-gantry hidden" id="lights-overlay">
+              <div class="light-col"><span class="light-pod" id="lp-1"></span></div>
+              <div class="light-col"><span class="light-pod" id="lp-2"></span></div>
+              <div class="light-col"><span class="light-pod" id="lp-3"></span></div>
+              <div class="light-col"><span class="light-pod" id="lp-4"></span></div>
+              <div class="light-col"><span class="light-pod" id="lp-5"></span></div>
+            </div>
+
+            <!-- SESSION CLASSIFICATION / GRID BANNER -->
+            <div class="phase-overlay hidden" id="phase-overlay"></div>
+          </div>
+
+          <!-- DUAL-CHANNEL PIT WALL STRATEGY CONSOLE -->
+          <div class="pitwall-dock">
+            <div class="pitwall-hdr">
+              <div class="pw-hdr-left">
+                <span class="pw-red-tag">PIT WALL</span>
+                <strong id="pw-title">RACE STRATEGY CONSOLE</strong>
+                <span class="pw-hint">AUTO-STRATEGIST ACTIVE WHEN UNATTENDED — MANUAL COMMANDS OVERRIDE IMMEDIATELY</span>
+              </div>
+            </div>
+            <div class="pitwall-cards" id="pitwall-cards"></div>
+          </div>
+        </div>
+
+        <!-- TAB 2: TECHNICAL R&D UPGRADES -->
+        <div class="tab-pane scroll-pane" id="tab-upgrades">
+          <div class="f1-frame-hdr" id="rd-header"></div>
+          <div class="hq-grid-2">
+            <div>
+              <h3 class="sec-title">2026 FACTORY DEVELOPMENT PROGRAMMES</h3>
+              <div class="upgrade-cards" id="upgrade-cards"></div>
+            </div>
+            <div>
+              <h3 class="sec-title">CONSTRUCTOR PERFORMANCE INDEX</h3>
+              <div class="power-rank-card" id="power-rank-list"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: DRIVER MARKET & TRADES -->
+        <div class="tab-pane scroll-pane" id="tab-drivers">
+          <div class="transfer-window-banner" id="transfer-window-banner">
+            <span class="window-badge window-open" id="window-status-badge">TRANSFER WINDOW: OPEN</span>
+            <span class="window-desc" id="window-status-desc">Season opening transfer period active (Round 1 &amp; Off-Season). Driver trades and free agent signings are permitted.</span>
+          </div>
+          <div class="hq-grid-2">
+            <div class="market-card">
+              <h3 class="sec-title">CONSTRUCTOR DRIVER TRANSFER NEGOTIATION</h3>
+              <p class="muted-note">Propose a direct contract exchange plus cash settlement with a rival Team Principal. Approved transfers take effect in the next session.</p>
+              <div class="form-row">
+                <label>OUTGOING CONTRACT (YOUR TEAM)</label>
+                <select id="trade-my-driver"></select>
+              </div>
+              <div class="form-row">
+                <label>TARGET DRIVER (RIVAL CONSTRUCTOR)</label>
+                <select id="trade-target-driver"></select>
+              </div>
+              <div class="form-row">
+                <label>CASH SETTLEMENT OFFER (POSITIVE = PAY RIVAL / NEGATIVE = REQUEST CASH): <strong id="trade-cash-label">$10.00M</strong></label>
+                <input type="range" id="trade-cash-slider" min="-35" max="80" step="0.5" value="10" />
+              </div>
+              <div class="trade-eval-box" id="trade-eval-box">Evaluating contract terms...</div>
+              <button class="btn-primary btn-block" id="btn-exec-trade">SUBMIT OFFICIAL TRANSFER AGREEMENT</button>
+            </div>
+
+            <div class="market-card">
+              <h3 class="sec-title">RESERVE &amp; FREE AGENT POOL</h3>
+              <p class="muted-note">Buy out an active seat contract and sign a Reserve or FIA Formula 2 graduate onto a two-season agreement.</p>
+              <div class="form-row">
+                <label>SEAT TO VACATE (CONTRACT BUYOUT)</label>
+                <select id="fa-release-driver"></select>
+              </div>
+              <div class="free-agent-list" id="free-agent-list"></div>
+            </div>
+          </div>
+
+          <div class="db-banner-card" style="margin-top:20px;padding:14px 18px;background:#0d0e17;border:1px solid #232438;border-left:3px solid var(--f1-red);border-radius:4px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+            <div>
+              <strong style="color:#ffffff;font-size:13px;letter-spacing:0.5px">FIA SUPER LICENCE DRIVER DATABASE</strong>
+              <div style="font-size:11.5px;color:#8f90a6;margin-top:2px">Official FIA Formula 1 registry: Performance ratings, contracts, driver market valuations, and Hall of Fame champions.</div>
+            </div>
+            <button class="btn-primary btn-sm" id="btn-goto-database">OPEN DRIVER DATABASE &gt;&gt;</button>
+          </div>
+        </div>
+
+        <!-- TAB: DEDICATED FIA SUPER LICENCE DRIVER DATABASE -->
+        <div class="tab-pane scroll-pane" id="tab-database">
+          <div class="db-header-row" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+            <div>
+              <h3 class="sec-title" style="margin:0">FIA SUPER LICENCE DRIVER DATABASE</h3>
+              <p class="muted-note" style="margin-top:2px">Official FIA registry: Live skill telemetry, racecraft ratings, and contractual valuations for all 41 grid drivers and Hall of Fame World Champions.</p>
+            </div>
+            <div class="db-filter-cluster" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="text" id="driver-search-input" placeholder="Search driver, team, or nation..." style="background:#11121d;border:1px solid #32334a;color:#fff;padding:6px 12px;border-radius:4px;font-size:12px;font-family:inherit;min-width:230px;" />
+              <div class="filter-btn-group" id="driver-category-filters" style="display:flex;gap:3px;background:#0d0e17;padding:3px;border-radius:4px;border:1px solid #232438;">
+                <button class="drv-btn active" data-cat="all">ALL (<span id="cnt-all">41</span>)</button>
+                <button class="drv-btn" data-cat="active">GRID (<span id="cnt-grid">22</span>)</button>
+                <button class="drv-btn" data-cat="fa">FREE AGENTS (<span id="cnt-fa">19</span>)</button>
+                <button class="drv-btn" data-cat="legend">LEGENDS (<span id="cnt-leg">9</span>)</button>
+              </div>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table" id="scouting-table">
+              <thead>
+                <tr>
+                  <th class="sortable" data-sort="name">DRIVER <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="team">CONSTRUCTOR <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="age">AGE <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="overall">INDEX <span class="sort-icon">▼</span></th>
+                  <th class="sortable" data-sort="pace">PACE <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="racecraft">CRAFT <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="defense">DEF <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="consistency">CONS <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="tire_mgmt">TYRE <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="wet_skill">WET <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="salary_m">SALARY <span class="sort-icon"></span></th>
+                  <th class="sortable" data-sort="value_m">VALUATION <span class="sort-icon"></span></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 4: COMMERCIAL & FINANCES -->
+        <div class="tab-pane scroll-pane" id="tab-finances">
+          <div class="hq-grid-2">
+            <div>
+              <h3 class="sec-title">COMMERCIAL &amp; TITLE SPONSORSHIP</h3>
+              <p class="muted-note">Select a commercial partner aligned with your expected race classification. Base retainers and target bonuses settle post-race.</p>
+              <div class="sponsor-list" id="sponsor-list"></div>
+            </div>
+            <div>
+              <h3 class="sec-title">FINANCIAL &amp; COST CAP LEDGER</h3>
+              <div class="table-wrap">
+                <table class="data-table" id="ledger-table">
+                  <thead>
+                    <tr>
+                      <th>RND</th>
+                      <th>DEPT</th>
+                      <th>ENTRY</th>
+                      <th style="text-align:right">AMOUNT</th>
+                      <th style="text-align:right">BALANCE</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 5: CHAMPIONSHIP STANDINGS, CALENDAR & ARCHIVE -->
+        <div class="tab-pane scroll-pane" id="tab-standings">
+          <div class="hq-grid-2">
+            <div>
+              <h3 class="sec-title" id="wdc-title">WORLD DRIVERS' CHAMPIONSHIP</h3>
+              <div class="table-wrap">
+                <table class="data-table" id="wdc-table">
+                  <thead>
+                    <tr>
+                      <th>POS</th>
+                      <th>DRIVER</th>
+                      <th>CONSTRUCTOR</th>
+                      <th>WINS</th>
+                      <th>POD</th>
+                      <th>POLE</th>
+                      <th>PEN PTS</th>
+                      <th style="text-align:right">PTS</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+            <div>
+              <h3 class="sec-title" id="wcc-title">WORLD CONSTRUCTORS' CHAMPIONSHIP</h3>
+              <div class="table-wrap">
+                <table class="data-table" id="wcc-table">
+                  <thead>
+                    <tr>
+                      <th>POS</th>
+                      <th>CONSTRUCTOR</th>
+                      <th>POWER UNIT</th>
+                      <th>INDEX</th>
+                      <th>WINS</th>
+                      <th>BUDGET</th>
+                      <th style="text-align:right">PTS</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+
+              <h3 class="sec-title" style="margin-top:20px">WORLD CHAMPIONS ARCHIVE</h3>
+              <div id="hof-list" class="hof-list"></div>
+            </div>
+          </div>
+
+            <h3 class="sec-title" id="calendar-title" style="margin-top:20px">FORMULA 1 CALENDAR</h3>
+            <p id="calendar-note" style="font-size:11px;color:#8f90a6;line-height:1.5"></p>
+          <div class="calendar-grid" id="calendar-grid"></div>
+        </div>
+
+        <!-- TAB 7: FIA FORMULA 1 HALL OF FAME & RESULTS ARCHIVE -->
+        <div class="tab-pane scroll-pane" id="tab-hall-of-fame">
+          <div class="hof-header-wrap">
+            <div class="hof-header-left">
+              <div class="hof-pretitle">FIA FORMULA 1 WORLD CHAMPIONSHIP</div>
+              <h2 class="hof-main-title">OFFICIAL HALL OF FAME &amp; RACE ARCHIVES</h2>
+              <div class="hof-era-strip">
+                <span class="hof-badge hof-badge-era" id="hof-era-badge">Active Aero Turbo-Hybrid Era</span>
+                <span class="hof-badge hof-badge-engine" id="hof-engine-badge">1.6L V6 Turbo + 350kW MGU-K</span>
+                <span class="hof-badge hof-badge-status" id="hof-status-badge">ARCHIVE RECORD</span>
+              </div>
+            </div>
+            <div class="hof-season-selector-wrap">
+              <div class="hof-selector-title">SELECT CHAMPIONSHIP SEASON</div>
+              <div class="hof-season-buttons" id="hof-season-buttons">
+                <button class="hof-season-btn active" data-year="2026">2026</button>
+                <button class="hof-season-btn" data-year="2027">2027</button>
+                <button class="hof-season-btn" data-year="2028">2028</button>
+                <button class="hof-season-btn" data-year="2029">2029</button>
+                <button class="hof-season-btn" data-year="2030">2030</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- SEASON CHAMPIONS SHOWCASE BANNER -->
+          <div class="hof-champions-grid" id="hof-champions-banner"></div>
+
+          <!-- NARRATIVE SUMMARY -->
+          <div class="hof-narrative-card" id="hof-narrative-card"></div>
+
+          <!-- SUB-NAVIGATION BAR: RACES VS STANDINGS -->
+          <div class="hof-subnav">
+            <div class="hof-subnav-buttons">
+              <button class="hof-sub-btn active" id="hof-sub-races">ALL GRAND PRIX RESULTS</button>
+              <button class="hof-sub-btn" id="hof-sub-standings">SEASON CLASSIFICATION</button>
+            </div>
+            <div class="hof-meta-stat" id="hof-round-count">24 OF 24 GRANDS PRIX CONCLUDED</div>
+          </div>
+
+          <!-- RACE-BY-RACE RESULTS GRID -->
+          <div class="hof-races-view" id="hof-races-view">
+            <div class="hof-races-grid" id="hof-races-grid"></div>
+          </div>
+
+          <!-- SEASON FINAL STANDINGS VIEW -->
+          <div class="hof-standings-view hidden" id="hof-standings-view">
+            <div class="hof-standings-grid">
+              <div class="hof-wdc-card">
+                <h3 class="sec-title">WORLD DRIVERS' CHAMPIONSHIP STANDINGS</h3>
+                <div class="table-wrap">
+                  <table class="data-table" id="hof-wdc-table">
+                    <thead>
+                      <tr>
+                        <th>POS</th>
+                        <th>DRIVER</th>
+                        <th>CONSTRUCTOR</th>
+                        <th>WINS</th>
+                        <th>PODIUMS</th>
+                        <th>POLES</th>
+                        <th style="text-align:right">PTS</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="hof-wcc-card">
+                <h3 class="sec-title">WORLD CONSTRUCTORS' CHAMPIONSHIP STANDINGS</h3>
+                <div class="table-wrap">
+                  <table class="data-table" id="hof-wcc-table">
+                    <thead>
+                      <tr>
+                        <th>POS</th>
+                        <th>CONSTRUCTOR</th>
+                        <th>ENGINE</th>
+                        <th>WINS</th>
+                        <th style="text-align:right">PTS</th>
+                      </tr>
+                    </thead>
+                    <tbody></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: LIVE TELEMETRY & FIA RACE CONTROL DOCUMENT WIRE -->
+      <aside class="right-panel">
+        <div class="telemetry-card">
+          <div class="panel-hdr">
+            <span>CAR TELEMETRY</span>
+            <span id="tel-car-tag">SELECT CAR</span>
+          </div>
+          <div class="telemetry-body" id="telemetry-body"></div>
+        </div>
+
+        <div class="feed-card">
+          <div class="panel-hdr feed-hdr">
+            <div class="feed-title-wrap">
+              <span>RACE CONTROL &amp; COMMS</span>
+              <span class="live-tag">OFFICIAL FEED</span>
+            </div>
+            <div class="feed-filters" role="group" aria-label="Feed filter">
+              <button class="feed-filter-btn active" data-feed-filter="all">ALL</button>
+              <button class="feed-filter-btn" data-feed-filter="official">OFFICIAL</button>
+              <button class="feed-filter-btn" data-feed-filter="radio">RADIO</button>
+            </div>
+          </div>
+          <div class="feed-list" id="feed-list"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- MODAL: CONSTRUCTOR SELECTION / CAREER RESET -->
+  <div class="modal-backdrop hidden" id="team-modal">
+    <div class="modal-box">
+      <div class="modal-hdr">
+        <h3>SELECT CONSTRUCTOR — TEAM PRINCIPAL</h3>
+        <button class="btn-outline btn-sm" id="btn-close-modal">CLOSE</button>
+      </div>
+      <p class="muted-note">Assume Team Principal control of any of the 11 Formula 1 Constructors immediately, or initialize a clean 2026 Season from Round 1.</p>
+      <div class="team-picker-grid" id="team-picker-grid"></div>
+      <div class="modal-ftr" style="display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
+        <span class="muted-note" style="margin:0;margin-right:auto">Restart Season:</span>
+        <button class="btn-outline btn-sm" id="btn-reset-career" style="border-color:var(--border);color:var(--text)">RESET 2026 (HYBRID)</button>
+        <button class="btn-danger btn-sm" id="btn-reset-2028" style="background:#ff5500;border-color:#ff5500;color:#fff;font-weight:700">START AT 2028 (V8 & DRS)</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast hidden" id="t

@@ -1,0 +1,29 @@
+[
+  {
+    "id": 413000959,
+    "dist": 91.4,
+    "length": 826.3,
+    "tags": {
+      "bicycle": "yes",
+      "highway": "raceway",
+      "name:en": "Circuit Gilles Villeneuve pit lane",
+      "name:fr": "Line des puits du circuit Gilles Villeneuve",
+      "oneway": "yes",
+      "sport": "motor"
+    }
+  },
+  {
+    "id": 543117518,
+    "dist": 19.7,
+    "length": 318.8,
+    "tags": {
+      "access": "no",
+      "bicycle": "no",
+      "foot": "customers",
+      "highway": "service",
+      "horse": "no",
+      "motor_vehicle": "no",
+      "surface": "paved"
+    }
+  }
+]

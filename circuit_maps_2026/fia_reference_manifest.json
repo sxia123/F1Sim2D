@@ -1,0 +1,170 @@
+[
+  {
+    "id": "australia",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/australia_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_australian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_quarantine_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Australian%20Grand%20Prix"
+  },
+  {
+    "id": "china",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/china_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_chinese_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_battery_containment_area_and_red_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Chinese%20Grand%20Prix"
+  },
+  {
+    "id": "japan",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/japan_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_japanese_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_battery_containment_area_and_red_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Japanese%20Grand%20Prix"
+  },
+  {
+    "id": "bahrain",
+    "year": 2025,
+    "pdf": "circuit_maps_2026/fia_reference/bahrain_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_bahrain_grand_prix_-_event_notes_-_circuit_map_pit_lane_quarantine_zone_and_red_zones.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071/event/Bahrain%20Grand%20Prix"
+  },
+  {
+    "id": "saudi",
+    "year": 2025,
+    "pdf": "circuit_maps_2026/fia_reference/saudi_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_saudi_arabian_grand_prix_-_event_notes_-_circuit_map_pit_lane_and_quarantine_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071/event/Saudi%20Arabian%20Grand%20Prix"
+  },
+  {
+    "id": "miami",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/miami_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_miami_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Miami%20Grand%20Prix"
+  },
+  {
+    "id": "canada",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/canada_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_canadian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Canadian%20Grand%20Prix"
+  },
+  {
+    "id": "monaco",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/monaco_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_monaco_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Monaco%20Grand%20Prix"
+  },
+  {
+    "id": "barcelona",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/barcelona_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_barcelona-catalunya_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Barcelona-Catalunya%20Grand%20Prix"
+  },
+  {
+    "id": "austria",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/austria_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_austrian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Austrian%20Grand%20Prix"
+  },
+  {
+    "id": "britain",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/britain_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_british_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/British%20Grand%20Prix"
+  },
+  {
+    "id": "belgium",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/belgium_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_belgian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Belgian%20Grand%20Prix"
+  },
+  {
+    "id": "hungary",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/hungary_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_hungarian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Hungarian%20Grand%20Prix"
+  },
+  {
+    "id": "netherlands",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/netherlands_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_dutch_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Dutch%20Grand%20Prix"
+  },
+  {
+    "id": "italy",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/italy_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_italian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Italian%20Grand%20Prix"
+  },
+  {
+    "id": "madrid",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/madrid_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_spanish_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Spanish%20Grand%20Prix"
+  },
+  {
+    "id": "azerbaijan",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/azerbaijan_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_azerbaijan_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Azerbaijan%20Grand%20Prix"
+  },
+  {
+    "id": "singapore",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/singapore_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_singapore_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Singapore%20Grand%20Prix"
+  },
+  {
+    "id": "usa",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/usa_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_united_states_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/United%20States%20Grand%20Prix"
+  },
+  {
+    "id": "mexico",
+    "year": 2026,
+    "pdf": "circuit_maps_2026/fia_reference/mexico_2026.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_mexico_city_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2026-2072/event/Mexico%20City%20Grand%20Prix"
+  },
+  {
+    "id": "brazil",
+    "year": 2025,
+    "pdf": "circuit_maps_2026/fia_reference/brazil_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_sao_paulo_grand_prix_-_event_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_quarantine_zone_and_red_zones_map.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071/event/S%C3%A3o%20Paulo%20Grand%20Prix"
+  },
+  {
+    "id": "vegas",
+    "year": 2025,
+    "pdf": "circuit_maps_2026/fia_reference/vegas_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_las_vegas_grand_prix_-_event_notes_-_circuit_map_v2_pit_lane_drawing_emergency_map_exits_quarantine_zone_and_red_zones.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071/event/Las%20Vegas%20Grand%20Prix"
+  },
+  {
+    "id": "qatar",
+    "year": 2025,
+    "pdf": "circuit_maps_2026/fia_reference/qatar_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_qatar_grand_prix_-_event_notes_-_circuit_map._pit_lane_drawing_emergency_exits_map_ers_battery_containment_area_red_zones_map.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071/event/Qatar%20Grand%20Prix"
+  },
+  {
+    "id": "abudhabi",
+    "year": 2025,
+    "pdf": "circuit_maps_2026/fia_reference/abudhabi_2025.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_abu_dhabi_grand_prix_-_event_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_quarantine_zone_and_red_zones.pdf",
+    "index_url": "https://www.fia.com/documents/championships/fia-formula-one-world-championship-14/season/season-2025-2071/event/Abu%20Dhabi%20Grand%20Prix"
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "length_m": 5.5,
+  "width_m": 1.9,
+  "wheelbase_m": 3.4,
+  "front_axle_m": 1.55,
+  "rear_axle_m": -1.85,
+  "front_track_m": 1.4,
+  "rear_track_m": 1.525,
+  "front_tyre_diameter_m": 0.705,
+  "rear_tyre_diameter_m": 0.71,
+  "front_tyre_width_m": 0.28,
+  "rear_tyre_width_m": 0.375,
+  "collision_margin_m": 0.03,
+  "safety_car_length_m": 4.75,
+  "safety_car_width_m": 2.0,
+  "note": "Shared nominal car, not a team-specific survey. 2026 width/wheelbase limits; nominal 5.5m length follows the published W17 envelope of under 5.505m.",
+  "sources": [
+    "https://www.mercedesamgf1.com/f1-w17-2026-technical-specifications",
+    "https://www.astonmartinf1.com/en-GB/2026",
+    "https://www.pirelli.com/global/en-ww/race/racingspot/formula-1/new-2026-f1-rules-187730/"
+  ]
+}

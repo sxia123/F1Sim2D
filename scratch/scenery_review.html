@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><title>Circuit scenery review</title>
+<style>body{margin:0;background:#10151a;color:#eee;font:14px system-ui}header{height:44px;display:flex;align-items:center;gap:16px;padding:0 20px}select,button{background:#303e48;color:white;padding:6px;border:1px solid #687477}#view{height:calc(100vh - 44px)}canvas{width:100%;height:100%}</style>
+<header><strong>GEOGRAPHIC SCENERY REVIEW</strong><select id="track"></select><button id="zoom">Close view</button><span id="stats"></span></header><div id="view"><canvas id="canvas"></canvas></div>
+<script type="module">
+import {CircuitRenderer} from '/canvas.js';
+window.addEventListener('error',e=>document.querySelector('#stats').textContent='ERROR: '+e.message);
+const r=new CircuitRenderer(document.querySelector('canvas'),()=>{});window.renderer=r;
+const sel=document.querySelector('select');const tracks=await(await fetch('/review-data/list')).json();
+for(const t of tracks)sel.add(new Option(t.name,t.id));
+async function load(){document.querySelector('#stats').textContent='Loading…';const t=await(await fetch('/review-data/'+sel.value)).json();r.setTrack(t);r.tick=null;document.querySelector('#stats').textContent=t.environment.buildings.length+' buildings · '+t.environment.trees.length+' trees · '+t.environment.terrain.length+' land areas';}
+sel.onchange=load;sel.value=new URLSearchParams(location.search).get('track')||'monaco';document.querySelector('#zoom').onclick=()=>{if(r.cameraMode==='selected'){r.cameraMode='full';r.tick=null;}else{const p=r.track.stations[0];r.cameraMode='selected';r.selectedDriverId='review';r.tick={cars:[{id:'review',x:p.x,y:p.y,h:0}],wetness:0};r.carInterp.set('review',{cx:p.x,cy:p.y,ch:0,buffer:[],data:{id:'review',tid:'ferrari',num:16,vis:true,col:'#dc0028'}});}};
+await load();
+</script>

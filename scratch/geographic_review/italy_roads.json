@@ -1,0 +1,136 @@
+[
+  {
+    "id": 12648699,
+    "dist": 61.7,
+    "length": 842.8,
+    "tags": {
+      "highway": "service",
+      "lanes": "2",
+      "layer": "0",
+      "maxspeed": "30",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 19842206,
+    "dist": 4.1,
+    "length": 922.2,
+    "tags": {
+      "access": "no",
+      "highway": "raceway",
+      "importance": "international",
+      "lanes": "1",
+      "lit": "no",
+      "name": "Rettifilo di partenza",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 38168747,
+    "dist": 24.3,
+    "length": 741.8,
+    "tags": {
+      "highway": "raceway",
+      "name": "Pit Lane",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 42834272,
+    "dist": 52.8,
+    "length": 155.7,
+    "tags": {
+      "access": "no",
+      "highway": "service",
+      "name": "Viale degli Uffici",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 194751179,
+    "dist": 47.2,
+    "length": 113.9,
+    "tags": {
+      "highway": "service",
+      "lanes": "2",
+      "lit": "yes",
+      "maxspeed": "30",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 219396382,
+    "dist": 60.2,
+    "length": 97.3,
+    "tags": {
+      "highway": "service",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 231257065,
+    "dist": 96.7,
+    "length": 161.7,
+    "tags": {
+      "highway": "service",
+      "surface": "paving_stones"
+    }
+  },
+  {
+    "id": 243215079,
+    "dist": 39.5,
+    "length": 15.3,
+    "tags": {
+      "access": "private",
+      "bicycle": "no",
+      "emergency": "designated",
+      "foot": "private",
+      "highway": "service",
+      "horse": "no",
+      "lanes": "2",
+      "layer": "0",
+      "lit": "yes",
+      "maxspeed": "30",
+      "motor_vehicle": "private",
+      "motorcar": "private",
+      "motorcycle": "private",
+      "surface": "asphalt",
+      "vehicle": "no"
+    }
+  },
+  {
+    "id": 243215080,
+    "dist": 63.6,
+    "length": 38.2,
+    "tags": {
+      "access": "private",
+      "bicycle": "no",
+      "emergency": "designated",
+      "foot": "private",
+      "highway": "service",
+      "horse": "no",
+      "lanes": "2",
+      "layer": "0",
+      "lit": "yes",
+      "maxspeed": "30",
+      "motor_vehicle": "private",
+      "motorcar": "private",
+      "motorcycle": "private",
+      "surface": "asphalt",
+      "vehicle": "no"
+    }
+  },
+  {
+    "id": 496461378,
+    "dist": 52.8,
+    "length": 39.1,
+    "tags": {
+      "highway": "service",
+      "surface": "asphalt"
+    }
+  }
+]

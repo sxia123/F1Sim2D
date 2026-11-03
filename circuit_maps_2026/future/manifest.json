@@ -1,0 +1,44 @@
+[
+  {
+    "id": "portugal",
+    "circuit": "Autodromo Internacional do Algarve",
+    "reference_year": 2021,
+    "reference_pdf": "circuit_maps_2026/fia_reference/portugal_2021.pdf",
+    "reference_url": "https://www.fia.com/sites/default/files/doc_1_-_2021_portuguese_grand_prix_-_circuit_map_1.pdf",
+    "reference_sha256": "f9cd060266c222c9e6f00fa0d824dce6e8fb26e99a88bb7426842870787e5a9e",
+    "pit_reference": "OpenStreetMap ways 157790380",
+    "width_note": "Nominal constant width; local road boundaries have not been surveyed.",
+    "accuracy_note": "Geographic centerline and independent OSM pit roads. FIA baseline supplies turn sequence and approximate start/control landmarks. Future event overlays, widths and garage allocations are simulation estimates.",
+    "game_preview": "portugal.png",
+    "source_overlay": "portugal_reference_overlay.png",
+    "copyright": "FIA / Formula One World Championship Limited: reference drawings, all rights reserved. Geographic centerline: Tomislav Bacinger, MIT. Pit roads/scenery: OpenStreetMap contributors, ODbL 1.0."
+  },
+  {
+    "id": "turkey",
+    "circuit": "Istanbul Park",
+    "reference_year": 2021,
+    "reference_pdf": "circuit_maps_2026/fia_reference/turkey_2021.pdf",
+    "reference_url": "https://www.fia.com/sites/default/files/doc_1_-_2021_turkish_grand_prix_-_circuit_map.pdf",
+    "reference_sha256": "d475f8ddce6f9ec24c484f697977f686c68335a8d281f4e5d5ebca5227b6056f",
+    "pit_reference": "OpenStreetMap ways 295742111",
+    "width_note": "Nominal constant width; local road boundaries have not been surveyed.",
+    "accuracy_note": "Geographic centerline and independent OSM pit roads. FIA baseline supplies turn sequence and approximate start/control landmarks. Future event overlays, widths and garage allocations are simulation estimates.",
+    "game_preview": "turkey.png",
+    "source_overlay": "turkey_reference_overlay.png",
+    "copyright": "FIA / Formula One World Championship Limited: reference drawings, all rights reserved. Geographic centerline: Tomislav Bacinger, MIT. Pit roads/scenery: OpenStreetMap contributors, ODbL 1.0."
+  },
+  {
+    "id": "malaysia",
+    "circuit": "Sepang International Circuit",
+    "reference_year": 2026,
+    "reference_pdf": "circuit_maps_2026/fia_pdf/supplement_malaysia_sepang.pdf",
+    "reference_url": "https://www.fia.com/system/files/decision-document/2026_bahrain_grand_prix_in_malaysia_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "reference_sha256": "0490017fd5eda55480198e7ebaaf85329a5e28b384e17c3386b42be7c4af05d4",
+    "pit_reference": "OpenStreetMap ways 23410526,144359483",
+    "width_note": "Nominal constant width; local road boundaries have not been surveyed.",
+    "accuracy_note": "Geographic centerline and independent OSM pit roads. FIA baseline supplies turn sequence and approximate start/control landmarks. Future event overlays, widths and garage allocations are simulation estimates.",
+    "game_preview": "malaysia.png",
+    "source_overlay": "malaysia_reference_overlay.png",
+    "copyright": "FIA / Formula One World Championship Limited: reference drawings, all rights reserved. Geographic centerline: Tomislav Bacinger, MIT. Pit roads/scenery: OpenStreetMap contributors, ODbL 1.0."
+  }
+]

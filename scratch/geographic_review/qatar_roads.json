@@ -1,0 +1,58 @@
+[
+  {
+    "id": 152483925,
+    "dist": 32.5,
+    "length": 6601.6,
+    "tags": {
+      "access": "no",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 617274738,
+    "dist": 79.8,
+    "length": 68.3,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1320495224,
+    "dist": 91.0,
+    "length": 1314.0,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1553605580,
+    "dist": 6.4,
+    "length": 1258.3,
+    "tags": {
+      "highway": "raceway",
+      "lit": "yes",
+      "oneway": "yes",
+      "sport": "motor"
+    }
+  },
+  {
+    "id": 1567647972,
+    "dist": 76.7,
+    "length": 903.4,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 1569387146,
+    "dist": 91.6,
+    "length": 78.5,
+    "tags": {
+      "access": "permissive",
+      "highway": "service"
+    }
+  }
+]

@@ -1,0 +1,33 @@
+[
+  {
+    "id": 185953078,
+    "dist": 97.8,
+    "length": 147.3,
+    "tags": {
+      "access": "unknown",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 772755821,
+    "dist": 54.9,
+    "length": 595.9,
+    "tags": {
+      "highway": "raceway",
+      "name": "Aut\u00f3dromo Hermanos Rodr\u00edguez",
+      "oneway": "yes",
+      "sport": "motor",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 1313604472,
+    "dist": 82.9,
+    "length": 315.7,
+    "tags": {
+      "access": "no",
+      "foot": "permissive",
+      "highway": "service"
+    }
+  }
+]

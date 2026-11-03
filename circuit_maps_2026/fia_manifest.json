@@ -1,0 +1,98 @@
+[
+  {
+    "id": "01_australia_albert_park",
+    "pdf": "fia_pdf/01_australia_albert_park.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_australian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_quarantine_zone.pdf",
+    "year": 2026,
+    "pages": [
+      {
+        "page": 2,
+        "png": "png/01_australia_albert_park_fia_circuit.png"
+      },
+      {
+        "page": 3,
+        "png": "png/01_australia_albert_park_fia_pit_lane.png"
+      }
+    ]
+  },
+  {
+    "id": "06_usa_miami",
+    "pdf": "fia_pdf/06_usa_miami.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_miami_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "year": 2026,
+    "pages": [
+      {
+        "page": 2,
+        "png": "png/06_usa_miami_fia_circuit.png"
+      },
+      {
+        "page": 3,
+        "png": "png/06_usa_miami_fia_pit_lane.png"
+      }
+    ]
+  },
+  {
+    "id": "07_canada_montreal",
+    "pdf": "fia_pdf/07_canada_montreal.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_canadian_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "year": 2026,
+    "pages": [
+      {
+        "page": 2,
+        "png": "png/07_canada_montreal_fia_circuit.png"
+      },
+      {
+        "page": 3,
+        "png": "png/07_canada_montreal_fia_pit_lane.png"
+      }
+    ]
+  },
+  {
+    "id": "14_netherlands_zandvoort",
+    "pdf": "fia_pdf/14_netherlands_zandvoort.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_dutch_grand_prix_-_competition_notes_-_circuit_map_pit_lane_drawing_and_emergency_exits_map.pdf",
+    "year": 2026,
+    "pages": [
+      {
+        "page": 2,
+        "png": "png/14_netherlands_zandvoort_fia_circuit.png"
+      },
+      {
+        "page": 3,
+        "png": "png/14_netherlands_zandvoort_fia_pit_lane.png"
+      }
+    ]
+  },
+  {
+    "id": "24_abu_dhabi_yas_marina",
+    "pdf": "fia_pdf/24_abu_dhabi_yas_marina.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2025_abu_dhabi_grand_prix_-_event_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_quarantine_zone_and_red_zones.pdf",
+    "year": 2025,
+    "pages": [
+      {
+        "page": 2,
+        "png": "png/24_abu_dhabi_yas_marina_fia_circuit.png"
+      },
+      {
+        "page": 3,
+        "png": "png/24_abu_dhabi_yas_marina_fia_pit_lane.png"
+      }
+    ]
+  },
+  {
+    "id": "supplement_malaysia_sepang",
+    "pdf": "fia_pdf/supplement_malaysia_sepang.pdf",
+    "source_url": "https://www.fia.com/system/files/decision-document/2026_bahrain_grand_prix_in_malaysia_-_competition_notes_-_circuit_map_pit_lane_drawing_emergency_exits_map_and_red_zone.pdf",
+    "year": 2026,
+    "pages": [
+      {
+        "page": 2,
+        "png": "png/supplement_malaysia_sepang_fia_circuit.png"
+      },
+      {
+        "page": 3,
+        "png": "png/supplement_malaysia_sepang_fia_pit_lane.png"
+      }
+    ]
+  }
+]

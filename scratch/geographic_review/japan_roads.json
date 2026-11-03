@@ -1,0 +1,35 @@
+[
+  {
+    "id": 184429432,
+    "dist": 98.0,
+    "length": 66.0,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 184429434,
+    "dist": 75.9,
+    "length": 67.7,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 469657637,
+    "dist": 72.2,
+    "length": 194.6,
+    "tags": {
+      "area": "yes",
+      "highway": "service"
+    }
+  },
+  {
+    "id": 470173099,
+    "dist": 85.5,
+    "length": 504.0,
+    "tags": {
+      "highway": "service"
+    }
+  }
+]

@@ -1,0 +1,154 @@
+[
+  {
+    "id": 4681856,
+    "dist": 53.7,
+    "length": 83.8,
+    "tags": {
+      "highway": "service",
+      "lanes": "2",
+      "name": "Avenida de la Capital de Espa\u00f1a Madrid",
+      "oneway": "yes",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 4681858,
+    "dist": 11.2,
+    "length": 117.0,
+    "tags": {
+      "highway": "service",
+      "lanes": "2",
+      "name": "Avenida de la Capital de Espa\u00f1a Madrid",
+      "oneway": "yes",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 140749278,
+    "dist": 11.2,
+    "length": 28.6,
+    "tags": {
+      "highway": "service",
+      "lanes": "3",
+      "lanes:backward": "1",
+      "lanes:forward": "2"
+    }
+  },
+  {
+    "id": 186758490,
+    "dist": 89.9,
+    "length": 850.2,
+    "tags": {
+      "highway": "service",
+      "oneway": "yes",
+      "service": "parking_aisle",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 186758539,
+    "dist": 69.8,
+    "length": 84.0,
+    "tags": {
+      "highway": "service",
+      "service": "parking_aisle"
+    }
+  },
+  {
+    "id": 517956350,
+    "dist": 39.5,
+    "length": 33.9,
+    "tags": {
+      "highway": "service",
+      "lanes": "2",
+      "oneway": "yes",
+      "surface": "asphalt",
+      "turn:lanes": "left|right"
+    }
+  },
+  {
+    "id": 517956351,
+    "dist": 39.5,
+    "length": 30.4,
+    "tags": {
+      "highway": "service",
+      "lanes": "3",
+      "lanes:backward": "1",
+      "lanes:forward": "2"
+    }
+  },
+  {
+    "id": 517956352,
+    "dist": 2.9,
+    "length": 118.5,
+    "tags": {
+      "highway": "service",
+      "lanes": "3",
+      "lanes:backward": "1",
+      "lanes:forward": "2"
+    }
+  },
+  {
+    "id": 517956353,
+    "dist": 69.8,
+    "length": 184.6,
+    "tags": {
+      "highway": "service"
+    }
+  },
+  {
+    "id": 517956365,
+    "dist": 98.2,
+    "length": 289.0,
+    "tags": {
+      "highway": "service",
+      "oneway": "yes",
+      "service": "parking_aisle",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 517956370,
+    "dist": 47.1,
+    "length": 493.4,
+    "tags": {
+      "highway": "service",
+      "oneway": "yes",
+      "service": "parking_aisle",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 517956377,
+    "dist": 61.7,
+    "length": 166.6,
+    "tags": {
+      "highway": "service",
+      "oneway": "yes",
+      "service": "parking_aisle",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 517956382,
+    "dist": 76.1,
+    "length": 295.6,
+    "tags": {
+      "highway": "service",
+      "oneway": "yes",
+      "service": "parking_aisle",
+      "surface": "asphalt"
+    }
+  },
+  {
+    "id": 517956384,
+    "dist": 61.7,
+    "length": 299.9,
+    "tags": {
+      "highway": "service",
+      "oneway": "yes",
+      "service": "parking_aisle",
+      "surface": "asphalt"
+    }
+  }
+]
