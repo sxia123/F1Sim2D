@@ -75,6 +75,9 @@ export class CircuitRenderer {
 
     this.renderTime = 0;
     this.renderTimeInitialized = false;
+    this.renderTick = 0;
+    this.renderTickInitialized = false;
+    this.playbackRate = 1.0;
     this.carInterp = new Map();
     this.scInterp = null;
     this.particles = [];
@@ -87,8 +90,70 @@ export class CircuitRenderer {
     this._lastFrameTs = performance.now();
     this._viewTransform = { scale: 1, ox: 0, oy: 0 };
 
+    this._isPointerDown = false;
+    this._pointerStartX = 0;
+    this._pointerStartY = 0;
+    this._lastPointerX = 0;
+    this._lastPointerY = 0;
+    this._hasDragged = false;
+    this._activeTargetKey = null;
+    this._camLocked = false;
+    this._camTransitElapsed = 0;
+    this._prevTargetX = 500;
+    this._prevTargetY = 325;
+
     window.addEventListener("resize", () => this.resize());
     this.canvas.addEventListener("click", (e) => this._handleClick(e));
+
+    this.canvas.addEventListener("pointerdown", (e) => {
+      this._isPointerDown = true;
+      this._pointerStartX = e.clientX;
+      this._pointerStartY = e.clientY;
+      this._lastPointerX = e.clientX;
+      this._lastPointerY = e.clientY;
+      this._hasDragged = false;
+      try { this.canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+
+    this.canvas.addEventListener("pointermove", (e) => {
+      if (!this._isPointerDown) return;
+      const dx = e.clientX - this._lastPointerX;
+      const dy = e.clientY - this._lastPointerY;
+      this._lastPointerX = e.clientX;
+      this._lastPointerY = e.clientY;
+
+      const totalDist = Math.hypot(e.clientX - this._pointerStartX, e.clientY - this._pointerStartY);
+      if (totalDist > 5) {
+        this._hasDragged = true;
+        this.cameraMode = "manual";
+        this._camLocked = false;
+        const scale = this._viewTransform.scale || 1;
+        this.camX -= dx / scale;
+        this.camY -= dy / scale;
+      }
+    });
+
+    const finishPointer = (e) => {
+      if (!this._isPointerDown) return;
+      this._isPointerDown = false;
+      try { this.canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+    };
+
+    this.canvas.addEventListener("pointerup", finishPointer);
+    this.canvas.addEventListener("pointercancel", finishPointer);
+
+    this.canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+      const oldZoom = this.camZoom;
+      const newZoom = Math.max(0.4, Math.min(6.5, oldZoom * zoomFactor));
+      if (newZoom !== oldZoom) {
+        this.cameraMode = "manual";
+        this._camLocked = false;
+        this.camZoom = newZoom;
+      }
+    }, { passive: false });
+
     this.resize();
     requestAnimationFrame((ts) => this._loop(ts));
   }
@@ -108,7 +173,15 @@ export class CircuitRenderer {
       this.carInterp.clear();
       this.scInterp = null;
       this.renderTimeInitialized = false;
+      this.renderTickInitialized = false;
+      this.renderTick = 0;
+      this.playbackRate = 1.0;
       this.particles = [];
+      this._activeTargetKey = null;
+      this._camLocked = false;
+      this._camTransitElapsed = 0;
+      this._prevTargetX = 500;
+      this._prevTargetY = 325;
       if (track.bounds) {
         this.camX = (track.bounds.min_x + track.bounds.max_x) * .5;
         this.camY = (track.bounds.min_y + track.bounds.max_y) * .5;
@@ -120,10 +193,16 @@ export class CircuitRenderer {
 
   setCameraMode(mode) {
     this.cameraMode = mode;
+    this._camLocked = false;
+    this._camTransitElapsed = 0;
   }
 
   setSelectedDriver(driverId) {
     this.selectedDriverId = driverId;
+    if (this.cameraMode === "selected") {
+      this._camLocked = false;
+      this._camTransitElapsed = 0;
+    }
   }
 
   pushTick(tick) {
@@ -131,20 +210,29 @@ export class CircuitRenderer {
     this.tick = tick;
     if (!tick || !tick.cars) return;
 
-    // Snapshot stream clock synchronization:
-    // Maintains a stable 65ms playback buffer against server simulation ticks.
-    // Completely eliminates inter-packet velocity jitter and micro-stutters.
-    const tickTime = tick.sim_time != null ? tick.sim_time * 1000 : now;
-    if (!this.renderTimeInitialized) {
-      this.renderTime = tickTime - 65.0;
+    // Tick-Based Phase-Locked Loop (PLL) stream synchronization:
+    // Decouples client rendering from network packet delivery jitter and timer irregularities.
+    // Maintains a stable 2.2-tick (110ms) playback cushion behind server simulation.
+    const currentTick = typeof tick.tick === "number" ? tick.tick : 0;
+    const TARGET_BUFFER_TICKS = 2.2;
+    if (!this.renderTickInitialized) {
+      this.renderTick = currentTick - TARGET_BUFFER_TICKS;
+      this.renderTickInitialized = true;
       this.renderTimeInitialized = true;
+      this.renderTime = this.renderTick * 50.0;
+      this.playbackRate = 1.0;
     } else {
-      const targetRenderTime = tickTime - 65.0;
-      const timeDiff = targetRenderTime - this.renderTime;
-      if (Math.abs(timeDiff) > 350) {
-        this.renderTime = targetRenderTime;
+      const targetTick = currentTick - TARGET_BUFFER_TICKS;
+      const tickDiff = targetTick - this.renderTick;
+      if (Math.abs(tickDiff) > 8.0) {
+        // Hard resync only on tab refocus or massive network hitch
+        this.renderTick = targetTick;
+        this.renderTime = this.renderTick * 50.0;
+        this.playbackRate = 1.0;
       } else {
-        this.renderTime += timeDiff * 0.08;
+        // Continuous time-dilation: gently nudge playback rate by +/- 4% max.
+        // Never jump renderTick abruptly; guarantees 100% frame-to-frame continuity.
+        this.playbackRate = 1.0 + Math.max(-0.05, Math.min(0.05, tickDiff * 0.08));
       }
     }
 
@@ -152,19 +240,19 @@ export class CircuitRenderer {
     for (const c of tick.cars) {
       seen.add(c.id);
       let st = this.carInterp.get(c.id);
-      if (!st || Math.hypot(c.x - st.cx, c.y - st.cy) > 75) {
+      if (!st || Math.hypot(c.x - st.cx, c.y - st.cy) > 350.0) {
         st = {
           cx: c.x,
           cy: c.y,
           ch: c.h,
-          buffer: [{ t: tickTime, x: c.x, y: c.y, h: c.h }],
+          buffer: [{ tick: currentTick, x: c.x, y: c.y, h: c.h }],
           data: c,
         };
         this.carInterp.set(c.id, st);
       } else {
         st.data = c;
-        st.buffer.push({ t: tickTime, x: c.x, y: c.y, h: c.h });
-        if (st.buffer.length > 8) {
+        st.buffer.push({ tick: currentTick, x: c.x, y: c.y, h: c.h });
+        if (st.buffer.length > 10) {
           st.buffer.shift();
         }
       }
@@ -227,16 +315,16 @@ export class CircuitRenderer {
     }
 
     if (tick.sc) {
-      if (!this.scInterp || Math.hypot(tick.sc.x - this.scInterp.cx, tick.sc.y - this.scInterp.cy) > 75) {
+      if (!this.scInterp || Math.hypot(tick.sc.x - this.scInterp.cx, tick.sc.y - this.scInterp.cy) > 350.0) {
         this.scInterp = {
           cx: tick.sc.x,
           cy: tick.sc.y,
           ch: tick.sc.h,
-          buffer: [{ t: tickTime, x: tick.sc.x, y: tick.sc.y, h: tick.sc.h }],
+          buffer: [{ tick: currentTick, x: tick.sc.x, y: tick.sc.y, h: tick.sc.h }],
         };
       } else {
-        this.scInterp.buffer.push({ t: tickTime, x: tick.sc.x, y: tick.sc.y, h: tick.sc.h });
-        if (this.scInterp.buffer.length > 8) {
+        this.scInterp.buffer.push({ tick: currentTick, x: tick.sc.x, y: tick.sc.y, h: tick.sc.h });
+        if (this.scInterp.buffer.length > 10) {
           this.scInterp.buffer.shift();
         }
       }
@@ -246,6 +334,7 @@ export class CircuitRenderer {
   }
 
   _handleClick(e) {
+    if (this._hasDragged) return;
     if (!this.tick) return;
     const rect = this.canvas.getBoundingClientRect();
     const mx = e.clientX - rect.left;
@@ -281,11 +370,12 @@ export class CircuitRenderer {
   }
 
   _updateInterpolation(now, dt) {
-    if (!this.renderTimeInitialized) return;
+    if (!this.renderTickInitialized) return;
 
-    // Advance continuous client render timeline smoothly at display refresh rate
+    // Advance render timeline smoothly with continuous time dilation
     const clampedDt = Math.max(0.001, Math.min(0.05, dt));
-    this.renderTime += clampedDt * 1000;
+    this.renderTick += (clampedDt / 0.050) * this.playbackRate;
+    this.renderTime = this.renderTick * 50.0;
 
     const interpolateEntity = (st) => {
       const buf = st.buffer;
@@ -294,21 +384,46 @@ export class CircuitRenderer {
       if (buf.length >= 2) {
         let idx = -1;
         for (let i = 0; i < buf.length - 1; i++) {
-          if (buf[i].t <= this.renderTime && this.renderTime <= buf[i + 1].t) {
+          if (buf[i].tick <= this.renderTick && this.renderTick <= buf[i + 1].tick) {
             idx = i;
             break;
           }
         }
 
         if (idx !== -1) {
-          const s0 = buf[idx];
-          const s1 = buf[idx + 1];
-          const span = Math.max(1.0, s1.t - s0.t);
-          const alpha = Math.max(0.0, Math.min(1.0, (this.renderTime - s0.t) / span));
-          st.cx = s0.x + (s1.x - s0.x) * alpha;
-          st.cy = s0.y + (s1.y - s0.y) * alpha;
-          st.ch = lerpAngle(s0.h, s1.h, alpha);
-        } else if (this.renderTime < buf[0].t) {
+          const s1 = buf[idx];
+          const s2 = buf[idx + 1];
+          const span = Math.max(1, s2.tick - s1.tick);
+          const t = Math.max(0.0, Math.min(1.0, (this.renderTick - s1.tick) / span));
+
+          // Catmull-Rom cubic spline interpolation for C1 position & velocity continuity.
+          // Guarantees cars trace continuous racetrack curves instead of discrete chords.
+          const p0 = idx > 0 ? buf[idx - 1] : { x: 2 * s1.x - s2.x, y: 2 * s1.y - s2.y };
+          const p1 = s1;
+          const p2 = s2;
+          const p3 = idx + 2 < buf.length ? buf[idx + 2] : { x: 2 * s2.x - s1.x, y: 2 * s2.y - s1.y };
+
+          const t2 = t * t;
+          const t3 = t2 * t;
+
+          st.cx = 0.5 * (
+            (2 * p1.x) +
+            (-p0.x + p2.x) * t +
+            (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
+            (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3
+          );
+
+          st.cy = 0.5 * (
+            (2 * p1.y) +
+            (-p0.y + p2.y) * t +
+            (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
+            (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
+          );
+
+          // Smoothstep angular lerp for C1 rotational continuity
+          const smoothT = t * t * (3 - 2 * t);
+          st.ch = lerpAngle(s1.h, s2.h, smoothT);
+        } else if (this.renderTick < buf[0].tick) {
           st.cx = buf[0].x;
           st.cy = buf[0].y;
           st.ch = buf[0].h;
@@ -316,12 +431,12 @@ export class CircuitRenderer {
           // If network tick arrived late, glide forward with last observed velocity
           const last = buf[buf.length - 1];
           const prev = buf[buf.length - 2];
-          const dtSnap = Math.max(1.0, last.t - prev.t);
-          const vx = (last.x - prev.x) / dtSnap;
-          const vy = (last.y - prev.y) / dtSnap;
-          const extraMs = Math.min(60.0, this.renderTime - last.t);
-          st.cx = last.x + vx * extraMs;
-          st.cy = last.y + vy * extraMs;
+          const dtTicks = Math.max(1, last.tick - prev.tick);
+          const vx = (last.x - prev.x) / dtTicks;
+          const vy = (last.y - prev.y) / dtTicks;
+          const extraTicks = Math.min(3.0, this.renderTick - last.tick);
+          st.cx = last.x + vx * extraTicks;
+          st.cy = last.y + vy * extraTicks;
           st.ch = last.h;
         }
       } else {
@@ -357,68 +472,127 @@ export class CircuitRenderer {
     const zoomRatio = bounds ? Math.max((bounds.max_x - bounds.min_x) / 880, (bounds.max_y - bounds.min_y) / 545) : 1;
     let targetZoom = 1.0;
     let isTrackingCar = false;
+    let currentTargetKey = "full";
+
+    if (this.cameraMode === "manual") {
+      // Manual pan/zoom active - keep camera steady
+      return;
+    }
 
     if (this.tick && this.carInterp.size > 0 && this.cameraMode !== "full") {
       let targetCarSt = null;
       if (this.cameraMode === "leader") {
         const ldr = this.tick.cars[0];
         targetCarSt = ldr && this.carInterp.get(ldr.id);
-        if (targetCarSt) targetZoom = 2.35 * zoomRatio;
+        if (targetCarSt) {
+          isTrackingCar = true;
+          targetX = targetCarSt.cx;
+          targetY = targetCarSt.cy;
+          targetZoom = 2.45 * zoomRatio;
+          currentTargetKey = "leader:" + ldr.id;
+        }
       } else if (this.cameraMode === "selected" && this.selectedDriverId) {
         targetCarSt = this.carInterp.get(this.selectedDriverId);
-        if (targetCarSt) targetZoom = 2.75 * zoomRatio;
+        if (targetCarSt) {
+          isTrackingCar = true;
+          targetX = targetCarSt.cx;
+          targetY = targetCarSt.cy;
+          targetZoom = 2.75 * zoomRatio;
+          currentTargetKey = "selected:" + this.selectedDriverId;
+        }
       } else if (this.cameraMode === "team") {
         const myCars = this.tick.cars.filter((c) => c.tid === this.tick.player_team_id && !c.dnf);
         if (myCars.length > 0) {
           targetCarSt = this.carInterp.get(myCars[0].id);
-          if (targetCarSt) targetZoom = 2.25 * zoomRatio;
+          if (targetCarSt) {
+            isTrackingCar = true;
+            targetX = targetCarSt.cx;
+            targetY = targetCarSt.cy;
+            targetZoom = 2.35 * zoomRatio;
+            currentTargetKey = "team:" + myCars[0].id;
+          }
         }
       } else if (this.cameraMode === "battle") {
-        const battling =
-          this.tick.cars.find((c) => c.battle && c.ovt && !c.dnf) ||
-          this.tick.cars.find((c) => c.battle && !c.dnf) ||
-          this.tick.cars[0];
-        if (battling) {
-          targetCarSt = this.carInterp.get(battling.id);
-          if (targetCarSt) targetZoom = 2.45 * zoomRatio;
+        const now = performance.now();
+        if (
+          !this._battleTargetA ||
+          now > (this._battleLockUntil || 0) ||
+          !this.tick.cars.some((c) => c.id === this._battleTargetA && !c.dnf)
+        ) {
+          const battling =
+            this.tick.cars.find((c) => c.battle && c.ovt && !c.dnf) ||
+            this.tick.cars.find((c) => c.battle && !c.dnf) ||
+            this.tick.cars[0];
+          if (battling) {
+            this._battleTargetA = battling.id;
+            const rival = this.tick.cars.find((c) => c.code === battling.battle && !c.dnf);
+            this._battleTargetB = rival ? rival.id : null;
+            this._battleLockUntil = now + 6500;
+          }
+        }
+
+        const stA = this._battleTargetA && this.carInterp.get(this._battleTargetA);
+        const stB = this._battleTargetB && this.carInterp.get(this._battleTargetB);
+        if (stA && stB) {
+          isTrackingCar = true;
+          targetX = (stA.cx + stB.cx) * 0.5;
+          targetY = (stA.cy + stB.cy) * 0.5;
+          const battleDist = Math.hypot(stA.cx - stB.cx, stA.cy - stB.cy);
+          targetZoom = Math.max(1.6, Math.min(2.7, 2.45 * zoomRatio * (65 / Math.max(45, battleDist))));
+          currentTargetKey = "battle:" + this._battleTargetA + "-" + this._battleTargetB;
+        } else if (stA) {
+          isTrackingCar = true;
+          targetX = stA.cx;
+          targetY = stA.cy;
+          targetZoom = 2.45 * zoomRatio;
+          currentTargetKey = "battle:" + this._battleTargetA;
         }
       }
-
-      if (targetCarSt) {
-        isTrackingCar = true;
-        // Firmly centered on the focused car - eliminates corner lookahead swinging
-        targetX = targetCarSt.cx;
-        targetY = targetCarSt.cy;
-      }
     }
 
-    if (isTrackingCar) {
-      const dist = Math.hypot(targetX - this.camX, targetY - this.camY);
-      if (dist > 35.0) {
-        // Smooth cinematic pan from previous car or full view
-        const kFly = 1.0 - Math.exp(-dt * 6.5);
-        this.camX += (targetX - this.camX) * kFly;
-        this.camY += (targetY - this.camY) * kFly;
-      } else if (dist > 0.05) {
-        // Fast asymptotic settle onto car center (eliminates braking/accel rubber-banding)
-        const kSettle = 1.0 - Math.exp(-dt * 24.0);
-        this.camX += (targetX - this.camX) * kSettle;
-        this.camY += (targetY - this.camY) * kSettle;
-      } else {
-        // Perfectly locked to car center
+    // Detect target entity or mode switch
+    if (this._activeTargetKey !== currentTargetKey) {
+      this._activeTargetKey = currentTargetKey;
+      this._camLocked = false;
+      this._camTransitElapsed = 0.0;
+    }
+
+    const dist = Math.hypot(targetX - this.camX, targetY - this.camY);
+
+    if (dist > 350.0) {
+      // Discontinuity / session teleport: immediate snap
+      this.camX = targetX;
+      this.camY = targetY;
+      this._camLocked = true;
+    } else if (!this._camLocked) {
+      // Smooth, responsive cinematic pan towards the car
+      this._camTransitElapsed = (this._camTransitElapsed || 0) + dt;
+      const kPan = 1.0 - Math.exp(-dt * 9.0);
+      this.camX += (targetX - this.camX) * kPan;
+      this.camY += (targetY - this.camY) * kPan;
+
+      // Lock once within 0.8 meters or after 0.40s transit
+      if (dist < 0.8 || this._camTransitElapsed > 0.40) {
         this.camX = targetX;
         this.camY = targetY;
+        this._camLocked = true;
       }
     } else {
-      // Full circuit view
-      const kFull = 1.0 - Math.exp(-dt * 5.0);
-      this.camX += (targetX - this.camX) * kFull;
-      this.camY += (targetY - this.camY) * kFull;
+      // Direct rock-solid tracking of Catmull-Rom smooth position:
+      // Zero lag, zero wobble, zero camera oscillation.
+      // The car is locked directly to screen center, and the track scrolls
+      // past with fluid sub-pixel continuity.
+      this.camX = targetX;
+      this.camY = targetY;
     }
 
-    const zoomRate = 5.0;
+    // Responsive camera zoom
+    const zoomRate = 8.0;
     const kZoom = 1.0 - Math.exp(-dt * zoomRate);
     this.camZoom += (targetZoom - this.camZoom) * kZoom;
+    if (Math.abs(targetZoom - this.camZoom) < 0.002) {
+      this.camZoom = targetZoom;
+    }
   }
 
   _render(now, dt) {

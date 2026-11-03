@@ -1669,4 +1669,26 @@ class F1App {
       `).join("");
     }
 
-    const wccTbod
+    const wccTbody = document.querySelector("#hof-wcc-table tbody");
+    if (wccTbody && seasonData.wcc_standings) {
+      wccTbody.innerHTML = seasonData.wcc_standings.map((t) => `
+        <tr class="${t.rank === 1 ? 'highlight-me' : ''}">
+          <td><strong style="font-style:italic">${t.rank || 1}</strong></td>
+          <td>
+            <span class="inline-team" style="font-weight:900">
+              ${teamLogoSVG(t.id, 16)}
+              <span style="color:${t.color}">${(t.name || '').toUpperCase()}</span>
+            </span>
+          </td>
+          <td>${t.engine || 'Formula 1'}</td>
+          <td>${t.wins || 0}</td>
+          <td style="text-align:right;font-weight:900">${t.points || 0}</td>
+        </tr>
+      `).join("");
+    }
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  new F1App();
+});

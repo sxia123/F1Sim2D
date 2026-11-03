@@ -1895,4 +1895,7 @@ select, input[type="range"] {
 
 .hof-standings-grid {
   display: grid;
-  grid-templ
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}

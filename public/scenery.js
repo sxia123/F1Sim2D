@@ -15,28 +15,44 @@ export class SceneryLayer {
   draw(ctx, track, view, width, height, dpr) {
     const env = track.environment;
     if (!env?.revision) return; // An older running server can finish its session safely.
-    const { scale, ox, oy } = view;
-    const left = -ox / scale, top = -oy / scale;
-    const right = left + width / scale, bottom = top + height / scale;
+    const { scale } = view;
     const key = `${track.id}:${track.geometry_revision}:${env.revision}`;
     let c = this.cache;
-    // A generous camera gutter amortizes rebuilding during follow-camera movement.
-    if (!c || c.key !== key || left < c.left || top < c.top || right > c.right || bottom > c.bottom ||
-        scale / c.viewScale > 1.22 || scale / c.viewScale < .78 || c.dpr !== dpr) {
-      const gutter = 240 / scale;
-      const x = left - gutter, y = top - gutter;
-      const w = right - left + gutter * 2, h = bottom - top + gutter * 2;
-      const resolution = Math.min(scale * Math.min(dpr, 2), 3072 / w, 3072 / h);
+
+    // Cache scenery covering the entire circuit and surroundings.
+    // Wide scale tolerance (0.33x to 3.0x) completely eliminates scenery canvas
+    // reconstructions and costly 1000-stroke road mask operations during camera movement.
+    const b = track.bounds;
+    const pad = Math.max(900, Math.max((b.max_x - b.min_x), (b.max_y - b.min_y)) * 0.12);
+    const totalLeft = b.min_x - pad;
+    const totalTop = b.min_y - pad;
+    const totalRight = b.max_x + pad;
+    const totalBottom = b.max_y + pad;
+    const totalW = totalRight - totalLeft;
+    const totalH = totalBottom - totalTop;
+
+    if (!c || c.key !== key || c.dpr !== dpr || scale / c.viewScale > 3.0 || scale / c.viewScale < 0.33) {
+      const resolution = Math.min(Math.max(scale * Math.min(dpr, 1.25), 0.15), 3072 / totalW, 3072 / totalH);
       const canvas = document.createElement("canvas");
-      canvas.width = Math.ceil(w * resolution);
-      canvas.height = Math.ceil(h * resolution);
+      canvas.width = Math.ceil(totalW * resolution);
+      canvas.height = Math.ceil(totalH * resolution);
       const rasterW = canvas.width / resolution, rasterH = canvas.height / resolution;
       const off = canvas.getContext("2d");
-      off.setTransform(resolution, 0, 0, resolution, -x * resolution, -y * resolution);
-      this.paint(off, track, [x, y, x + rasterW, y + rasterH], scale);
+      off.setTransform(resolution, 0, 0, resolution, -totalLeft * resolution, -totalTop * resolution);
+      this.paint(off, track, [totalLeft, totalTop, totalLeft + rasterW, totalTop + rasterH], scale);
       this.maskRoads(off, track);
-      c = this.cache = { key, canvas, left: x, top: y, right: x + rasterW, bottom: y + rasterH,
-        w: rasterW, h: rasterH, viewScale: scale, dpr };
+      c = this.cache = {
+        key,
+        canvas,
+        left: totalLeft,
+        top: totalTop,
+        right: totalLeft + rasterW,
+        bottom: totalTop + rasterH,
+        w: rasterW,
+        h: rasterH,
+        viewScale: scale,
+        dpr
+      };
     }
     ctx.drawImage(c.canvas, c.left, c.top, c.w, c.h);
   }

@@ -1546,8 +1546,13 @@ class ChampionshipWorld:
                     self._push_event("RADIO", f"GRID STRATEGY: #{car.number} {car.code} starting tyres switched to {comp}!")
             if "box_this_lap" in cmd:
                 car.box_this_lap = bool(cmd["box_this_lap"])
-                if car.box_this_lap:
-                    self._push_event("RADIO", f"PIT WALL RADIO ({car.code}): 'Box, box this lap for {car.next_compound} tyres!'")
+                if car.box_this_lap and not car.radio_box_announced:
+                    self.race_session.radio_dispatcher.trigger_box_call(
+                        car, self._push_event, self.race_session.race_clock, is_pit_wall=True
+                    )
+                car.radio_box_announced = car.box_this_lap
+                if not car.box_this_lap:
+                    car.inlap_push_announced = False
             if "pace_mode" in cmd and cmd["pace_mode"] in ("CONSERVE", "BALANCED", "PUSH", "ATTACK"):
                 old_pace = getattr(car, "pace_mode", "BALANCED")
                 car.pace_mode = cmd["pace_mode"]
@@ -1557,7 +1562,8 @@ class ChampionshipWorld:
                     turn = trk.nearest_corner(car.s) if trk and hasattr(trk, "nearest_corner") else 1
                     if car.pace_mode in ("PUSH", "ATTACK") and old_pace != car.pace_mode:
                         self.race_session.radio_dispatcher.trigger_push_mode(
-                            car, car.pace_mode, is_pit_wall=True, event_cb=self._push_event, clock=clk, turn=turn
+                            car, car.pace_mode, is_pit_wall=True, event_cb=self._push_event, clock=clk, turn=turn,
+                            flag_state=self.race_session.flag_state
                         )
                     elif car.pace_mode == "CONSERVE" and old_pace != car.pace_mode:
                         self.race_session.radio_dispatcher.trigger_conserve_mode(
@@ -1572,11 +1578,13 @@ class ChampionshipWorld:
                     turn = trk.nearest_corner(car.s) if trk and hasattr(trk, "nearest_corner") else 1
                     if car.ers_mode in ("BOOST", "OVERTAKE") and old_ers != car.ers_mode:
                         self.race_session.radio_dispatcher.trigger_push_mode(
-                            car, car.ers_mode, is_pit_wall=True, event_cb=self._push_event, clock=clk, turn=turn
+                            car, car.ers_mode, is_pit_wall=True, event_cb=self._push_event, clock=clk, turn=turn,
+                            flag_state=self.race_session.flag_state
                         )
                     elif car.ers_mode == "HARVEST" and old_ers != car.ers_mode:
                         self.race_session.radio_dispatcher.trigger_conserve_mode(
-                            car, event_cb=self._push_event, clock=clk, turn=turn
+                            car, event_cb=self._push_event, clock=clk, turn=turn,
+                            is_pit_wall=True, mode_name="HARVEST"
                         )
             if "team_order" in cmd and cmd["team_order"] in ("FREE", "HOLD", "YIELD", "SWAP"):
                 order = "YIELD" if cmd["team_order"] == "SWAP" else cmd["team_order"]

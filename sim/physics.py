@@ -98,12 +98,55 @@ def _sat_obb_penetration(c1: "CarState", c2: "CarState", half_l: float = CAR_HAL
     return pen_l1, pen_w1, pen_l2, pen_w2
 
 
+def _translate_contact(track: CompiledTrack, car: "CarState", dx: float, dy: float,
+                       update_xy_fn) -> None:
+    """Keep a contact correction in road coordinates so the next sync retains it."""
+    goal_x, goal_y = car.x + dx, car.y + dy
+    if car.in_pits or car.dnf or car.spin_timer > 0.0:
+        car.x, car.y = round(goal_x, 2), round(goal_y, 2)
+        return
+
+    def position(s, d):
+        sample = track.sample(s)
+        lateral = compute_lateral_screen_px(track, d, s)
+        return sample["x"] + sample["nx"] * lateral, sample["y"] + sample["ny"] * lateral
+
+    old_s, old_d = car.s, car.d
+    s, d = old_s, old_d
+    # Invert the local road mapping, including width changes and curved normals.
+    # A tangent-only projection leaves another residual at hairpins.
+    for _ in range(4):
+        x, y = position(s, d)
+        ex, ey = goal_x - x, goal_y - y
+        if math.hypot(ex, ey) < 0.004:
+            break
+        sx0, sy0 = position(s - 0.05, d)
+        sx1, sy1 = position(s + 0.05, d)
+        dx0, dy0 = position(s, d - 0.001)
+        dx1, dy1 = position(s, d + 0.001)
+        sx, sy = (sx1 - sx0) / 0.1, (sy1 - sy0) / 0.1
+        nx, ny = (dx1 - dx0) / 0.002, (dy1 - dy0) / 0.002
+        determinant = sx * ny - sy * nx
+        if abs(determinant) < 1e-8:
+            break
+        s += max(-8.0, min(8.0, (ex * ny - ey * nx) / determinant))
+        d += max(-0.5, min(0.5, (sx * ey - sy * ex) / determinant))
+    car.total_dist += s - old_s
+    car.s, car.d = car.total_dist % track.length_m, d
+    if d > old_d:
+        car.target_d = max(car.target_d, d)
+    elif d < old_d:
+        car.target_d = min(car.target_d, d)
+    update_xy_fn(car)
+
+
 def enforce_2d_car_separation(
     track: CompiledTrack,
     cars: list["CarState"],
     allow_passing: bool,
     update_xy_fn,
     collision_cb=None,
+    dt: float = 0.05,
 ) -> None:
     """
     Multi-lane traffic assignment + exact 4-axis SAT 2D oriented bounding-box non-overlap solver.
@@ -132,13 +175,13 @@ def enforce_2d_car_separation(
             ds_m = (ahead.s - behind.s) % L
             if 0.0 <= ds_m < min_pit_long_m and abs(ahead.pit_apron - behind.pit_apron) < 0.75:
                 deficit = min_pit_long_m - ds_m
-                budget_long = max(0.0, behind.v * 0.05 * 0.60 - getattr(behind, "_tick_long_shift", 0.0))
+                budget_long = max(0.0, behind.v * dt * 0.60 - getattr(behind, "_tick_long_shift", 0.0))
                 soft_shift = min(deficit * 0.30, budget_long)
                 behind._tick_long_shift = getattr(behind, "_tick_long_shift", 0.0) + soft_shift
                 behind.total_dist -= soft_shift
                 behind.s = behind.total_dist % L
                 if behind.v > ahead.v:
-                    behind.v = max(ahead.v, behind.v - 22.0 * 0.05)
+                    behind.v = max(ahead.v, behind.v - 22.0 * dt)
 
     # 2. On-track multi-lane selection & spline separation
     on_track = [c for c in cars if not c.in_pits and not c.dnf and c.spin_timer <= 0.0]
@@ -239,9 +282,9 @@ def enforce_2d_car_separation(
                     if deficit > 0:
                         if c.v > o.v:
                             if c.accel > -22.0:
-                                c.v = max(o.v * 0.98, c.v - 12.0 * 0.05)
+                                c.v = max(o.v * 0.98, c.v - 12.0 * dt)
                         # Strict budget guarantee: cumulative shift never causes negative forward displacement
-                        budget_long = max(0.0, c.v * 0.05 * 0.60 - getattr(c, "_tick_long_shift", 0.0))
+                        budget_long = max(0.0, c.v * dt * 0.60 - getattr(c, "_tick_long_shift", 0.0))
                         soft_shift = min(deficit * 0.20, budget_long)
                         c._tick_long_shift = getattr(c, "_tick_long_shift", 0.0) + soft_shift
                         c.total_dist -= soft_shift
@@ -308,7 +351,7 @@ def enforce_2d_car_separation(
                 # Case A: Pit entry/exit merge alongside an on-track car -> steer on-track car clear of pit blend line
                 if ahead.in_pits != behind.in_pits and not c1_off and not c2_off:
                     c_trk = behind if not behind.in_pits else ahead
-                    lat_budget = max(0.0, 0.10 - getattr(c_trk, "_tick_lat_shift", 0.0))
+                    lat_budget = max(0.0, 2.0 * dt - getattr(c_trk, "_tick_lat_shift", 0.0))
                     need_d = min(lat_budget, (max(pen_w1, pen_w2) + 0.20) / half_usable)
                     if need_d > 0.001:
                         new_d = max(-0.93, min(0.93, c_trk.d - track.pit_side * need_d))
@@ -324,8 +367,8 @@ def enforce_2d_car_separation(
                 min_pen_l = min(pen_l1, pen_l2)
                 is_lateral = (min_pen_w <= min_pen_l) or (abs(ahead.d - behind.d) > 0.14)
                 if is_lateral and not ahead.in_pits and not behind.in_pits and not c1_off and not c2_off and allow_passing:
-                    lat_budget_a = max(0.0, 0.055 - getattr(ahead, "_tick_lat_shift", 0.0))
-                    lat_budget_b = max(0.0, 0.055 - getattr(behind, "_tick_lat_shift", 0.0))
+                    lat_budget_a = max(0.0, 1.1 * dt - getattr(ahead, "_tick_lat_shift", 0.0))
+                    lat_budget_b = max(0.0, 1.1 * dt - getattr(behind, "_tick_lat_shift", 0.0))
                     need_d = min(0.14, (max(pen_w1, pen_w2) + 0.15) / half_usable)
                     max_shift_a = min(lat_budget_a, need_d * 0.50)
                     max_shift_b = min(lat_budget_b, need_d * 0.50)
@@ -340,8 +383,14 @@ def enforce_2d_car_separation(
                         behind._tick_lat_shift = getattr(behind, "_tick_lat_shift", 0.0) + abs(new_b - behind.d)
                         ahead.d = new_a
                         behind.d = new_b
-                        ahead.target_d = ahead.d
-                        behind.target_d = behind.d
+                        # Keep the planned passing lane; only move a target out
+                        # of contact, rather than cancelling it on each solve.
+                        if behind.d >= ahead.d:
+                            ahead.target_d = min(ahead.target_d, ahead.d)
+                            behind.target_d = max(behind.target_d, behind.d)
+                        else:
+                            ahead.target_d = max(ahead.target_d, ahead.d)
+                            behind.target_d = min(behind.target_d, behind.d)
                         update_xy_fn(ahead)
                         update_xy_fn(behind)
                         continue
@@ -368,7 +417,7 @@ def enforce_2d_car_separation(
                     pl1, _pw1, pl2, _pw2 = sat_now
                     loc_px_m = max(0.18, track.px_per_m)
                     pen_l = min(max(pl1, pl2), 4.2)
-                    budget_long = max(0.0, mover.v * 0.05 * 0.60 - getattr(mover, "_tick_long_shift", 0.0))
+                    budget_long = max(0.0, mover.v * dt * 0.60 - getattr(mover, "_tick_long_shift", 0.0))
                     shift_m = min((pen_l + 0.20) / loc_px_m, budget_long)
                     if shift_m > 0.0001:
                         mover._tick_long_shift = getattr(mover, "_tick_long_shift", 0.0) + shift_m
@@ -377,7 +426,7 @@ def enforce_2d_car_separation(
                     if sign_dir < 0.0 and not mover.dnf and mover.pit_phase != "STOPPED":
                         if mover.v > ahead.v:
                             if mover.accel > -22.0:
-                                mover.v = max(ahead.v, mover.v - 12.0 * 0.05)
+                                mover.v = max(ahead.v, mover.v - 12.0 * dt)
                     update_xy_fn(mover)
 
         if not any_overlap:
@@ -417,10 +466,8 @@ def enforce_2d_car_separation(
                 if cx_d * ax + cy_d * ay < 0.0:
                     ax, ay = -ax, -ay
                 push = 0.5 * (pen_min + 0.55)
-                c1.x = round(c1.x - ax * push, 2)
-                c1.y = round(c1.y - ay * push, 2)
-                c2.x = round(c2.x + ax * push, 2)
-                c2.y = round(c2.y + ay * push, 2)
+                _translate_contact(track, c1, -ax * push, -ay * push, update_xy_fn)
+                _translate_contact(track, c2, ax * push, ay * push, update_xy_fn)
         if not mtv_hit:
             break
 
@@ -469,6 +516,7 @@ class CarState:
         self.crossed_start_line: bool = False
         self.d: float = 0.0
         self.target_d: float = 0.0
+        self.lateral_velocity: float = 0.0  # m/s relative to the road
         self.grid_start_d: float = 0.0
         self.v: float = 0.0
         self.accel: float = 0.0
@@ -856,7 +904,7 @@ class QualifyingSession:
                 car.quali_sector_plan = None
                 car.current_sector_times = [None, None, None]
 
-        enforce_2d_car_separation(self.track, self.cars, True, self._update_xy)
+        enforce_2d_car_separation(self.track, self.cars, True, self._update_xy, dt=dt)
 
         if self.stage_elapsed >= self.stage_duration:
             self._complete_current_stage(event_cb)
@@ -1134,10 +1182,8 @@ class RaceSession:
         if not heading_stepped:
             car._heading_tick = curr_tick
             tx, ty = smp["tx"], smp["ty"]
-            half_usable = self.track.width_px_at(car.s) * 0.39
             v_forward_px = max(6.0, car.v * self.track.px_per_m)
-            steer_rate = 2.8 if (car.maneuver_pass_timer > 0.0 or car.maneuver_timer > 0.0) else 2.2
-            v_lateral_px = (car.target_d - car.d) * steer_rate * half_usable * 0.18
+            v_lateral_px = car.lateral_velocity * self.track.px_per_m * 0.18
 
             drift_angle = max(-0.065, min(0.065, math.atan2(v_lateral_px, v_forward_px)))
             track_heading = math.atan2(ty, tx)
@@ -1233,7 +1279,7 @@ class RaceSession:
         allow_passing = self.flag_state not in ("VSC", "SC", "LIGHTS")
         def _col_cb(c1: CarState, c2: CarState, sat: tuple[float, float, float, float]) -> None:
             self._on_physical_contact(c1, c2, sat, event_cb)
-        enforce_2d_car_separation(self.track, self.cars, allow_passing, self._update_xy, collision_cb=_col_cb)
+        enforce_2d_car_separation(self.track, self.cars, allow_passing, self._update_xy, collision_cb=_col_cb, dt=dt)
         if self.flag_state == "SC":
             min_sc_m = (CAR_LEN_PX * 1.45) / self.track.px_per_m
             L = self.track.length_m
@@ -1248,7 +1294,7 @@ class RaceSession:
                     self._update_xy(c)
             if any_unlap:
                 # Re-resolve so cars shifted into the unlapping lane never stack on each other
-                enforce_2d_car_separation(self.track, self.cars, False, self._update_xy)
+                enforce_2d_car_separation(self.track, self.cars, False, self._update_xy, dt=dt)
             sc_lane = 0.48 * self.track.pit_side if any_unlap else 0.0
             self._update_sc_xy(sc_lane)
             # Ensure Safety Car never clips P1 or any car across sharp chicane chords
@@ -1287,7 +1333,10 @@ class RaceSession:
             else:
                 self.rain_intensity = max(0.0, self.rain_intensity - random.uniform(0.25, 0.50))
                 if prev_rain >= 0.18 and self.rain_intensity < 0.06:
-                    event_cb("WEATHER", "WEATHER UPDATE: Rain shower passing. A dry racing line is emerging!")
+                    event_cb("WEATHER", "WEATHER UPDATE: Rain shower passing. The surface may remain wet; monitor grip.")
+                    self.radio_dispatcher.trigger_weather_transition(
+                        self.rain_intensity, self.wetness, event_cb, self.race_clock, self.standings, self.track
+                    )
 
         if self.rain_intensity > self.wetness:
             self.wetness = min(1.0, self.wetness + (self.rain_intensity - self.wetness) * 0.022 * dt)
@@ -1536,7 +1585,7 @@ class RaceSession:
                     self.fastest_lap_code = car.code
                     if car.laps_completed >= 2:
                         event_cb("PURPLE", f"FASTEST LAP: {car.code} ({car.team_short}) clocks {_fmt_lap(lap_time)}!")
-                        self.radio_dispatcher.trigger_fastest_lap(car, _fmt_lap(lap_time), event_cb)
+                        self.radio_dispatcher.trigger_fastest_lap(car, _fmt_lap(lap_time), event_cb, self.race_clock)
 
             car.lap_start_time = crossing_time
             car.tire_age_laps += 1
@@ -1586,7 +1635,18 @@ class RaceSession:
         if car.maneuver_pass_timer > 0.0:
             car.maneuver_pass_timer = max(0.0, car.maneuver_pass_timer - dt)
             if car.maneuver_pass_timer <= 0.0:
-                car.maneuver_target_id = None
+                target = self.cars_by_id.get(car.maneuver_target_id)
+                clearance = CAR_LEN_PX / self.track.px_per_m * 1.35
+                still_alongside = (
+                    target is not None and not target.dnf and not target.in_pits
+                    and abs(car.total_dist - target.total_dist) < clearance
+                    and abs(compute_lateral_screen_px(self.track, car.d, car.s)
+                            - compute_lateral_screen_px(self.track, target.d, target.s)) > CAR_WID_PX * 0.5
+                )
+                if still_alongside:
+                    car.maneuver_pass_timer = 0.2
+                else:
+                    car.maneuver_target_id = None
         if car.maneuver_timer > 0.0:
             car.maneuver_timer = max(0.0, car.maneuver_timer - dt)
             if car.maneuver_timer <= 0.0:
@@ -1595,6 +1655,7 @@ class RaceSession:
         car.sparks = False
 
         if car.spin_timer > 0.0:
+            car.lateral_velocity = 0.0
             car.spin_timer = max(0.0, car.spin_timer - dt)
             car.v = max(0.0, car.v - 22.0 * dt)
             s_dir = getattr(car, "spin_lateral_dir", 1.0 if car.d >= 0.0 else -1.0)
@@ -1625,14 +1686,15 @@ class RaceSession:
         prev_s = car.s
         if car.box_this_lap and not car.radio_box_announced and laps_left >= 1:
             car.radio_box_announced = True
-            self.radio_dispatcher.trigger_box_call(car, event_cb)
-            if not getattr(car, "inlap_push_announced", False):
-                car.inlap_push_announced = True
-                car.pace_mode = "ATTACK"
-                turn = self.track.nearest_corner(car.s) if hasattr(self.track, "nearest_corner") else 1
-                self.radio_dispatcher.trigger_push_mode(
-                    car, "IN-LAP ATTACK", is_pit_wall=True, event_cb=event_cb, clock=self.race_clock, turn=turn
-                )
+            self.radio_dispatcher.trigger_box_call(car, event_cb, self.race_clock)
+        if (car.box_this_lap and laps_left >= 1 and self.flag_state == "GREEN"
+                and not getattr(car, "inlap_push_announced", False)):
+            car.inlap_push_announced = True
+            car.pace_mode = "ATTACK"
+            turn = self.track.nearest_corner(car.s) if hasattr(self.track, "nearest_corner") else 1
+            self.radio_dispatcher.trigger_push_mode(
+                car, "IN-LAP ATTACK", is_pit_wall=False, event_cb=event_cb, clock=self.race_clock, turn=turn
+            )
 
         entry_gap=(self.track.pit_entry_s-prev_s)%self.track.length_m
         if car.box_this_lap and entry_gap <= car.v*dt:
@@ -2112,10 +2174,7 @@ class RaceSession:
             else:
                 car.target_d = max(-0.88, min(0.88, base_line_d))
 
-        steer_rate = 2.6 if (car.maneuver_pass_timer > 0.0 or car.maneuver_timer > 0.0) else 2.0
-        max_d_step = 1.6 * dt
-        step_d = (car.target_d - car.d) * min(1.0, dt * steer_rate)
-        car.d += max(-max_d_step, min(max_d_step, step_d))
+        self._move_laterally(car, dt)
 
         # 2D Vehicle Dynamics: lateral G, front wheel steer angle with realistic hairpin steering lock
         a_lat = (car.v * car.v) * smp["curv"]
@@ -2123,7 +2182,7 @@ class RaceSession:
         car.body_slip_angle = 0.0
         wheelbase_m = 3.6
         ackerman_steer = math.atan(wheelbase_m * 1.65 * smp["curv"] * smp["inside_sign"])
-        lane_steer = (car.target_d - car.d) * 0.20
+        lane_steer = math.atan2(car.lateral_velocity, max(car.v, 6.0))
         car.steer_angle = round(max(-0.42, min(0.42, ackerman_steer + lane_steer)), 4)
 
         km_step = ds / 1000.0
@@ -2148,6 +2207,37 @@ class RaceSession:
             return
 
         self._advance_car_progress(car, ds, leader_finished, event_cb)
+
+    def _move_laterally(self, car: CarState, dt: float) -> None:
+        """Steer with bounded lateral acceleration and keep an occupied lane clear."""
+        if dt <= 0.0:
+            return
+        half_width_m = self.track.width_px_at(car.s) * 0.39 / self.track.px_per_m
+        steer_rate = 2.6 if (car.maneuver_pass_timer > 0.0 or car.maneuver_timer > 0.0) else 2.0
+        desired_v = max(-4.5, min(4.5, (car.target_d - car.d) * steer_rate * half_width_m))
+        velocity = car.lateral_velocity
+        velocity += max(-10.0 * dt, min(10.0 * dt, desired_v - velocity))
+        proposed = car.d + velocity * dt / half_width_m
+        length = self.track.length_m
+        overlap_distance = CAR_LEN_PX / self.track.px_per_m * 1.15
+        current_lat = compute_lateral_screen_px(self.track, car.d, car.s)
+        for other in self.cars:
+            if other is car or other.in_pits or other.dnf or other.spin_timer > 0.0:
+                continue
+            gap = (other.s - car.s + length * 0.5) % length - length * 0.5
+            if abs(gap) >= overlap_distance:
+                continue
+            other_lat = compute_lateral_screen_px(self.track, other.d, other.s)
+            clearance_d = CAR_WID_PX * 1.06 / (half_width_m * self.track.px_per_m)
+            other_d = other_lat / (half_width_m * self.track.px_per_m)
+            # If already touching, leave resolution to the contact solver; do
+            # not turn this predictive guard into another position snap.
+            if current_lat > other_lat:
+                proposed = max(proposed, min(car.d, other_d + clearance_d))
+            elif current_lat < other_lat:
+                proposed = min(proposed, max(car.d, other_d - clearance_d))
+        car.lateral_velocity = (proposed - car.d) * half_width_m / dt
+        car.d = proposed
 
     def _roll_pit_stop_duration(self, car: CarState, event_cb) -> tuple[float, str]:
         """Realistic F1 pit stop distribution: faster mean for top crews, right-tail slow/botched stops."""
@@ -2188,6 +2278,7 @@ class RaceSession:
         return dur, "CLEAN"
 
     def _step_pit_lane(self, car: CarState, leader_finished: bool, dt: float, event_cb) -> None:
+        car.lateral_velocity = 0.0
         pit_d = 2.0 * self.track.pit_side
         car.d += (pit_d - car.d) * min(1.0, dt * 5.5)
         car.braking = False
@@ -2296,7 +2387,7 @@ class RaceSession:
                 car.radio_box_announced = False
                 car.cliff_radio_triggered = False
                 car.inlap_push_announced = False
-                self.radio_dispatcher.trigger_pit_exit(car, car.last_pit_duration, event_cb)
+                self.radio_dispatcher.trigger_pit_exit(car, car.last_pit_duration, event_cb, self.race_clock)
                 other_in_pit = any(
                     o.in_pits and o.driver_id != car.driver_id and abs(o.s - car.s) < 38.0 for o in self.cars
                 )
@@ -2325,6 +2416,9 @@ class RaceSession:
             if ds>=remaining:
                 car.in_pits = False
                 car.pit_phase = "NONE"
+                # Drive-throughs skip STOPPED, so clear pit-call state here too.
+                car.radio_box_announced = False
+                car.inlap_push_announced = False
                 car.pit_speed_checked = False
                 car.pit_apron = 0.0
                 car.pit_blend_active = True

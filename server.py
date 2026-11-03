@@ -50,27 +50,45 @@ class SimulationBroadcaster:
             self.cond.notify_all()
 
     def _run_loop(self) -> None:
-        target_dt = 0.05  # 20 Hz physics & broadcast tick
-        prev_time = time.perf_counter()
-        while self.running:
-            now = time.perf_counter()
-            real_dt = min(0.20, max(0.005, now - prev_time))
-            prev_time = now
-
+        if sys.platform == "win32":
             try:
-                self.world.step(real_dt)
-                payload = self.world.build_live_tick_payload()
-                encoded = json.dumps(payload, separators=(",", ":"))
-                with self.cond:
-                    self.latest_frame_id += 1
-                    self.latest_json = encoded
-                    self.cond.notify_all()
-            except Exception as exc:
-                sys.stderr.write(f"[F1SimEngine Error] {exc}\n")
+                import ctypes
+                ctypes.windll.winmm.timeBeginPeriod(1)
+            except Exception:
+                pass
 
-            elapsed = time.perf_counter() - now
-            sleep_for = max(0.004, target_dt - elapsed)
-            time.sleep(sleep_for)
+        target_dt = 0.05  # 20 Hz physics & broadcast tick
+        next_tick_time = time.perf_counter()
+        try:
+            while self.running:
+                now = time.perf_counter()
+                if now - next_tick_time > 0.5:
+                    next_tick_time = now
+
+                try:
+                    self.world.step(target_dt)
+                    payload = self.world.build_live_tick_payload()
+                    encoded = json.dumps(payload, separators=(",", ":"))
+                    with self.cond:
+                        self.latest_frame_id += 1
+                        self.latest_json = encoded
+                        self.cond.notify_all()
+                except Exception as exc:
+                    sys.stderr.write(f"[F1SimEngine Error] {exc}\n")
+
+                next_tick_time += target_dt
+                sleep_for = next_tick_time - time.perf_counter()
+                if sleep_for > 0.001:
+                    time.sleep(sleep_for)
+                else:
+                    time.sleep(0.001)
+        finally:
+            if sys.platform == "win32":
+                try:
+                    import ctypes
+                    ctypes.windll.winmm.timeEndPeriod(1)
+                except Exception:
+                    pass
 
 
 class F1RequestHandler(BaseHTTPRequestHandler):

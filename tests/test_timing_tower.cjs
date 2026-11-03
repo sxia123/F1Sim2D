@@ -56,4 +56,41 @@ assert.match(list.innerHTML, /t-interval"[^>]*>INT \+1\.234/);
 tick.phase = 'SPRINT_RACE';
 render();
 assert.match(list.innerHTML, /t-gap-val"[^>]*>\+12\.345/);
-assert.match(list.innerHTML, /t-interval"[^>]*>I
+assert.match(list.innerHTML, /t-interval"[^>]*>INT \+1\.234/);
+driver.pos = 1;
+render();
+assert.match(list.innerHTML, /t-gap-val"[^>]*>LEADER/);
+assert.doesNotMatch(list.innerHTML, /class="t-interval"/);
+driver.pos = 3;
+driver.dnf = true;
+render();
+assert.match(list.innerHTML, /t-gap-val"[^>]*>OUT/);
+assert.doesNotMatch(list.innerHTML, /class="t-interval"/);
+driver.dnf = false;
+
+tick.phase = 'QUALIFYING';
+render();
+assert.equal(gapHeading.textContent, 'LAP DELTA');
+assert.match(list.innerHTML, /title="Best lap difference to the qualifying leader">\+12\.345/);
+assert.doesNotMatch(list.innerHTML, /class="t-interval"/);
+
+tick.phase = 'GRID_WALK';
+driver.last = driver.best = null;
+driver.sectors = [null, null, null];
+driver.last_sectors = [null, null, null];
+render();
+assert.match(list.innerHTML, /--:--\.---/);
+assert.equal((list.innerHTML.match(/<strong>--\.---<\/strong>/g) || []).length, 3);
+assert.doesNotMatch(list.innerHTML, /t-sector-active/);
+
+tick.phase = 'SPRINT_QUALIFYING';
+driver.elim = true;
+driver.estg = 'SQ1';
+render();
+assert.match(list.innerHTML, /OUT SQ1/);
+assert.doesNotMatch(list.innerHTML, /t-sector-active/);
+
+tick.cars = [];
+render();
+assert.match(list.innerHTML, /CARS IN GARAGE/);
+console.log('Timing tower checks passed.');
