@@ -1770,8 +1770,10 @@ class ChampionshipWorld:
             quali_cut = 0
 
             active_cars: list = []
+            maneuver_session = None
             if self.phase in ("GRID_WALK", "RACE", "SPRINT_RACE") and self.race_session:
                 rs = self.race_session
+                maneuver_session = rs
                 active_cars = rs.standings
                 flag = rs.flag_state
                 yellow_sec = rs.yellow_sector
@@ -1868,7 +1870,7 @@ class ChampionshipWorld:
                         "dnf_r": c.dnf_reason,
                         "vis": (not c.dnf) or (c.dnf_timer > 0),
                         "battle": c.battle_with,
-                        "man": c.maneuver,
+                        "man": maneuver_session.display_maneuver(c) if maneuver_session else c.maneuver,
                         "elim": c.eliminated,
                         "estg": c.elim_stage,
                     }

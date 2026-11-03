@@ -45,6 +45,7 @@ The server immediately starts broadcasting live 20 Hz telemetry and physics. No 
   Replaces legacy DRS. Any chasing car within **1.000s** at the circuit's **OVT Detection Gate** gains `+0.5 MJ` extra harvest capacity and overrides the standard **290 km/h MGU-K electrical derating curve** up to **355+ km/h** on the subsequent lap.
 - **Realistic Slipstream & Tow Dynamics**:
   Tow benefits require close trailing proximity directly behind an opponent with realistic wake falloff and dirty-air cornering penalties.
+  Faster cars use available pace and closing speed to leave the tow, check both sides for traffic, and hold a passing lane until fully clear. Their actual speed advantage determines whether the straight-line pass succeeds.
 - **Authentic Overtaking Maneuvers**:
   AI drivers execute contextual maneuvers matching track layout: late-braking divebombs into heavy braking hairpins, switchbacks on corner exits, dummy moves, and outside sweeps.
 - **Multi-Compound Tyre Model & Deg**:

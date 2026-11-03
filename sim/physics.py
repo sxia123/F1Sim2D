@@ -17,6 +17,8 @@ PIT_SPEED_LIMIT_MS = 22.22  # 80 km/h FIA pit lane limit
 DERATE_START_MS = 80.56     # 290 km/h standard 2026 MGU-K derating threshold
 DERATE_END_MS = 96.00       # 345.6 km/h standard ceiling
 OVERTAKE_MAX_MS = 101.50    # 365.4 km/h Strong Overtake Mode + electrical punch + slipstream ceiling
+TOW_MIN_PASS_RUN_MS = 0.75  # Minimum available pace or closing-speed advantage.
+TOW_RELEASE_CAR_LENGTHS = 3.5  # Pull out earlier when a stronger run needs more room.
 
 TEAM_GARAGE_INDEX = {
     "mercedes": 0,
@@ -606,6 +608,8 @@ class CarState:
         self.maneuver_pass_timer: float = 0.0
         self.maneuver_target_id: str | None = None
         self.maneuver_attempt_cooldown: float = 0.0
+        self.tow_target_id: str | None = None
+        self.free_air_target_v: float = 0.0
         self.spin_timer: float = 0.0
         self.spin_omega: float = 0.0
         self.spin_lateral_dir: float = 0.0
@@ -1649,7 +1653,7 @@ class RaceSession:
                     car.maneuver_target_id = None
         if car.maneuver_timer > 0.0:
             car.maneuver_timer = max(0.0, car.maneuver_timer - dt)
-            if car.maneuver_timer <= 0.0:
+            if car.maneuver_timer <= 0.0 and car.maneuver_pass_timer <= 0.0:
                 car.maneuver = ""
         car.smoke = max(0.0, car.smoke - dt * 1.6)
         car.sparks = False
@@ -1751,22 +1755,7 @@ class RaceSession:
                 else:
                     car.tailing_timer = max(0.0, car.tailing_timer - dt * 0.4)
 
-                # Tow Balance: Only occurs if RIGHT BEHIND the car ahead on a straight
-                # - Tight proximity: <= 20m and <= 0.28s gap
-                # - Lateral wake alignment: lateral offset <= 0.16 (drops to zero if pulled out)
-                # - Track condition: straight line / flat-out only (curv < 0.0038 and not in braking zone)
-                # - Subtle authentic speed bonus: max 0.8% (~0.7-0.8 m/s or ~2.6 km/h)
-                if (
-                    3.0 <= dist_ahead <= 20.0
-                    and gap_ahead_s <= 0.28
-                    and smp["curv"] < 0.0038
-                    and not self.is_braking[st]
-                ):
-                    lat_offset = abs(car.d - car_ahead.d)
-                    if lat_offset <= 0.16:
-                        align_factor = 1.0 - (lat_offset / 0.16) ** 1.5
-                        prox_factor = 1.0 - (gap_ahead_s / 0.28)
-                        slipstream_bonus = prox_factor * align_factor * 0.008
+                slipstream_bonus = self._tow_strength(car, car_ahead, smp) * 0.008
 
                 # Dirty air downforce deficit in cornering wake
                 if gap_ahead_s < 0.85 and smp["curv"] > 0.0065:
@@ -1924,6 +1913,10 @@ class RaceSession:
             elif car.boost_active:
                 target_v *= 1.020
 
+        # Preserve available pace before following/flags reduce the target.
+        # Matched traffic speed must not hide a faster car's ability to pass.
+        car.free_air_target_v = target_v
+
         # Team Order: YIELD / SWAP Position to Teammate
         if car.team_order == "YIELD":
             teammate = next(
@@ -1976,8 +1969,8 @@ class RaceSession:
             min_long_car = CAR_LEN_PX / self.track.px_per_m
             is_alongside = dist_ahead_m < min_long_car * 0.95 and lane_offset >= min_d_w * 0.75
             in_active_pass = (
-                car.maneuver_pass_timer > 0.0
-                or getattr(car_ahead, "maneuver_pass_timer", 0.0) > 0.0
+                (car.maneuver_pass_timer > 0.0 and car.maneuver_target_id == car_ahead.driver_id)
+                or (car_ahead.maneuver_pass_timer > 0.0 and car_ahead.maneuver_target_id == car.driver_id)
                 or car.battle_with == car_ahead.driver_id
                 or is_alongside
                 or (car.team_id == car_ahead.team_id and getattr(car_ahead, "team_order", "") == "YIELD")
@@ -1994,7 +1987,12 @@ class RaceSession:
                 elif gap_ahead_s < 0.92:
                     gap_blend = max(0.0, min(1.0, (0.92 - gap_ahead_s) / 0.60))
                     blend = gap_blend * lateral_overlap
-                    desired_gap = 0.35
+                    if car.tow_target_id == car_ahead.driver_id:
+                        # Gather a run without sitting at the normal cruising
+                        # headway forever. Braking anticipation above still applies.
+                        desired_gap = max(0.12, (min_long_car + 3.0) / max(car.v, 25.0))
+                    else:
+                        desired_gap = 0.35
                     follow_v = car_ahead.v + (gap_ahead_s - desired_gap) * 12.0
                     target_follow = max(4.0, follow_v)
                     target_v = min(target_v, (1.0 - blend) * target_v + blend * target_follow)
@@ -2685,11 +2683,127 @@ class RaceSession:
         p_success = 1.0 / (1.0 + math.exp(-max(-4.2, min(4.2, logit))))
         return maneuver, p_success, target_d
 
+    def _tow_strength(self, car: CarState, ahead: CarState, smp: dict) -> float:
+        """Current wake strength, rather than intent to attempt a tow-assisted pass."""
+        if (ahead is car or car.in_pits or ahead.in_pits or car.dnf or ahead.dnf
+                or car.finished or ahead.finished or car.spin_timer > 0 or ahead.spin_timer > 0
+                or car.v <= 0):
+            return 0.0
+        distance = (ahead.s - car.s) % self.track.length_m
+        gap = distance / max(car.v, 25.0)
+        alignment = abs(car.d - ahead.d)
+        if (not 3.0 <= distance <= 20.0 or gap >= .28 or alignment >= .16
+                or smp["curv"] >= .0038 or self.is_braking[smp["station"]]):
+            return 0.0
+        return (1.0 - (alignment / .16) ** 1.5) * (1.0 - gap / .28)
+
+    def display_maneuver(self, car: CarState) -> str:
+        """Show TOW only while a live car is actually directly ahead in the wake."""
+        if car.maneuver != "SLIPSTREAM":
+            return car.maneuver
+        if self.flag_state != "GREEN":
+            return ""
+        smp = self.track.sample(car.s)
+        # Physical proximity also works across the timing line and with lapped
+        # traffic; the preceding standings row need not be the car in front.
+        return "SLIPSTREAM" if any(self._tow_strength(car, ahead, smp) > 0
+                                    for ahead in self.cars) else ""
+
+    def _tow_passing_lane(self, attacker: CarState, defender: CarState,
+                          gap: float, defender_lane: float) -> float | None:
+        """Choose a reachable side that clears the defender and nearby traffic."""
+        track = self.track
+        half_width = track.width_px_at(attacker.s) * 0.39
+        clearance = CAR_WID_PX * 1.15
+        lane_spacing = clearance / half_width
+        defender_lats = (compute_lateral_screen_px(track, defender.d, defender.s),
+                         compute_lateral_screen_px(track, defender_lane, defender.s))
+        candidates = [attacker.target_d, attacker.d,
+                      defender_lane - lane_spacing, defender_lane + lane_spacing,
+                      -.46, .46, -.74, .74, -.86, .86]
+        car_length = CAR_LEN_PX / track.px_per_m
+        options = []
+        for lane in candidates:
+            if not -.86 <= lane <= .86:
+                continue
+            lateral = compute_lateral_screen_px(track, lane, attacker.s)
+            if any(abs(lateral - occupied) < clearance - .001 for occupied in defender_lats):
+                continue
+            # Once alongside, the other car cannot be crossed to reach a lane.
+            current_lat = compute_lateral_screen_px(track, attacker.d, attacker.s)
+            if gap < car_length * 1.35 and (current_lat - defender_lats[0]) * (lateral - defender_lats[0]) < 0:
+                continue
+            blocked = False
+            for other in self.cars:
+                if other is attacker or other is defender or other.dnf or other.in_pits or other.finished:
+                    continue
+                signed_gap = (other.s - attacker.s + track.length_m * .5) % track.length_m - track.length_m * .5
+                rear_room = car_length * 1.35 + max(0.0, other.v - attacker.v) * 1.2
+                front_room = gap + car_length * 1.35 + max(0.0, attacker.v - other.v) * 1.2
+                if not -rear_room < signed_gap < front_room:
+                    continue
+                occupied = [compute_lateral_screen_px(track, other.d, other.s)]
+                if other.maneuver_pass_timer > 0.0 or other.defense_moves > 0:
+                    occupied.append(compute_lateral_screen_px(track, other.target_d, other.s))
+                if any(abs(lateral - lat) < clearance for lat in occupied):
+                    blocked = True
+                    break
+            if not blocked:
+                # Prefer a short lane change and keep an already chosen side.
+                cost = abs(lane - attacker.d) + .2 * abs(lane - attacker.target_d)
+                options.append((cost, lane))
+        return min(options)[1] if options else None
+
+    def _plan_tow_pass(self, attacker: CarState, defender: CarState, gap: float) -> None:
+        """Use a tow to build a run, then let real pace complete a clear-lane pass."""
+        attacker.maneuver = "SLIPSTREAM"
+        attacker.maneuver_timer = .4
+        # A tow is preparation, not an already successful overtake. Keep the
+        # following/braking controller active until the driver actually pulls out.
+        attacker.target_d = defender.d
+        available_pace = (attacker.free_air_target_v or attacker.v) - (defender.free_air_target_v or defender.v)
+        closing_speed = attacker.v - defender.v
+        run = max(closing_speed, available_pace)
+        if run < TOW_MIN_PASS_RUN_MS or attacker.pit_blend_active or attacker.box_this_lap:
+            return
+        # Respect an existing defensive move. Do not invent a last-second move
+        # across the entire road from a noisy inside_sign on a straight.
+        defender_lane = defender.defending_side if defender.defense_moves else defender.target_d
+        lane = self._tow_passing_lane(attacker, defender, gap, defender_lane)
+        if lane is None:
+            return
+        half_width_m = self.track.width_px_at(attacker.s) * .39 / self.track.px_per_m
+        lane_change_time = abs(lane - attacker.d) * half_width_m / 2.8 + .45
+        car_length = CAR_LEN_PX / self.track.px_per_m
+        pullout_gap = min(45.0, max(car_length * TOW_RELEASE_CAR_LENGTHS,
+                                   car_length * 1.5 + run * lane_change_time))
+        if gap > pullout_gap:
+            attacker.tow_target_id = defender.driver_id
+            return
+
+        attacker.target_d = lane
+        attacker.maneuver_target_id = defender.driver_id
+        attacker.maneuver_pass_timer = max(4.0, min(9.0, (gap + car_length * 1.35) / max(run, 1.0) + 1.0))
+        attacker.maneuver_timer = attacker.maneuver_pass_timer
+        attacker.attacking_side = 1.0 if lane > defender_lane else -1.0
+        attacker.defense_moves = 0
+        attacker.defense_timer = 0.0
+        attacker.battle_with = defender.driver_id
+        defender.battle_with = attacker.driver_id
+        if defender.defense_moves == 0:
+            defender.defense_moves = 1
+            defender.defending_side = defender_lane
+            defender.defense_timer = 4.5
+            defender.target_d = defender_lane
+            defender.maneuver = "DEFEND"
+            defender.maneuver_timer = 3.5
+
     def _resolve_battles_and_incidents(self, dt: float, event_cb) -> None:
         """Evaluate wheel-to-wheel 2D lane shifts, smooth side-by-side overtaking maneuvers, defense & contact."""
         active = [c for c in self.standings if not c.dnf and not c.finished and not c.in_pits and c.spin_timer <= 0.0]
         for c in active:
             c.battle_with = None
+            c.tow_target_id = None
 
         if self.flag_state in ("VSC", "SC", "LIGHTS"):
             return
@@ -2703,10 +2817,19 @@ class RaceSession:
             if c.maneuver_pass_timer > 0.0 and c.maneuver_target_id:
                 tgt = self.cars_by_id.get(c.maneuver_target_id)
                 if tgt and not tgt.dnf and not tgt.in_pits:
+                    if (c.maneuver == "SLIPSTREAM" and c.team_order == "HOLD"
+                            and c.team_id == tgt.team_id):
+                        c.maneuver_pass_timer = 0.0
+                        c.maneuver_target_id = None
+                        c.maneuver_timer = 0.0
+                        c.maneuver = ""
+                        continue
                     # Require a full clear car length ahead (1.35x) before ending passing lane commitment
                     if c.total_dist > tgt.total_dist + min_long_m * 1.35:
                         c.maneuver_pass_timer = 0.0
                         c.maneuver_target_id = None
+                        if c.maneuver == "SLIPSTREAM":
+                            c.maneuver_timer = min(c.maneuver_timer, .4)
                         c.battle_with = None
                         c.attacking_side = 0.0
                         tgt.battle_with = None
@@ -2714,6 +2837,14 @@ class RaceSession:
                         tgt.defense_moves = 0
                         tgt.defense_timer = 0.0
                     else:
+                        if c.maneuver == "SLIPSTREAM":
+                            # A straight-line pass earns its result through
+                            # actual speed; do not accelerate the attacker or
+                            # slow the defender to manufacture a success.
+                            c.maneuver_timer = max(c.maneuver_timer, .4)
+                            c.battle_with = tgt.driver_id
+                            tgt.battle_with = c.driver_id
+                            continue
                         lat_sep = abs(compute_lateral_screen_px(self.track, c.d,c.s) - compute_lateral_screen_px(self.track, tgt.d,tgt.s))
                         if lat_sep >= CAR_WID_PX * 0.86:
                             st_c = self.track.sample(c.s)["station"]
@@ -2733,7 +2864,11 @@ class RaceSession:
                 continue
 
             actual_gap = defender.total_dist - attacker.total_dist
-            if actual_gap < -4.0 or actual_gap > max(38.0, min_long_m * 1.55):
+            smp = self.track.sample(attacker.s)
+            st = smp["station"]
+            open_straight = smp["curv"] < .0038 and not self.is_braking[st]
+            battle_range = 60.0 if open_straight else max(38.0, min_long_m * 1.55)
+            if actual_gap < -4.0 or actual_gap > battle_range:
                 continue
 
             if attacker.team_id == defender.team_id:
@@ -2753,8 +2888,6 @@ class RaceSession:
                     attacker.target_d = max(-0.84, min(0.84, -side * 0.45))
                     continue
 
-            smp = self.track.sample(attacker.s)
-            st = smp["station"]
             ins = float(smp.get("inside_sign", 1))
             in_yellow = (self.flag_state == "YELLOW" and self.yellow_sector == smp["sector"])
             if in_yellow:
@@ -2768,6 +2901,18 @@ class RaceSession:
                     if attacker.v > defender.v:
                         attacker.v = max(defender.v, attacker.v - 24.0 * dt)
                     continue
+
+            # Do not re-plan the same fight in reverse as the cars trade places
+            # by a nose. The passing lane stays reserved until fully clear.
+            if ((attacker.maneuver_pass_timer > 0 and attacker.maneuver_target_id == defender.driver_id)
+                    or (defender.maneuver_pass_timer > 0 and defender.maneuver_target_id == attacker.driver_id)):
+                continue
+
+            t1_s = self.track.corners[0]["s_m"] if self.track.corners else 320.0
+            if (open_straight and not in_yellow
+                    and not (attacker.lap == 1 and attacker.total_dist < t1_s * .75)):
+                self._plan_tow_pass(attacker, defender, actual_gap)
+                continue
 
             attacker.battle_with = defender.driver_id
             defender.battle_with = attacker.driver_id
