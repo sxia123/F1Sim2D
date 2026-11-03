@@ -1,7 +1,7 @@
 // High-DPI 60fps 2D Real-GPS Circuit & Detailed 2026 F1 Car Renderer
 import { getTeamLogoImage } from "/logos.js";
 import { SceneryLayer } from "/scenery.js";
-import { getCarSurfaces, getCarbonPaint } from "/car-materials.js";
+import { getCarSurfaces, getCarbonPaint, FLOOR_SURFACE_BOUNDS, BODY_SURFACE_BOUNDS } from "/car-materials.js";
 
 const TIRE_COLORS = {
   SOFT: "#ff2800",
@@ -1206,7 +1206,8 @@ export class CircuitRenderer {
     }
 
     // 2. Woven Carbon Underfloor, Plank & Diffuser Edge Wings
-    ctx.drawImage(surfaces.floor, -8.5, -4.2, 18, 8.4);
+    const floorBounds = FLOOR_SURFACE_BOUNDS;
+    ctx.drawImage(surfaces.floor, floorBounds.x, floorBounds.y, floorBounds.width, floorBounds.height);
 
     // 3. Carbon Double-Wishbone Suspension Arms (Front & Rear)
     ctx.strokeStyle = "#181a22";
@@ -1277,7 +1278,8 @@ export class CircuitRenderer {
 
     // Cached sculpted paint, pod graphics, radiator mouths and chassis decals.
     // This uses the original artwork bounds; physical dimensions stay untouched.
-    ctx.drawImage(surfaces.body, -8.5, -4.2, 18, 8.4);
+    const bodyBounds = BODY_SURFACE_BOUNDS;
+    ctx.drawImage(surfaces.body, bodyBounds.x, bodyBounds.y, bodyBounds.width, bodyBounds.height);
 
     // Stamp miniature Team Logo on the Nosecone when zoomed in
     const logoImg = getTeamLogoImage(c.tid);

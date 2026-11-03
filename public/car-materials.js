@@ -1,6 +1,8 @@
 // Display-only, cached surface artwork in the renderer's existing car coordinates.
-// These canvases contain no timing, movement, dimensions or collision state.
+// These canvases contain no timing, movement or collision state.
 export const CAR_SURFACE_BOUNDS = Object.freeze({ x: -8.5, y: -4.2, width: 18, height: 8.4 });
+export const FLOOR_SURFACE_BOUNDS = Object.freeze({ x: -7.1, y: -3.4, width: 10.4, height: 6.8 });
+export const BODY_SURFACE_BOUNDS = Object.freeze({ x: -6.9, y: -3.15, width: 16.1, height: 6.3 });
 const RESOLUTION = 24;
 const BODY_CACHE = new Map();
 const RUBBER_CACHE = new Map();
@@ -15,8 +17,7 @@ function canvas(width, height) {
   return result;
 }
 
-function surface(paint) {
-  const b = CAR_SURFACE_BOUNDS;
+function surface(paint, b = CAR_SURFACE_BOUNDS) {
   const result = canvas(Math.ceil(b.width * RESOLUTION), Math.ceil(b.height * RESOLUTION));
   const ctx = result.getContext("2d");
   ctx.scale(RESOLUTION, RESOLUTION);
@@ -110,7 +111,7 @@ function sharedSurfaces() {
       ctx.moveTo(-6.85, y); ctx.lineTo(-4.7, y * .72);
     }
     ctx.stroke();
-  });
+  }, FLOOR_SURFACE_BOUNDS);
   shared = { floor, carbon };
   return shared;
 }
@@ -205,7 +206,7 @@ function bodySurface(liv, team, number, retired) {
     for (const x of [2.5,3.2]) for (const side of [-1,1]) {
       ctx.beginPath(); ctx.arc(x,side*.9,.055,0,Math.PI*2); ctx.fill();
     }
-  });
+  }, BODY_SURFACE_BOUNDS);
 }
 
 function rubberSurface(compound, worn) {
@@ -244,7 +245,7 @@ export function getCarSurfaces(livery, team, number, retired, compound, wear, pi
   const density = Math.min(24, Math.max(2, 2 ** Math.ceil(Math.log2(Math.max(1,pixelScale)))));
   const width = Math.ceil(CAR_SURFACE_BOUNDS.width * density);
   const tyreWidth = Math.min(128,Math.max(16,2 ** Math.ceil(Math.log2(3 * Math.max(1,pixelScale)))));
-  return { floor: scaledSurface(base.floor,width), carbon: scaledSurface(base.carbon,width),
-    body: scaledSurface(BODY_CACHE.get(key),width),
+  return { floor: scaledSurface(base.floor,Math.ceil(FLOOR_SURFACE_BOUNDS.width * density)), carbon: scaledSurface(base.carbon,width),
+    body: scaledSurface(BODY_CACHE.get(key),Math.ceil(BODY_SURFACE_BOUNDS.width * density)),
     rubber: scaledSurface(RUBBER_CACHE.get(rubberKey),tyreWidth) };
 }
