@@ -571,9 +571,8 @@ class ChampionshipWorld:
 
         self._apply_race_bans_if_any()
 
-        # AI rival teams invest surplus budget into R&D upgrades starting from Round 2 onward
-        if self.current_round > 1:
-            self._run_ai_rd_upgrades()
+        # AI rival teams invest surplus budget into R&D upgrades
+        self._run_ai_rd_upgrades()
 
         cond = "WET / RAIN" if self.weekend_wetness > 0.15 else "DRY"
         fmt_tag = " [SPRINT WEEKEND]" if trk.is_sprint else ""
@@ -615,26 +614,161 @@ class ChampionshipWorld:
         self.temp_ban_subs = []
 
     def _run_ai_rd_upgrades(self) -> None:
+        """AI rival teams strategically invest surplus budget into department upgrades."""
+        OPERATING_RESERVE_M = 22.0  # Safe reserve for race weekend salaries and crash repairs
+
         for team in self.teams:
             if team["id"] == self.player_team_id:
                 continue
-            if team["budget_m"] > 30.0 and random.random() < 0.42:
-                candidates = [
-                    (dept, lvl, upgrade_cost_m(dept, lvl))
-                    for dept, lvl in team["upgrades"].items()
-                    if lvl < UPGRADE_DEPARTMENTS[dept]["max_level"]
-                ]
-                affordable = [c for c in candidates if 0 < c[2] <= team["budget_m"] - 20.0]
-                if affordable:
-                    affordable.sort(key=lambda x: (x[1], x[2]))
-                    dept, lvl, cost = random.choice(affordable[:3])
-                    team["budget_m"] = round(team["budget_m"] - cost, 2)
-                    team["upgrades"][dept] = lvl + 1
-                    if lvl + 1 >= 8:
+
+            budget = team["budget_m"]
+            surplus = budget - OPERATING_RESERVE_M
+            if surplus <= 0:
+                continue
+
+            # Determine maximum number of upgrades to attempt this weekend based on surplus
+            if surplus >= 110.0:
+                # Enormous war chest: aggressive multi-package development surge
+                max_upgrades = 3
+                spend_chance = 0.95
+            elif surplus >= 60.0:
+                # High war chest: major upgrade package
+                max_upgrades = 2
+                spend_chance = 0.85
+            elif surplus >= 25.0:
+                # Solid surplus: regular update package
+                max_upgrades = 1
+                spend_chance = 0.65
+            else:
+                # Modest surplus: occasional minor upgrade
+                max_upgrades = 1
+                spend_chance = 0.40
+
+            if random.random() > spend_chance:
+                continue
+
+            upgrades_bought = []
+            total_spent = 0.0
+
+            for _ in range(max_upgrades):
+                curr_budget = team["budget_m"]
+                available_to_spend = curr_budget - OPERATING_RESERVE_M
+                if available_to_spend <= 2.0:
+                    break
+
+                candidates = []
+                for dept, lvl in team["upgrades"].items():
+                    spec = UPGRADE_DEPARTMENTS[dept]
+                    if lvl < spec["max_level"]:
+                        cost = upgrade_cost_m(dept, lvl)
+                        if 0 < cost <= available_to_spend:
+                            candidates.append((dept, lvl, cost))
+
+                if not candidates:
+                    break
+
+                team_id = team["id"]
+                avg_lvl = sum(team["upgrades"].values()) / len(team["upgrades"])
+
+                def dept_priority(cand):
+                    d, l, c = cand
+                    score = 10.0 - l  # lower level = higher baseline priority (cost-efficient rating gain)
+
+                    # Top teams bias towards raw aero and engine power
+                    if team_id in ("ferrari", "redbull", "mclaren", "mercedes"):
+                        if d in ("power_unit", "active_aero"):
+                            score += 4.5
+                        elif d == "chassis":
+                            score += 2.5
+                    else:
+                        # Midfield/backmarkers prioritize fixing departments lagging behind their team average
+                        if l < avg_lvl - 0.8:
+                            score += 5.0
+
+                    # Reliability safety factor: don't neglect reliability if it's lagging
+                    if d == "reliability" and l < avg_lvl - 0.5:
+                        score += 3.5
+                    if d == "pit_crew" and l < avg_lvl - 1.0:
+                        score += 2.0
+
+                    return score + random.uniform(-0.5, 0.5)
+
+                candidates.sort(key=dept_priority, reverse=True)
+                dept, lvl, cost = candidates[0]
+
+                team["budget_m"] = round(team["budget_m"] - cost, 2)
+                team["upgrades"][dept] = lvl + 1
+                total_spent += cost
+                upgrades_bought.append((dept, lvl + 1, cost))
+
+            if upgrades_bought:
+                total_spent = round(total_spent, 2)
+                if len(upgrades_bought) > 1:
+                    depts_str = ", ".join(f"{UPGRADE_DEPARTMENTS[d]['short']} Lv.{nl}" for d, nl, _ in upgrades_bought)
+                    self._push_event(
+                        "UPGRADE",
+                        f"PADDOCK TECH: {team['short']} introduces a ${total_spent:.1f}M multi-stage development package ({depts_str})!",
+                    )
+                else:
+                    d, nl, c = upgrades_bought[0]
+                    if nl >= 8 or c >= 25.0:
                         self._push_event(
                             "UPGRADE",
-                            f"PADDOCK TECH: {team['short']} brings a major {UPGRADE_DEPARTMENTS[dept]['short']} Lv.{lvl+1} upgrade package!",
+                            f"PADDOCK TECH: {team['short']} brings a major ${c:.1f}M {UPGRADE_DEPARTMENTS[d]['short']} Lv.{nl} upgrade package!",
                         )
+                    else:
+                        self._push_event(
+                            "UPGRADE",
+                            f"UPGRADE: {team['short']} updates {UPGRADE_DEPARTMENTS[d]['short']} to Lv.{nl} (-${c:.1f}M).",
+                        )
+
+    def _run_ai_offseason_development(self) -> None:
+        """AI teams invest winter R&D capital into developing their new season challenger."""
+        OPERATING_RESERVE_M = 25.0
+        for team in self.teams:
+            if team["id"] == self.player_team_id:
+                continue
+
+            surplus = team["budget_m"] - OPERATING_RESERVE_M
+            if surplus < 12.0:
+                continue
+
+            # Real F1 teams commit 40% to 65% of liquid winter surplus into new car architecture
+            winter_budget = round(surplus * random.uniform(0.40, 0.65), 2)
+            spent = 0.0
+            upgrades_bought = []
+
+            # Perform up to 4 pre-season department upgrades
+            for _ in range(4):
+                remaining_winter = winter_budget - spent
+                if remaining_winter <= 2.0 or team["budget_m"] - OPERATING_RESERVE_M <= 2.0:
+                    break
+
+                candidates = []
+                for dept, lvl in team["upgrades"].items():
+                    spec = UPGRADE_DEPARTMENTS[dept]
+                    if lvl < spec["max_level"]:
+                        cost = upgrade_cost_m(dept, lvl)
+                        if 0 < cost <= min(remaining_winter, team["budget_m"] - OPERATING_RESERVE_M):
+                            candidates.append((dept, lvl, cost))
+
+                if not candidates:
+                    break
+
+                candidates.sort(key=lambda x: (x[1], x[2]))
+                dept, lvl, cost = candidates[0]
+
+                team["budget_m"] = round(team["budget_m"] - cost, 2)
+                team["upgrades"][dept] = lvl + 1
+                spent = round(spent + cost, 2)
+                upgrades_bought.append((dept, lvl + 1))
+
+            if upgrades_bought:
+                depts_summary = ", ".join(f"{UPGRADE_DEPARTMENTS[d]['short']} Lv.{nl}" for d, nl in upgrades_bought)
+                self._push_event(
+                    "UPGRADE",
+                    f"WINTER R&D: {team['short']} invests ${spent:.1f}M in pre-season car development ({depts_summary})!",
+                )
 
     def _start_sprint_qualifying(self) -> None:
         trk = self.current_track
@@ -873,8 +1007,9 @@ class ChampionshipWorld:
             team_drivers = [d for d in self.drivers if d["team_id"] == tid]
             salaries_per_race = sum(d["salary_m"] / 24.0 for d in team_drivers)
             repairs = team_repairs[tid]
+            factory_ops = round(0.55 + 0.05 * (sum(team["upgrades"].values()) / 6.0), 2)
 
-            net = income + pts_bonus - salaries_per_race - repairs
+            net = income + pts_bonus - salaries_per_race - repairs - factory_ops
             team["budget_m"] = round(max(1.5, team["budget_m"] + net), 2)
 
             if tid == self.player_team_id:
@@ -884,6 +1019,7 @@ class ChampionshipWorld:
                     income + pts_bonus,
                 )
                 self._log_ledger("SALARY", f"R{self.current_round} Driver Payroll", -salaries_per_race)
+                self._log_ledger("OPERATIONS", f"R{self.current_round} Factory Operations & Logistics", -factory_ops)
                 if repairs > 0.01:
                     self._log_ledger("REPAIR", f"R{self.current_round} Carbon-Fibre Crash Damage Repairs", -repairs)
 
@@ -1177,14 +1313,20 @@ class ChampionshipWorld:
                 d["contract_years"] -= 1
 
             if d["age"] >= 42 and d["team_id"] is not None and d["team_id"] != self.player_team_id and free_pool:
-                    if random.random() < 0.45:
-                        rep = free_pool.pop(0)
-                        tid = d["team_id"]
-                        t_short = self._teams_by_id()[tid]["short"]
-                        d["team_id"] = None
-                        rep["team_id"] = tid
-                        rep["contract_years"] = 2
-                        self._push_event("TRANSFER", f"RETIREMENT: {d['name']} steps back; {t_short} signs {rep['name']}!")
+                if random.random() < 0.45:
+                    rep = free_pool.pop(0)
+                    tid = d["team_id"]
+                    team = self._teams_by_id()[tid]
+                    t_short = team["short"]
+                    signing_fee = round(rep["value_m"] * 0.25, 2)
+                    fee_str = ""
+                    if team["budget_m"] > signing_fee + 15.0:
+                        team["budget_m"] = round(team["budget_m"] - signing_fee, 2)
+                        fee_str = f" (-${signing_fee:.1f}M signing bonus)"
+                    d["team_id"] = None
+                    rep["team_id"] = tid
+                    rep["contract_years"] = 2
+                    self._push_event("TRANSFER", f"RETIREMENT: {d['name']} steps back; {t_short} signs {rep['name']}{fee_str}!")
 
         ai_expiring = [
             d for d in self._active_drivers()
@@ -1194,19 +1336,57 @@ class ChampionshipWorld:
             if random.random() < 0.35 and free_pool:
                 cand = free_pool[0]
                 if driver_overall(cand) >= driver_overall(d) - 1.5:
-                    free_pool.pop(0)
                     tid = d["team_id"]
-                    t_short = self._teams_by_id()[tid]["short"]
+                    team = self._teams_by_id()[tid]
+                    t_short = team["short"]
+                    signing_fee = round(cand["value_m"] * 0.25, 2)
+                    fee_str = ""
+                    if team["budget_m"] > signing_fee + 15.0:
+                        team["budget_m"] = round(team["budget_m"] - signing_fee, 2)
+                        fee_str = f" (-${signing_fee:.1f}M)"
+                    free_pool.pop(0)
                     d["team_id"] = None
                     d["contract_years"] = 0
                     cand["team_id"] = tid
                     cand["contract_years"] = 2
                     free_pool.append(d)
-                    self._push_event("TRANSFER", f"SILLY SEASON: {t_short} signs {cand['name']}, releasing {d['name']}!")
+                    self._push_event("TRANSFER", f"SILLY SEASON: {t_short} signs {cand['name']}{fee_str}, releasing {d['name']}!")
                 else:
                     d["contract_years"] = 2
             else:
                 d["contract_years"] = 2
+
+        # Proactive ambitious signings: rich AI teams (budget >= $70M) seek elite drivers
+        rich_teams = [t for t in self.teams if t["id"] != self.player_team_id and t["budget_m"] >= 70.0]
+        for t in rich_teams:
+            t_drivers = [d for d in self.drivers if d["team_id"] == t["id"]]
+            if not t_drivers or not free_pool:
+                continue
+            weakest = min(t_drivers, key=driver_overall)
+            w_ovr = driver_overall(weakest)
+            best_fa = free_pool[0]
+            fa_ovr = driver_overall(best_fa)
+            if fa_ovr >= w_ovr + 3.0 and fa_ovr >= 85.0:
+                buyout = round(weakest["salary_m"] * max(1, weakest["contract_years"]) * 0.20, 2)
+                signing_fee = round(best_fa["value_m"] * 0.25, 2)
+                total_deal = round(buyout + signing_fee, 2)
+                if t["budget_m"] >= total_deal + 25.0:
+                    t["budget_m"] = round(t["budget_m"] - total_deal, 2)
+                    free_pool.pop(0)
+                    weakest["team_id"] = None
+                    weakest["contract_years"] = 0
+                    best_fa["team_id"] = t["id"]
+                    best_fa["contract_years"] = 2
+                    free_pool.append(weakest)
+                    self.driver_points.setdefault(best_fa["id"], 0)
+                    self.driver_wins.setdefault(best_fa["id"], 0)
+                    self.driver_podiums.setdefault(best_fa["id"], 0)
+                    self.driver_poles.setdefault(best_fa["id"], 0)
+                    self.driver_dnfs.setdefault(best_fa["id"], 0)
+                    self._push_event(
+                        "TRANSFER",
+                        f"PADDOCK BLOCKBUSTER: {t['short']} spends ${total_deal:.1f}M to sign #{best_fa['number']} {best_fa['name']} on a 2-year deal, replacing {weakest['name']}!",
+                    )
 
         for d in self._active_drivers():
             if d["contract_years"] <= 0:
@@ -1297,6 +1477,9 @@ class ChampionshipWorld:
             else f"SEASON START FUNDS: +$50.0M allocated to all team budgets for {next_year}! Prior season funds fully carried over."
         )
         self._push_event("UPGRADE", funds_announcement)
+
+        # Winter Pre-Season Development: Rival teams invest capital into their new season car
+        self._run_ai_offseason_development()
 
         self.season_year = next_year
         self.current_round = 1
