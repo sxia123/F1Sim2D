@@ -668,9 +668,17 @@ class ChampionshipWorld:
     def _start_sprint_race(self) -> None:
         trk = self.current_track
         grid_drivers = self._ordered_grid_drivers(self.sprint_grid_order_ids)
-        sprint_wet = self.weekend_wetness
-        if random.random() < trk.rain_chance * 0.45:
-            sprint_wet = min(0.85, sprint_wet + random.uniform(0.10, 0.30))
+
+        # Single rain event per race: probability of rain equals track rain_chance
+        will_rain = random.random() < trk.rain_chance
+        if will_rain:
+            # 30% chance wet start, 70% chance single mid-race shower
+            if random.random() < 0.30:
+                sprint_wet = round(random.uniform(0.28, 0.65), 2)
+            else:
+                sprint_wet = 0.0
+        else:
+            sprint_wet = 0.0
 
         self.quali_session = None
         self.race_session = RaceSession(
@@ -683,6 +691,7 @@ class ChampionshipWorld:
             is_sprint=True,
             regulations=self.regulations,
             starting_compounds=self.starting_compounds,
+            rain_scheduled=will_rain,
         )
         self.phase = "SPRINT_RACE"
         self._push_event(
@@ -769,11 +778,16 @@ class ChampionshipWorld:
         trk = self.current_track
         grid_drivers = self._ordered_grid_drivers(self.grid_order_ids)
 
-        race_wet = self.weekend_wetness
-        if random.random() < trk.rain_chance * 0.55:
-            race_wet = min(0.85, race_wet + random.uniform(0.15, 0.40))
-        elif race_wet > 0:
-            race_wet = max(0.0, race_wet - random.uniform(0.05, 0.25))
+        # Single rain event per race: probability of rain equals track rain_chance
+        will_rain = random.random() < trk.rain_chance
+        if will_rain:
+            # 30% chance wet start, 70% chance single mid-race shower
+            if random.random() < 0.30:
+                race_wet = round(random.uniform(0.28, 0.65), 2)
+            else:
+                race_wet = 0.0
+        else:
+            race_wet = 0.0
 
         self.quali_session = None
         self.race_session = RaceSession(
@@ -786,6 +800,7 @@ class ChampionshipWorld:
             is_sprint=False,
             regulations=self.regulations,
             starting_compounds=self.starting_compounds,
+            rain_scheduled=will_rain,
         )
 
     def _start_race(self) -> None:

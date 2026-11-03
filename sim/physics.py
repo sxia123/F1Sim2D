@@ -811,8 +811,8 @@ class QualifyingSession:
         self.elapsed += dt
         self.stage_elapsed += dt
 
-        if self.wetness > 0.02 or random.random() < self.track.rain_chance * 0.008:
-            self.wetness = max(0.0, min(1.0, self.wetness + random.uniform(-0.003, 0.003) * dt))
+        if self.wetness > 0.02:
+            self.wetness = max(0.0, min(1.0, self.wetness + random.uniform(-0.002, 0.002) * dt))
 
         L = self.track.length_m
         for car in self.cars:
@@ -1054,6 +1054,7 @@ class RaceSession:
         is_sprint: bool = False,
         regulations: dict | None = None,
         starting_compounds: dict[str, str] | None = None,
+        rain_scheduled: bool | None = None,
     ):
         self.track = track
         self.is_sprint = is_sprint
@@ -1079,10 +1080,46 @@ class RaceSession:
         self.post_finish_timer: float = 0.0
 
         self.wetness: float = wetness
-        self.rain_intensity: float = wetness * 0.85 if wetness > 0.12 else 0.0
         self.rain_forecast: float = rain_forecast
+        forecast_val = rain_forecast[0] if isinstance(rain_forecast, list) else float(rain_forecast)
+
+        # Single Rain Event Architecture:
+        # A race can experience at most ONE rain event, with probability exactly equal to rain_chance.
+        if rain_scheduled is not None:
+            self.rain_scheduled: bool = bool(rain_scheduled)
+        else:
+            self.rain_scheduled = (wetness > 0.12) or (random.random() < forecast_val)
+
+        if wetness > 0.12:
+            # Race starts wet: the initial rain shower is active from lap 1
+            self.rain_event_started: bool = True
+            self.rain_event_completed: bool = False
+            self.target_rain_intensity: float = round(min(1.0, max(0.35, wetness * 0.95)), 2)
+            self.rain_intensity: float = self.target_rain_intensity
+            self.rain_duration: float = random.uniform(450.0, 950.0)
+            self.rain_start_clock: float = 0.0
+        elif self.rain_scheduled:
+            # Race starts dry with exactly ONE scheduled mid-race rain shower
+            self.rain_event_started = False
+            self.rain_event_completed = False
+            self.rain_intensity = 0.0
+            self.target_rain_intensity = round(random.uniform(0.40, 0.78), 2)
+            est_race_s = self.total_laps * 80.0
+            min_start = max(180.0, est_race_s * 0.15)
+            max_start = max(min_start + 60.0, est_race_s * 0.65)
+            self.rain_start_clock = random.uniform(min_start, max_start)
+            self.rain_duration = random.uniform(350.0, 850.0)
+        else:
+            # Completely dry race: zero rain events
+            self.rain_event_started = False
+            self.rain_event_completed = True
+            self.rain_intensity = 0.0
+            self.target_rain_intensity = 0.0
+            self.rain_start_clock = 999999.0
+            self.rain_duration = 0.0
+
         self.track_temp_c: float = round(track.base_temp_c + (8.0 if wetness < 0.1 else -4.0), 1)
-        self.weather_timer: float = random.uniform(165.0, 290.0)
+        self.weather_timer: float = 0.0
 
         self.flag_state: str = "LIGHTS"
         self.yellow_sector: int | None = None
@@ -1321,27 +1358,39 @@ class RaceSession:
         self._update_standings(dt, event_cb)
 
     def _step_weather(self, dt: float, event_cb) -> None:
-        self.weather_timer -= dt
-        if self.weather_timer <= 0.0:
-            self.weather_timer = random.uniform(165.0, 290.0)
-            roll = random.random()
-            prev_rain = self.rain_intensity
-            forecast = self.rain_forecast[0] if isinstance(self.rain_forecast, list) else self.rain_forecast
-            if roll < forecast:
-                self.rain_intensity = min(1.0, self.rain_intensity + random.uniform(0.25, 0.55))
-                if prev_rain < 0.10 and self.rain_intensity >= 0.18:
-                    event_cb("WEATHER", "WEATHER RADAR: Rain front arriving over the circuit! Surface grip dropping.")
-                    self.radio_dispatcher.trigger_weather_transition(
-                        self.rain_intensity, self.wetness, event_cb, self.race_clock, self.standings, self.track
-                    )
-            else:
-                self.rain_intensity = max(0.0, self.rain_intensity - random.uniform(0.25, 0.50))
-                if prev_rain >= 0.18 and self.rain_intensity < 0.06:
-                    event_cb("WEATHER", "WEATHER UPDATE: Rain shower passing. The surface may remain wet; monitor grip.")
-                    self.radio_dispatcher.trigger_weather_transition(
-                        self.rain_intensity, self.wetness, event_cb, self.race_clock, self.standings, self.track
-                    )
+        prev_rain = self.rain_intensity
 
+        if not self.rain_scheduled or self.rain_event_completed:
+            # Either a dry race or the single rain shower has concluded: lock rain_intensity to 0
+            self.rain_intensity = 0.0
+            if prev_rain >= 0.18 and self.rain_intensity < 0.06:
+                event_cb("WEATHER", "WEATHER UPDATE: Rain shower passing. The surface may remain wet; monitor grip.")
+                self.radio_dispatcher.trigger_weather_transition(
+                    self.rain_intensity, self.wetness, event_cb, self.race_clock, self.standings, self.track
+                )
+        elif not self.rain_event_started:
+            # Awaiting the single scheduled mid-race shower
+            if self.race_clock >= self.rain_start_clock:
+                self.rain_event_started = True
+                self.rain_intensity = self.target_rain_intensity
+                event_cb("WEATHER", "WEATHER RADAR: Rain front arriving over the circuit! Surface grip dropping.")
+                self.radio_dispatcher.trigger_weather_transition(
+                    self.rain_intensity, self.wetness, event_cb, self.race_clock, self.standings, self.track
+                )
+        else:
+            # The single rain event is currently active
+            self.rain_duration -= dt
+            if self.rain_duration <= 0.0:
+                self.rain_event_completed = True
+                self.rain_intensity = 0.0
+                event_cb("WEATHER", "WEATHER UPDATE: Rain shower passing. The surface may remain wet; monitor grip.")
+                self.radio_dispatcher.trigger_weather_transition(
+                    self.rain_intensity, self.wetness, event_cb, self.race_clock, self.standings, self.track
+                )
+            else:
+                self.rain_intensity = self.target_rain_intensity
+
+        # Dynamic track surface wetness accumulation and drying
         if self.rain_intensity > self.wetness:
             self.wetness = min(1.0, self.wetness + (self.rain_intensity - self.wetness) * 0.022 * dt)
         else:

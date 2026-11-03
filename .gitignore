@@ -5,7 +5,7 @@ __pycache__/
 
 # Local logs
 *.log
-scratch/*.log
+scratch/
 
 # Operating System Files
 .DS_Store

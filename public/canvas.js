@@ -1,6 +1,7 @@
 // High-DPI 60fps 2D Real-GPS Circuit & Detailed 2026 F1 Car Renderer
 import { getTeamLogoImage } from "/logos.js";
 import { SceneryLayer } from "/scenery.js";
+import { getCarSurfaces, getCarbonPaint } from "/car-materials.js";
 
 const TIRE_COLORS = {
   SOFT: "#ff2800",
@@ -1129,6 +1130,10 @@ export class CircuitRenderer {
     const isMyTeam = this.tick && c.tid === this.tick.player_team_id;
     const isSelected = c.id === this.selectedDriverId;
     const liv = TEAM_LIVERY[c.tid] || { body: c.tcol, pod: c.tcol, noseTip: c.tcol, stripe: c.scol };
+    const viewTransform = ctx.getTransform();
+    const pixelScale = Math.max(Math.hypot(viewTransform.a,viewTransform.b),Math.hypot(viewTransform.c,viewTransform.d));
+    const surfaces = getCarSurfaces(liv, c.tid, c.num, c.dnf, c.comp, c.wear, pixelScale);
+    const carbonPaint = getCarbonPaint(ctx,surfaces.carbon);
 
     ctx.save();
     if (c.elim) {
@@ -1201,16 +1206,7 @@ export class CircuitRenderer {
     }
 
     // 2. Woven Carbon Underfloor, Plank & Diffuser Edge Wings
-    ctx.fillStyle = "#0b0c10";
-    ctx.beginPath();
-    ctx.moveTo(3.2, -3.3);
-    ctx.lineTo(-5.8, -3.2);
-    ctx.lineTo(-7.0, -2.2);
-    ctx.lineTo(-7.0, 2.2);
-    ctx.lineTo(-5.8, 3.2);
-    ctx.lineTo(3.2, 3.3);
-    ctx.closePath();
-    ctx.fill();
+    ctx.drawImage(surfaces.floor, -8.5, -4.2, 18, 8.4);
 
     // 3. Carbon Double-Wishbone Suspension Arms (Front & Rear)
     ctx.strokeStyle = "#181a22";
@@ -1249,6 +1245,8 @@ export class CircuitRenderer {
       ctx.beginPath();
       ctx.roundRect(-ww * 0.5, -wh * 0.5, ww, wh, wh*.2);
       ctx.fill();
+      // Texture the contact surface inside the original rounded tyre outline.
+      ctx.drawImage(surfaces.rubber, -ww * .43, -wh * .33, ww * .86, wh * .66);
 
       // Pirelli compound sidewall stripe
       ctx.fillStyle = tyreCol;
@@ -1277,65 +1275,15 @@ export class CircuitRenderer {
       }
     }
 
-    // 5. Sculpted Sidepods & Coke-Bottle Undercut
-    ctx.fillStyle = c.dnf ? "#3f4452" : liv.pod;
-    ctx.beginPath();
-    ctx.moveTo(2.4, -1.3);
-    ctx.lineTo(1.7, -3.05);
-    ctx.lineTo(-1.4, -2.95);
-    ctx.lineTo(-4.8, -1.75);
-    ctx.lineTo(-4.8, 1.75);
-    ctx.lineTo(-1.4, 2.95);
-    ctx.lineTo(1.7, 3.05);
-    ctx.lineTo(2.4, 1.3);
-    ctx.closePath();
-    ctx.fill();
-
-    // Radiator Sidepod Intakes
-    ctx.fillStyle = "#07080b";
-    ctx.fillRect(1.3, -2.85, 0.7, 1.35);
-    ctx.fillRect(1.3, 1.5, 0.7, 1.35);
-
-    // 6. Central Monocoque, Tapered Nosecone & Engine Cover
-    ctx.fillStyle = c.dnf ? "#4b5162" : liv.body;
-    ctx.beginPath();
-    ctx.moveTo(9.1, 0);          // Tapered 2026 nose tip
-    ctx.lineTo(8.5, -0.65);
-    ctx.lineTo(4.0, -1.15);
-    ctx.lineTo(1.2, -1.35);
-    ctx.lineTo(-5.8, -1.1);
-    ctx.lineTo(-6.8, -0.55);
-    ctx.lineTo(-6.8, 0.55);
-    ctx.lineTo(-5.8, 1.1);
-    ctx.lineTo(1.2, 1.35);
-    ctx.lineTo(4.0, 1.15);
-    ctx.lineTo(8.5, 0.65);
-    ctx.closePath();
-    ctx.fill();
-
-    // Nose tip accent & Shark-fin livery spine
-    if (!c.dnf) {
-      ctx.fillStyle = liv.noseTip;
-      ctx.beginPath();
-      ctx.moveTo(9.1, 0);
-      ctx.lineTo(7.1, -0.72);
-      ctx.lineTo(7.1, 0.72);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = liv.stripe;
-      ctx.lineWidth = 0.65;
-      ctx.beginPath();
-      ctx.moveTo(-5.9, 0);
-      ctx.lineTo(-2.1, 0);
-      ctx.stroke();
-    }
+    // Cached sculpted paint, pod graphics, radiator mouths and chassis decals.
+    // This uses the original artwork bounds; physical dimensions stay untouched.
+    ctx.drawImage(surfaces.body, -8.5, -4.2, 18, 8.4);
 
     // Stamp miniature Team Logo on the Nosecone when zoomed in
     const logoImg = getTeamLogoImage(c.tid);
     if (logoImg && logoImg.complete && logoImg.naturalWidth > 0 && !c.dnf) {
       ctx.save();
-      ctx.translate(4.9, 0);
+      ctx.translate(4.4, 0);
       ctx.rotate(Math.PI * 0.5);
       ctx.drawImage(logoImg, -1.1, -1.1, 2.2, 2.2);
       ctx.restore();
@@ -1377,6 +1325,11 @@ export class CircuitRenderer {
     ctx.fill();
 
     // Secondary front wing flap (highlights in Straight Active Aero)
+    const wingOpacity = ctx.globalAlpha;
+    ctx.globalAlpha *= .65;
+    ctx.fillStyle = carbonPaint;
+    ctx.fill();
+    ctx.globalAlpha = wingOpacity;
     ctx.strokeStyle = c.aero === "STRAIGHT" ? "#ffffff" : "#0b0d12";
     ctx.lineWidth = 0.45;
     ctx.beginPath();
@@ -1417,6 +1370,10 @@ export class CircuitRenderer {
     ctx.beginPath();
     ctx.arc(-0.35, 0, 0.88, 0, Math.PI * 2);
     ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,.32)";
+    ctx.beginPath();
+    ctx.ellipse(-.6,-.3,.37,.18,-.35,0,Math.PI*2);
+    ctx.fill();
     ctx.fillStyle = "#111318";
     ctx.beginPath();
     ctx.arc(-0.05, 0, 0.55, -0.9, 0.9);
@@ -1432,10 +1389,15 @@ export class CircuitRenderer {
     ctx.moveTo(1.55, 0);
     ctx.lineTo(0.45, 0);
     ctx.stroke();
+    ctx.strokeStyle = "rgba(193,204,215,.65)";
+    ctx.lineWidth = .14;
+    ctx.stroke();
 
     // 9. 2026 Multi-Element Active Rear Wing (Opens Slot Gap in Straight Mode!)
     ctx.fillStyle = "#0b0d13";
     ctx.fillRect(-8.0, -3.45, 1.85, 6.9); // Rear wing mainplane
+    ctx.fillStyle = carbonPaint;
+    ctx.fillRect(-8.0,-3.45,1.85,6.9);
     if ((c.aero === "STRAIGHT" || c.aero === "DRS" || c.ovt || c.drs) && !c.dnf) {
       // Open low-drag DRS slot gap profile revealing white leading edge & green DRS status LED
       ctx.fillStyle = "#f0f4f8";
