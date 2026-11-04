@@ -775,23 +775,35 @@ class F1App {
               </div>
 
               ${isPreRace ? `
-              <div class="pw-group" title="Select Starting Tyre Compound Before Lights Out">
+              <div class="pw-group" title="Select Starting Tyre Compound Before Lights Out (Allocations Remaining)">
                 <span class="pw-lbl" style="color:#00d2be;font-weight:900">START TYRE</span>
                 ${["SOFT", "MEDIUM", "HARD", "INTER", "WET"]
-                  .map(
-                    (k) =>
-                      `<button class="pw-btn ${c.comp === k ? "active" : ""}" data-pw-cmd="start_comp" data-drv="${c.id}" data-val="${k}" style="${c.comp === k ? "" : `color:${TIRE_META[k].color}`}">${TIRE_META[k].code}</button>`
-                  )
+                  .map((k) => {
+                    const setsLeft = (c.tsets && c.tsets[k] != null) ? c.tsets[k] : 0;
+                    const isActive = c.comp === k;
+                    const canSelect = isActive || setsLeft > 0;
+                    const btnDis = canSelect ? "" : "disabled";
+                    const btnStyle = isActive
+                      ? ""
+                      : `color:${TIRE_META[k].color};${setsLeft <= 0 ? "opacity:0.35;cursor:not-allowed;" : ""}`;
+                    return `<button class="pw-btn ${isActive ? "active" : ""}" ${btnDis} data-pw-cmd="start_comp" data-drv="${c.id}" data-val="${k}" style="${btnStyle}" title="${k}: ${setsLeft} set${setsLeft === 1 ? '' : 's'} remaining">${TIRE_META[k].code} (${setsLeft})</button>`;
+                  })
                   .join("")}
               </div>
               ` : `
-              <div class="pw-group" title="Next Pit-Stop Tyre Compound">
+              <div class="pw-group" title="Next Pit-Stop Tyre Compound (Allocations Remaining)">
                 <span class="pw-lbl">TYRE</span>
                 ${["SOFT", "MEDIUM", "HARD", "INTER", "WET"]
-                  .map(
-                    (k) =>
-                      `<button class="pw-btn ${c.ncomp === k ? "active" : ""}" ${dis} data-pw-cmd="ncomp" data-drv="${c.id}" data-val="${k}" style="${c.ncomp === k ? "" : `color:${TIRE_META[k].color}`}">${TIRE_META[k].code}</button>`
-                  )
+                  .map((k) => {
+                    const setsLeft = (c.tsets && c.tsets[k] != null) ? c.tsets[k] : 0;
+                    const isActive = c.ncomp === k;
+                    const canSelect = isRace && (isActive || setsLeft > 0);
+                    const btnDis = canSelect ? "" : "disabled";
+                    const btnStyle = isActive
+                      ? ""
+                      : `color:${TIRE_META[k].color};${setsLeft <= 0 ? "opacity:0.35;cursor:not-allowed;" : ""}`;
+                    return `<button class="pw-btn ${isActive ? "active" : ""}" ${btnDis} data-pw-cmd="ncomp" data-drv="${c.id}" data-val="${k}" style="${btnStyle}" title="${k}: ${setsLeft} set${setsLeft === 1 ? '' : 's'} remaining">${TIRE_META[k].code} (${setsLeft})</button>`;
+                  })
                   .join("")}
               </div>
               `}
@@ -896,6 +908,7 @@ class F1App {
       <div class="tel-grid">
         <div class="tel-kv"><span>Compound</span><strong>${car.comp} (${100 - car.wear}%)</strong></div>
         <div class="tel-kv"><span>Tyre Temp</span><strong style="color:${tCol}">${car.ttemp}°C (${tStat})</strong></div>
+        <div class="tel-kv"><span>Tyre Sets Left</span><strong style="color:#00d2be;font-size:10.5px">${car.tsets ? `S:${car.tsets.SOFT ?? 0} M:${car.tsets.MEDIUM ?? 0} H:${car.tsets.HARD ?? 0} I:${car.tsets.INTER ?? 0} W:${car.tsets.WET ?? 0}` : "—"}</strong></div>
         <div class="tel-kv"><span>Maneuver</span><strong style="color:${car.man ? "#ffb366" : "#d4d4e0"}">${manDisplay}</strong></div>
         <div class="tel-kv"><span>Last Lap</span><strong>${fmtLap(car.last)}</strong></div>
         <div class="tel-kv"><span>Personal Best</span><strong style="color:#a855f7">${fmtLap(car.best)}</strong></div>

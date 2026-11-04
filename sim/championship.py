@@ -16,6 +16,7 @@ from sim.data import (
     SPONSORS,
     SPRINT_POINTS,
     TIRE_COMPOUNDS,
+    DEFAULT_WEEKEND_TIRE_SETS,
     UPGRADE_DEPARTMENTS,
     WCC_PRIZE_POOL_M,
     clone_initial_roster,
@@ -160,6 +161,7 @@ class ChampionshipWorld:
         self.last_podium_summary: dict | None = None
         self.temp_ban_subs: list[tuple[str, str, str]] = []
         self.starting_compounds: dict[str, str] = {}
+        self.tire_allocations: dict[str, dict[str, int]] = {}
 
         if not self._load_state():
             self._init_fresh_career("williams")
@@ -175,6 +177,11 @@ class ChampionshipWorld:
         self.player_team_id = player_team_id
         self.teams, self.drivers = clone_initial_roster()
         self.starting_compounds.clear()
+        self.tire_allocations = {
+            d["id"]: dict(DEFAULT_WEEKEND_TIRE_SETS)
+            for d in self.drivers
+            if d.get("team_id")
+        }
 
         if self.season_year == 2028:
             # Age drivers by 2 years from 2026 baseline
@@ -302,6 +309,7 @@ class ChampionshipWorld:
                 "calendar_results": self.calendar_results,
                 "season_archives": self.season_archives,
                 "reigning_wdc_id": getattr(self, "reigning_wdc_id", ""),
+                "tire_allocations": getattr(self, "tire_allocations", {}),
                 "hall_of_fame": self.hall_of_fame[-25:],
                 "ledger": self.ledger[-60:],
                 "event_feed": self.event_feed[-80:],
@@ -384,6 +392,10 @@ class ChampionshipWorld:
             self.ledger = data.get("ledger", [])
             self.event_feed = data.get("event_feed", [])
             self._event_seq = int(data.get("event_seq", len(self.event_feed)))
+            self.tire_allocations = data.get("tire_allocations", {})
+            for d in self.drivers:
+                if d.get("team_id") and d["id"] not in self.tire_allocations:
+                    self.tire_allocations[d["id"]] = dict(DEFAULT_WEEKEND_TIRE_SETS)
             self._begin_weekend()
             self._push_event(
                 "SERVER",
@@ -420,16 +432,24 @@ class ChampionshipWorld:
             p_drivers = [d["id"] for d in self.drivers if d["team_id"] == self.player_team_id]
             if driver_id not in p_drivers:
                 return {"ok": False, "error": "Can only set starting tyres for your team's drivers."}
+
+            if self.race_session:
+                ok = self.race_session.set_starting_compound(driver_id, compound)
+                if not ok:
+                    return {"ok": False, "error": f"Cannot fit {compound} tyres (no sets remaining in weekend allocation or race started)."}
+                car = self.race_session.cars_by_id.get(driver_id)
+                if car:
+                    car.next_compound = compound
+            else:
+                alloc = getattr(self, "tire_allocations", {}).get(driver_id, {})
+                if alloc.get(compound, 0) <= 0:
+                    return {"ok": False, "error": f"No {compound} tyre sets remaining in weekend allocation."}
+
             self.starting_compounds[driver_id] = compound
             dmap = self._drivers_by_id()
             drv = dmap.get(driver_id)
             drv_code = drv["code"] if drv else driver_id
             drv_num = drv["number"] if drv else ""
-            if self.race_session:
-                self.race_session.set_starting_compound(driver_id, compound)
-                car = self.race_session.cars_by_id.get(driver_id)
-                if car:
-                    car.next_compound = compound
             self._push_event("RADIO", f"GRID STRATEGY: #{drv_num} {drv_code} confirmed starting on {compound} tyres!")
             self._save_state()
             return {"ok": True, "driver_id": driver_id, "compound": compound}
@@ -562,6 +582,11 @@ class ChampionshipWorld:
         self.sprint_winner_code = ""
         self.grid_order_ids = []
         self.last_podium_summary = None
+        self.tire_allocations = {
+            d["id"]: dict(DEFAULT_WEEKEND_TIRE_SETS)
+            for d in self.drivers
+            if d.get("team_id")
+        }
 
         self.weekend_rain_forecast = trk.rain_chance
         if random.random() < trk.rain_chance:
@@ -780,6 +805,7 @@ class ChampionshipWorld:
             self.weekend_wetness,
             is_sprint_quali=True,
             regulations=self.regulations,
+            tire_allocations=self.tire_allocations,
         )
         self.phase = "SPRINT_QUALIFYING"
         self._push_event(
@@ -826,6 +852,7 @@ class ChampionshipWorld:
             regulations=self.regulations,
             starting_compounds=self.starting_compounds,
             rain_scheduled=will_rain,
+            tire_allocations=self.tire_allocations,
         )
         self.phase = "SPRINT_RACE"
         self._push_event(
@@ -886,6 +913,7 @@ class ChampionshipWorld:
             self.weekend_wetness,
             is_sprint_quali=False,
             regulations=self.regulations,
+            tire_allocations=self.tire_allocations,
         )
         self.phase = "QUALIFYING"
         self._push_event(
@@ -935,6 +963,7 @@ class ChampionshipWorld:
             regulations=self.regulations,
             starting_compounds=self.starting_compounds,
             rain_scheduled=will_rain,
+            tire_allocations=self.tire_allocations,
         )
 
     def _start_race(self) -> None:
@@ -1724,24 +1753,21 @@ class ChampionshipWorld:
                 car.auto_strategy = bool(cmd["auto_strategy"])
             if "start_compound" in cmd and cmd["start_compound"] in TIRE_COMPOUNDS:
                 comp = cmd["start_compound"]
-                self.starting_compounds[driver_id] = comp
-                car.compound = comp
-                car.next_compound = comp
-                car.compounds_used = {comp}
-                car.tire_age_laps = 0
-                car.tire_wear = 0.01
-                self._push_event("RADIO", f"GRID CALL: #{car.number} {car.code} fitted with {comp} tyres for race start!")
+                res = self.set_starting_compound(driver_id, comp)
+                if not res.get("ok"):
+                    return res
             elif "next_compound" in cmd and cmd["next_compound"] in TIRE_COMPOUNDS:
                 comp = cmd["next_compound"]
-                car.next_compound = comp
-                # If race has not launched yet (standing on grid or lights sequence), also update starting compound!
-                if self.phase in ("GRID_WALK", "PRE_WEEKEND") or (self.race_session and (self.race_session.flag_state in ("GRID", "LIGHTS") or self.race_session.lights_countdown > 0 or (car.lap <= 1 and car.v < 10.0))):
-                    car.compound = comp
-                    car.compounds_used = {comp}
-                    car.tire_age_laps = 0
-                    car.tire_wear = 0.01
-                    self.starting_compounds[driver_id] = comp
-                    self._push_event("RADIO", f"GRID STRATEGY: #{car.number} {car.code} starting tyres switched to {comp}!")
+                is_pre = self.phase in ("GRID_WALK", "PRE_WEEKEND") or (self.race_session and (self.race_session.flag_state in ("GRID", "LIGHTS") or self.race_session.lights_countdown > 0 or (car.lap <= 1 and car.v < 10.0)))
+                if is_pre:
+                    res = self.set_starting_compound(driver_id, comp)
+                    if not res.get("ok"):
+                        return res
+                else:
+                    alloc = getattr(self.race_session, "tire_allocations", self.tire_allocations).get(driver_id, {})
+                    if alloc.get(comp, 0) <= 0:
+                        return {"ok": False, "error": f"No {comp} tyre sets remaining in weekend allocation."}
+                    car.next_compound = comp
             if "box_this_lap" in cmd:
                 car.box_this_lap = bool(cmd["box_this_lap"])
                 if car.box_this_lap and not car.radio_box_announced:
@@ -2004,6 +2030,12 @@ class ChampionshipWorld:
                      if not c.eliminated and c.best_sector_times[i] is not None), default=None)
                 for i in range(3)
             ]
+            alloc_map = (
+                getattr(self.race_session, "tire_allocations", None)
+                or getattr(self.quali_session, "tire_allocations", None)
+                or getattr(self, "tire_allocations", None)
+                or {}
+            )
             for c in active_cars:
                 cars_payload.append(
                     {
@@ -2037,6 +2069,7 @@ class ChampionshipWorld:
                         "wear": int(round(c.tire_wear * 100)),
                         "tage": c.tire_age_laps,
                         "ttemp": int(round(c.tire_temp)),
+                        "tsets": dict(alloc_map.get(c.driver_id, DEFAULT_WEEKEND_TIRE_SETS)),
                         "dmg": int(round(c.wing_damage * 100)),
                         "dmg_side": getattr(c, "wing_damage_side", "NONE"),
                         "steer": round(getattr(c, "steer_angle", 0.0), 3),

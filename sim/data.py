@@ -87,6 +87,15 @@ TIRE_COMPOUNDS = {
     },
 }
 
+# Official FIA Formula 1 Pirelli Weekend Tire Allocation per Driver (Total: 20 sets)
+DEFAULT_WEEKEND_TIRE_SETS = {
+    "SOFT": 8,
+    "MEDIUM": 3,
+    "HARD": 2,
+    "INTER": 4,
+    "WET": 3,
+}
+
 UPGRADE_DEPARTMENTS = {
     "power_unit": {
         "name": "2026 Hybrid PU & MGU-K",

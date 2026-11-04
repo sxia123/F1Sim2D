@@ -7,6 +7,7 @@ from typing import Any
 from types import SimpleNamespace
 from sim.data import (
     TIRE_COMPOUNDS,
+    DEFAULT_WEEKEND_TIRE_SETS,
     team_car_rating,
     tire_thermal_wear_mult,
     tire_thermal_grip_mult,
@@ -676,6 +677,7 @@ class QualifyingSession:
         wetness: float,
         is_sprint_quali: bool = False,
         regulations: dict | None = None,
+        tire_allocations: dict[str, dict[str, int]] | None = None,
     ):
         self.track = track
         self.is_sprint_quali = is_sprint_quali
@@ -686,6 +688,14 @@ class QualifyingSession:
             "has_active_aero": True,
             "has_classic_drs": False,
         }
+        if tire_allocations is not None:
+            self.tire_allocations = tire_allocations
+        else:
+            self.tire_allocations = {
+                drv["id"]: dict(DEFAULT_WEEKEND_TIRE_SETS)
+                for drv in active_drivers
+                if "id" in drv
+            }
         self.v_env, self.is_braking = build_speed_envelope(track)
         # Qualifying uses modeled flying laps with accelerated on-track motion.
         # Split the same modeled time by each sector's reference driving time.
@@ -715,9 +725,20 @@ class QualifyingSession:
         random.shuffle(shuffled)
         n_drv = max(len(shuffled), 1)
         for idx, drv in enumerate(shuffled):
+            drv_id = drv["id"]
+            driver_alloc = self.tire_allocations.setdefault(drv_id, dict(DEFAULT_WEEKEND_TIRE_SETS))
+            chosen_comp = start_comp
+            if driver_alloc.get(chosen_comp, 0) <= 0:
+                for fallback in (["MEDIUM", "HARD", "SOFT"] if start_comp in ("SOFT", "MEDIUM", "HARD") else ["INTER", "WET", "MEDIUM"]):
+                    if driver_alloc.get(fallback, 0) > 0:
+                        chosen_comp = fallback
+                        break
+            if driver_alloc.get(chosen_comp, 0) > 0:
+                driver_alloc[chosen_comp] -= 1
+
             team = teams_by_id[drv["team_id"]]
             max_bat = float(self.regulations.get("max_battery_mj", 4.0))
-            car = CarState(drv, team, idx + 1, start_comp, 3, max_battery_mj=max_bat)
+            car = CarState(drv, team, idx + 1, chosen_comp, 3, max_battery_mj=max_bat)
             car.max_battery_mj = float(self.regulations.get("max_battery_mj", 4.0))
             car.battery_mj = car.max_battery_mj
             # Evenly space all 22 cars around 92% of the circuit (~220m+ apart, zero overlap)
@@ -978,6 +999,15 @@ class QualifyingSession:
             advancing = [c for c in self.standings if not c.eliminated]
             n_adv = max(len(advancing), 1)
             for idx, car in enumerate(advancing):
+                driver_alloc = self.tire_allocations.setdefault(car.driver_id, dict(DEFAULT_WEEKEND_TIRE_SETS))
+                chosen_comp = next_comp
+                if driver_alloc.get(chosen_comp, 0) <= 0:
+                    for fallback in (["MEDIUM", "HARD", "SOFT"] if next_comp in ("SOFT", "MEDIUM", "HARD") else ["INTER", "WET", "MEDIUM"]):
+                        if driver_alloc.get(fallback, 0) > 0:
+                            chosen_comp = fallback
+                            break
+                if driver_alloc.get(chosen_comp, 0) > 0:
+                    driver_alloc[chosen_comp] -= 1
                 car.best_lap_time = None
                 car.last_lap_time = None
                 car.current_sector_times = [None, None, None]
@@ -986,7 +1016,7 @@ class QualifyingSession:
                 car.quali_sector_plan = None
                 car.gap_to_leader = 0.0
                 car.interval_ahead = 0.0
-                car.compound = next_comp
+                car.compound = chosen_comp
                 car.tire_wear = 0.01
                 car.d = 0.0
                 car.target_d = 0.0
@@ -1063,6 +1093,7 @@ class RaceSession:
         regulations: dict | None = None,
         starting_compounds: dict[str, str] | None = None,
         rain_scheduled: bool | None = None,
+        tire_allocations: dict[str, dict[str, int]] | None = None,
     ):
         self.track = track
         self.is_sprint = is_sprint
@@ -1076,6 +1107,14 @@ class RaceSession:
             "has_classic_drs": False,
             "drs_boost_kmh": 0.0,
         }
+        if tire_allocations is not None:
+            self.tire_allocations = tire_allocations
+        else:
+            self.tire_allocations = {
+                drv["id"]: dict(DEFAULT_WEEKEND_TIRE_SETS)
+                for drv in grid_drivers
+                if "id" in drv
+            }
         self.starting_compounds = dict(starting_compounds or {})
         self.v_env, self.is_braking = build_speed_envelope(track)
         self.total_laps: int = max(6, track.sprint_laps) if (is_sprint and track.sprint_laps > 0) else track.race_laps
@@ -1168,6 +1207,21 @@ class RaceSession:
                 else:
                     comp = random.choice(["HARD", "MEDIUM"])
 
+            driver_alloc = self.tire_allocations.setdefault(drv["id"], dict(DEFAULT_WEEKEND_TIRE_SETS))
+            if driver_alloc.get(comp, 0) <= 0:
+                if wetness > 0.55:
+                    candidates = ["WET", "INTER", "MEDIUM", "HARD", "SOFT"]
+                elif wetness > 0.16:
+                    candidates = ["INTER", "WET", "MEDIUM", "HARD", "SOFT"]
+                else:
+                    candidates = ["MEDIUM", "HARD", "SOFT", "INTER", "WET"]
+                for alt in candidates:
+                    if driver_alloc.get(alt, 0) > 0:
+                        comp = alt
+                        break
+            if driver_alloc.get(comp, 0) > 0:
+                driver_alloc[comp] -= 1
+
             max_bat = float(self.regulations.get("max_battery_mj", 4.0))
             car = CarState(drv, team, grid_pos, comp, self.total_laps, max_battery_mj=max_bat)
             car.max_battery_mj = float(self.regulations.get("max_battery_mj", 4.0))
@@ -1191,6 +1245,15 @@ class RaceSession:
     def set_starting_compound(self, driver_id: str, compound: str) -> bool:
         if compound in TIRE_COMPOUNDS and driver_id in self.cars_by_id:
             car = self.cars_by_id[driver_id]
+            if car.crossed_start_line or self.lights_out:
+                return False
+            if car.compound == compound:
+                return True
+            alloc = self.tire_allocations.setdefault(driver_id, dict(DEFAULT_WEEKEND_TIRE_SETS))
+            if alloc.get(compound, 0) <= 0:
+                return False
+            alloc[car.compound] = alloc.get(car.compound, 0) + 1
+            alloc[compound] -= 1
             car.compound = compound
             car.next_compound = compound
             car.compounds_used = {compound}
@@ -1198,6 +1261,7 @@ class RaceSession:
             car.tire_wear = 0.01
             self.starting_compounds[driver_id] = compound
             return True
+        return False
         return False
 
     def _team_pit_box_s(self, car: CarState) -> float:
@@ -1536,15 +1600,15 @@ class RaceSession:
         if self.is_sprint:
             if self.wetness > 0.60 and car.compound != "WET" and laps_left >= 2:
                 car.box_this_lap = True
-                car.next_compound = "WET"
+                car.next_compound = self._best_compound_for_conditions(car, laps_left)
                 return
             if 0.23 <= self.wetness <= 0.56 and is_slick and laps_left >= 2:
                 car.box_this_lap = True
-                car.next_compound = "INTER"
+                car.next_compound = self._best_compound_for_conditions(car, laps_left)
                 return
             if self.wetness < 0.09 and not is_slick and car.tire_age_laps >= 2 and laps_left >= 2:
                 car.box_this_lap = True
-                car.next_compound = "SOFT"
+                car.next_compound = self._best_compound_for_conditions(car, laps_left)
                 return
             if car.wing_damage >= 0.68 and laps_left >= 3:
                 car.box_this_lap = True
@@ -1560,15 +1624,15 @@ class RaceSession:
         if car.tire_age_laps >= 2 or car.lap >= 2:
             if self.wetness > 0.60 and car.compound != "WET" and laps_left >= 2:
                 car.box_this_lap = True
-                car.next_compound = "WET"
+                car.next_compound = self._best_compound_for_conditions(car, laps_left)
                 return
             if 0.23 <= self.wetness <= 0.56 and is_slick and laps_left >= 2:
                 car.box_this_lap = True
-                car.next_compound = "INTER"
+                car.next_compound = self._best_compound_for_conditions(car, laps_left)
                 return
             if self.wetness < 0.09 and not is_slick and car.tire_age_laps >= 2 and laps_left >= 2:
                 car.box_this_lap = True
-                car.next_compound = "SOFT" if laps_left <= 8 else "MEDIUM"
+                car.next_compound = self._best_compound_for_conditions(car, laps_left)
                 return
 
         need_second_dry = (
@@ -1592,10 +1656,18 @@ class RaceSession:
             car.next_compound = self._best_compound_for_conditions(car, laps_left)
 
     def _best_compound_for_conditions(self, car: CarState, laps_left: int) -> str:
+        alloc = self.tire_allocations.get(car.driver_id, {})
         if self.wetness > 0.55:
-            return "WET"
-        if self.wetness > 0.17:
-            return "INTER"
+            if alloc.get("WET", 0) > 0:
+                return "WET"
+            if alloc.get("INTER", 0) > 0:
+                return "INTER"
+        elif self.wetness > 0.17:
+            if alloc.get("INTER", 0) > 0:
+                return "INTER"
+            if alloc.get("WET", 0) > 0:
+                return "WET"
+
         used_dry = car.compounds_used & {"SOFT", "MEDIUM", "HARD"}
         if laps_left <= 7:
             pref = ["SOFT", "MEDIUM", "HARD"]
@@ -1606,8 +1678,14 @@ class RaceSession:
 
         if not self.is_sprint and len(used_dry) == 1:
             for c in pref:
-                if c not in used_dry:
+                if c not in used_dry and alloc.get(c, 0) > 0:
                     return c
+        for c in pref:
+            if alloc.get(c, 0) > 0:
+                return c
+        for c in ["MEDIUM", "HARD", "SOFT", "INTER", "WET"]:
+            if alloc.get(c, 0) > 0:
+                return c
         return pref[0]
 
     def _advance_car_progress(self, car: CarState, ds: float, leader_finished: bool, event_cb) -> None:
@@ -2481,7 +2559,23 @@ class RaceSession:
                 if fast_lane_busy:
                     return
 
-                car.compound = car.next_compound
+                target = car.next_compound
+                alloc = self.tire_allocations.setdefault(car.driver_id, dict(DEFAULT_WEEKEND_TIRE_SETS))
+                if alloc.get(target, 0) > 0:
+                    alloc[target] -= 1
+                    fitted_comp = target
+                else:
+                    fitted_comp = self._best_compound_for_conditions(car, max(1, self.total_laps - car.laps_completed))
+                    if alloc.get(fitted_comp, 0) > 0:
+                        alloc[fitted_comp] -= 1
+                        event_cb(
+                            "PIT",
+                            f"PIT CREW: #{car.number} {car.code} out of {target} tyres! Fitting available {fitted_comp} ({alloc.get(fitted_comp, 0)} sets left).",
+                        )
+                    else:
+                        fitted_comp = target
+
+                car.compound = fitted_comp
                 car.compounds_used.add(car.compound)
                 car.tire_wear = 0.0
                 car.tire_age_laps = 0
@@ -2491,7 +2585,7 @@ class RaceSession:
                 car.pit_phase = "EXIT"
                 car.v = PIT_SPEED_LIMIT_MS
                 car.pit_apron = 0.0
-                car.next_compound = "MEDIUM" if car.compound != "MEDIUM" else "HARD"
+                car.next_compound = self._best_compound_for_conditions(car, max(1, self.total_laps - car.laps_completed))
                 event_cb(
                     "PIT",
                     f"PIT OUT: #{car.number} {car.code} ({car.team_short}) rejoins on {car.compound} ({car.last_pit_duration:.2f}s stationary).",

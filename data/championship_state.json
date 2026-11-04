@@ -32,10 +32,10 @@
       "engine": "Ferrari",
       "color": "#e8002d",
       "secondary": "#ffffff",
-      "budget_m": 84.5,
+      "budget_m": 25.15,
       "sponsor_id": "chronos_swiss",
       "upgrades": {
-        "power_unit": 8,
+        "power_unit": 9,
         "active_aero": 8,
         "chassis": 7,
         "suspension": 6,
@@ -51,12 +51,12 @@
       "engine": "Red Bull Ford",
       "color": "#3671c6",
       "secondary": "#ff1e42",
-      "budget_m": 94.66,
+      "budget_m": 24.38,
       "sponsor_id": "apex_cloud",
       "upgrades": {
         "power_unit": 8,
-        "active_aero": 7,
-        "chassis": 7,
+        "active_aero": 8,
+        "chassis": 8,
         "suspension": 8,
         "reliability": 7,
         "pit_crew": 7
@@ -89,15 +89,15 @@
       "engine": "Red Bull Ford",
       "color": "#6692ff",
       "secondary": "#ffffff",
-      "budget_m": 99.65,
+      "budget_m": 23.83,
       "sponsor_id": "nova_fintech",
       "upgrades": {
         "power_unit": 6,
         "active_aero": 5,
-        "chassis": 5,
-        "suspension": 5,
-        "reliability": 5,
-        "pit_crew": 5
+        "chassis": 6,
+        "suspension": 6,
+        "reliability": 6,
+        "pit_crew": 7
       }
     },
     {
@@ -108,15 +108,15 @@
       "engine": "Mercedes",
       "color": "#0093cc",
       "secondary": "#ff87bc",
-      "budget_m": 114.91,
+      "budget_m": 30.31,
       "sponsor_id": "nova_fintech",
       "upgrades": {
         "power_unit": 5,
-        "active_aero": 5,
-        "chassis": 5,
-        "suspension": 5,
-        "reliability": 5,
-        "pit_crew": 5
+        "active_aero": 6,
+        "chassis": 6,
+        "suspension": 6,
+        "reliability": 6,
+        "pit_crew": 6
       }
     },
     {
@@ -127,14 +127,14 @@
       "engine": "Audi",
       "color": "#f50537",
       "secondary": "#b8c0c8",
-      "budget_m": 140.32,
+      "budget_m": 45.69,
       "sponsor_id": "hyperion_ai",
       "upgrades": {
-        "power_unit": 4,
-        "active_aero": 4,
-        "chassis": 4,
-        "suspension": 5,
-        "reliability": 4,
+        "power_unit": 5,
+        "active_aero": 5,
+        "chassis": 5,
+        "suspension": 6,
+        "reliability": 6,
         "pit_crew": 5
       }
     },
@@ -146,14 +146,14 @@
       "engine": "Ferrari",
       "color": "#b6babd",
       "secondary": "#e6002b",
-      "budget_m": 160.41,
+      "budget_m": 33.14,
       "sponsor_id": "titan_logistics",
       "upgrades": {
-        "power_unit": 4,
-        "active_aero": 4,
-        "chassis": 4,
-        "suspension": 4,
-        "reliability": 4,
+        "power_unit": 5,
+        "active_aero": 5,
+        "chassis": 6,
+        "suspension": 6,
+        "reliability": 6,
         "pit_crew": 5
       }
     },
@@ -165,13 +165,13 @@
       "engine": "Mercedes",
       "color": "#1868db",
       "secondary": "#64c4ff",
-      "budget_m": 95.02,
+      "budget_m": 29.45,
       "sponsor_id": "hyperion_ai",
       "upgrades": {
-        "power_unit": 5,
-        "active_aero": 5,
+        "power_unit": 6,
+        "active_aero": 6,
         "chassis": 6,
-        "suspension": 5,
+        "suspension": 6,
         "reliability": 5,
         "pit_crew": 5
       }
@@ -184,15 +184,15 @@
       "engine": "Honda",
       "color": "#229971",
       "secondary": "#cedc00",
-      "budget_m": 147.97,
+      "budget_m": 28.41,
       "sponsor_id": "titan_logistics",
       "upgrades": {
-        "power_unit": 5,
-        "active_aero": 5,
-        "chassis": 5,
-        "suspension": 5,
-        "reliability": 5,
-        "pit_crew": 4
+        "power_unit": 6,
+        "active_aero": 6,
+        "chassis": 6,
+        "suspension": 6,
+        "reliability": 6,
+        "pit_crew": 6
       }
     },
     {
@@ -203,15 +203,15 @@
       "engine": "Ferrari",
       "color": "#d4af37",
       "secondary": "#1e3f8f",
-      "budget_m": 119.1,
+      "budget_m": 39.51,
       "sponsor_id": "titan_logistics",
       "upgrades": {
         "power_unit": 5,
-        "active_aero": 5,
-        "chassis": 5,
-        "suspension": 5,
+        "active_aero": 6,
+        "chassis": 6,
+        "suspension": 6,
         "reliability": 5,
-        "pit_crew": 4
+        "pit_crew": 6
       }
     }
   ],
@@ -15448,20 +15448,20 @@
         },
         {
           "rank": 6,
-          "id": "alpine",
-          "name": "BWT Alpine F1 Team",
-          "short": "Alpine",
-          "color": "#0093cc",
+          "id": "williams",
+          "name": "Atlassian Williams Racing",
+          "short": "Williams",
+          "color": "#1868db",
           "engine": "Mercedes",
           "points": 15,
           "wins": 0
         },
         {
           "rank": 7,
-          "id": "williams",
-          "name": "Atlassian Williams Racing",
-          "short": "Williams",
-          "color": "#1868db",
+          "id": "alpine",
+          "name": "BWT Alpine F1 Team",
+          "short": "Alpine",
+          "color": "#0093cc",
           "engine": "Mercedes",
           "points": 15,
           "wins": 0
@@ -15507,7 +15507,7 @@
           "wins": 0
         }
       ],
-      "current_round": 5
+      "current_round": 6
     },
     "2029": {
       "season": 2029,
@@ -23973,6 +23973,162 @@
     }
   },
   "reigning_wdc_id": "verstappen",
+  "tire_allocations": {
+    "russell": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 0,
+      "WET": 3
+    },
+    "antonelli": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "leclerc": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "hamilton": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "verstappen": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "hadjar": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "norris": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "piastri": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "lawson": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "lindblad": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "gasly": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "colapinto": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "hulkenberg": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "bortoleto": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "ocon": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "bearman": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "sainz": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "albon": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "alonso": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "stroll": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "perez": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    },
+    "bottas": {
+      "SOFT": 8,
+      "MEDIUM": 3,
+      "HARD": 2,
+      "INTER": 4,
+      "WET": 3
+    }
+  },
   "hall_of_fame": [
     {
       "season": 2026,
@@ -24289,272 +24445,6 @@
   ],
   "event_feed": [
     {
-      "id": 28836,
-      "kind": "OVERTAKE",
-      "tag": "L21/22",
-      "msg": "OVERTAKE P8: #30 LAW passes SAI near Turn 6 (SLIPSTREAM)!",
-      "ts": 1793745920.5
-    },
-    {
-      "id": 28837,
-      "kind": "OVERTAKE",
-      "tag": "L21/22",
-      "msg": "OUTSIDE SEND P10: #10 GAS sweeps around the outside of SAI through Turn 6!",
-      "ts": 1793745921.0
-    },
-    {
-      "id": 28838,
-      "kind": "RADIO",
-      "tag": "L21/22",
-      "msg": "PIT WALL (Cadillac / #11 PER): 'You're close to BEA, PER. Be patient and pick your moment.'",
-      "ts": 1793745923.6
-    },
-    {
-      "id": 28839,
-      "kind": "RADIO",
-      "tag": "L21/22",
-      "msg": "DRIVER (#41 LIN): 'Copy, PUSH. Pushing now.'",
-      "ts": 1793745925.9
-    },
-    {
-      "id": 28840,
-      "kind": "OVERTAKE",
-      "tag": "L21/22",
-      "msg": "OUTSIDE SEND P8: #55 SAI sweeps around the outside of ANT through Turn 7!",
-      "ts": 1793745926.5
-    },
-    {
-      "id": 28841,
-      "kind": "OVERTAKE",
-      "tag": "L21/22",
-      "msg": "SLIPSTREAM PASS P10: #30 LAW drafts past GAS on approach to Turn 8!",
-      "ts": 1793745929.2
-    },
-    {
-      "id": 28842,
-      "kind": "RADIO",
-      "tag": "L21/22",
-      "msg": "DRIVER (#63 RUS): 'I'm staying with NOR. Keeping the pressure on.'",
-      "ts": 1793745929.4
-    },
-    {
-      "id": 28843,
-      "kind": "OVERTAKE",
-      "tag": "L21/22",
-      "msg": "OVERTAKE P1: #4 NOR passes PIA near Turn 16 (DEFEND) [OVERTAKE MODE]!",
-      "ts": 1793745932.4
-    },
-    {
-      "id": 28844,
-      "kind": "RADIO",
-      "tag": "L21/22",
-      "msg": "PIT WALL (McLaren / #81 PIA): 'NOR has gone through, PIA. Stay focused on your race.'",
-      "ts": 1793745932.4
-    },
-    {
-      "id": 28845,
-      "kind": "OVERTAKE",
-      "tag": "L21/22",
-      "msg": "OUTSIDE SEND P8: #55 SAI sweeps around the outside of ANT through Turn 9!",
-      "ts": 1793745935.4
-    },
-    {
-      "id": 28846,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "PIT WALL (Williams / #55 SAI): 'You're close to ANT, SAI. Be patient and pick your moment.'",
-      "ts": 1793745936.0
-    },
-    {
-      "id": 28847,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#1 VER): 'Copy, mate. Pushing now.'",
-      "ts": 1793745939.2
-    },
-    {
-      "id": 28848,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P9: #10 GAS passes ANT near Turn 10 (SLIPSTREAM) [OVERTAKE MODE]!",
-      "ts": 1793745939.4
-    },
-    {
-      "id": 28849,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#77 BOT): 'I'm staying with ALB. Keeping the pressure on.'",
-      "ts": 1793745942.7
-    },
-    {
-      "id": 28850,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P10: #30 LAW passes ANT near Turn 11 (SLIPSTREAM)!",
-      "ts": 1793745943.1
-    },
-    {
-      "id": 28851,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P4: #1 VER passes HAM near Turn 1 (SLIPSTREAM)!",
-      "ts": 1793745944.0
-    },
-    {
-      "id": 28852,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P8: #55 SAI passes GAS near Turn 11 (DEFEND)!",
-      "ts": 1793745945.3
-    },
-    {
-      "id": 28853,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "PIT WALL (Alpine / #10 GAS): 'SAI has gone through, GAS. Stay focused on your race.'",
-      "ts": 1793745945.3
-    },
-    {
-      "id": 28854,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "PIT WALL (Cadillac / #11 PER): 'That's BEA behind us. P16.'",
-      "ts": 1793745948.0
-    },
-    {
-      "id": 28855,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#30 LAW): 'Still close behind GAS. Looking for a way through.'",
-      "ts": 1793745951.4
-    },
-    {
-      "id": 28856,
-      "kind": "RACE_CONTROL",
-      "tag": "L22/22",
-      "msg": "STOUT DEFENSE P1: #4 NOR shuts the door on PIA's SWITCHBACK at Turn 4!",
-      "ts": 1793745954.7
-    },
-    {
-      "id": 28857,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#23 ALB): 'I'm staying with COL. Keeping the pressure on.'",
-      "ts": 1793745955.0
-    },
-    {
-      "id": 28858,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "SLIPSTREAM PASS P10: #12 ANT drafts past LAW on approach to Turn 13 [OVERTAKE MODE]!",
-      "ts": 1793745955.7
-    },
-    {
-      "id": 28859,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#44 HAM): 'Still close behind VER. Looking for a way through.'",
-      "ts": 1793745958.5
-    },
-    {
-      "id": 28860,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P8: #10 GAS passes SAI near Turn 13 (SLIPSTREAM)!",
-      "ts": 1793745960.3
-    },
-    {
-      "id": 28861,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#55 SAI): 'I'm staying with GAS. Keeping the pressure on.'",
-      "ts": 1793745962.1
-    },
-    {
-      "id": 28862,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P9: #30 LAW passes SAI near Turn 14 (SLIPSTREAM)!",
-      "ts": 1793745963.5
-    },
-    {
-      "id": 28863,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "PIT WALL (Cadillac / #77 BOT): 'ALB has gone through, BOT. Stay focused on your race.'",
-      "ts": 1793745965.2
-    },
-    {
-      "id": 28864,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P10: #12 ANT passes SAI near Turn 14 (SLIPSTREAM)!",
-      "ts": 1793745967.1
-    },
-    {
-      "id": 28865,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "DUMMY MOVE P4: #44 HAM sells the feint and slices past VER into Turn 6!",
-      "ts": 1793745967.6
-    },
-    {
-      "id": 28866,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P10: #55 SAI passes ANT near Turn 14 (DEFEND)!",
-      "ts": 1793745968.1
-    },
-    {
-      "id": 28867,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#12 ANT): 'Lost the place to SAI near Turn 14.'",
-      "ts": 1793745968.1
-    },
-    {
-      "id": 28868,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "DIVEBOMB P11: #41 LIN lunges late on the brakes inside ANT at Turn 14!",
-      "ts": 1793745968.3
-    },
-    {
-      "id": 28869,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#11 PER): 'I'm staying with BEA. Keeping the pressure on.'",
-      "ts": 1793745971.7
-    },
-    {
-      "id": 28870,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P9: #55 SAI passes LAW near Turn 16 (DUMMY)!",
-      "ts": 1793745974.2
-    },
-    {
-      "id": 28871,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "PIT WALL (Racing Bulls / #30 LAW): 'SAI has gone through, LAW. Stay focused on your race.'",
-      "ts": 1793745974.2
-    },
-    {
-      "id": 28872,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#43 COL): 'Lost the place to ALB near Turn 15.'",
-      "ts": 1793745976.8
-    },
-    {
-      "id": 28873,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "SLIPSTREAM PASS P1: #81 PIA drafts past NOR on approach to Turn 9!",
-      "ts": 1793745977.3
-    },
-    {
       "id": 28874,
       "kind": "RADIO",
       "tag": "L22/22",
@@ -24847,7 +24737,273 @@
       "tag": "R6",
       "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (WET / RAIN, 24% rain risk)!",
       "ts": 1793746055.2
+    },
+    {
+      "id": 28916,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Ferrari brings a major $59.4M Power Unit Lv.9 upgrade package!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28917,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Red Bull introduces a $70.3M multi-stage development package (Active Aero Lv.8, Chassis Lv.8)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28918,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Racing Bulls introduces a $31.1M multi-stage development package (Reliability Lv.6, Suspension Lv.6)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28919,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Alpine introduces a $42.2M multi-stage development package (Chassis Lv.6, Active Aero Lv.6)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28920,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Audi introduces a $44.0M multi-stage development package (Chassis Lv.5, Active Aero Lv.5, Reliability Lv.5)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28921,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Williams introduces a $39.8M multi-stage development package (Active Aero Lv.6, Suspension Lv.6)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28922,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Aston Martin introduces a $34.7M multi-stage development package (Pit Crew Lv.5, Pit Crew Lv.6, Reliability Lv.6)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28923,
+      "kind": "WEEKEND",
+      "tag": "R6",
+      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (DRY, 24% rain risk)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28924,
+      "kind": "SERVER",
+      "tag": "R6",
+      "msg": "Persistent Championship resumed at 2028 Round 6 (Miami Grand Prix).",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28925,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Racing Bulls updates Pit Crew to Lv.6 (-$11.3M).",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28926,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Alpine updates Reliability to Lv.6 (-$14.2M).",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28927,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Audi introduces a $33.7M multi-stage development package (Power Unit Lv.5, Reliability Lv.6)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28928,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Haas introduces a $52.2M multi-stage development package (Active Aero Lv.5, Chassis Lv.5, Power Unit Lv.5)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28929,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Williams brings a major $25.8M Power Unit Lv.6 upgrade package!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28930,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Aston Martin introduces a $45.1M multi-stage development package (Chassis Lv.6, Power Unit Lv.6)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28931,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Cadillac introduces a $20.5M multi-stage development package (Pit Crew Lv.5, Pit Crew Lv.6)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28932,
+      "kind": "WEEKEND",
+      "tag": "R6",
+      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (WET / RAIN, 24% rain risk)!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28933,
+      "kind": "RADIO",
+      "tag": "R6",
+      "msg": "GRID STRATEGY: #63 RUS confirmed starting on MEDIUM tyres!",
+      "ts": 1793752187.8
+    },
+    {
+      "id": 28934,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Alpine updates Pit Crew to Lv.6 (-$11.3M).",
+      "ts": 1793752207.8
+    },
+    {
+      "id": 28935,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Audi updates Suspension to Lv.6 (-$16.9M).",
+      "ts": 1793752207.8
+    },
+    {
+      "id": 28936,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Haas introduces a $24.6M multi-stage development package (Reliability Lv.5, Suspension Lv.5)!",
+      "ts": 1793752207.8
+    },
+    {
+      "id": 28937,
+      "kind": "WEEKEND",
+      "tag": "R6",
+      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (WET / RAIN, 24% rain risk)!",
+      "ts": 1793752207.8
+    },
+    {
+      "id": 28938,
+      "kind": "SERVER",
+      "tag": "R6",
+      "msg": "Persistent Championship resumed at 2028 Round 6 (Miami Grand Prix).",
+      "ts": 1793752207.8
+    },
+    {
+      "id": 28939,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Haas introduces a $33.5M multi-stage development package (Chassis Lv.6, Reliability Lv.6)!",
+      "ts": 1793752207.8
+    },
+    {
+      "id": 28940,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Aston Martin updates Suspension to Lv.6 (-$16.9M).",
+      "ts": 1793752207.8
+    },
+    {
+      "id": 28941,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "PADDOCK TECH: Cadillac introduces a $42.2M multi-stage development package (Active Aero Lv.6, Chassis Lv.6)!",
+      "ts": 1793752207.8
+    },
+    {
+      "id": 28942,
+      "kind": "WEEKEND",
+      "tag": "R6",
+      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (DRY, 24% rain risk)!",
+      "ts": 1793752207.8
+    },
+    {
+      "id": 28943,
+      "kind": "RADIO",
+      "tag": "R6",
+      "msg": "GRID STRATEGY: #63 RUS confirmed starting on MEDIUM tyres!",
+      "ts": 1793752207.8
+    },
+    {
+      "id": 28944,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Racing Bulls updates Chassis to Lv.6 (-$19.3M).",
+      "ts": 1793752232.5
+    },
+    {
+      "id": 28945,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Alpine updates Suspension to Lv.6 (-$16.9M).",
+      "ts": 1793752232.5
+    },
+    {
+      "id": 28946,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Aston Martin updates Active Aero to Lv.6 (-$22.9M).",
+      "ts": 1793752232.5
+    },
+    {
+      "id": 28947,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Cadillac updates Suspension to Lv.6 (-$16.9M).",
+      "ts": 1793752232.5
+    },
+    {
+      "id": 28948,
+      "kind": "WEEKEND",
+      "tag": "R6",
+      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (DRY, 24% rain risk)!",
+      "ts": 1793752232.5
+    },
+    {
+      "id": 28949,
+      "kind": "SERVER",
+      "tag": "R6",
+      "msg": "Persistent Championship resumed at 2028 Round 6 (Miami Grand Prix).",
+      "ts": 1793752232.5
+    },
+    {
+      "id": 28950,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Racing Bulls updates Pit Crew to Lv.7 (-$14.1M).",
+      "ts": 1793752232.5
+    },
+    {
+      "id": 28951,
+      "kind": "UPGRADE",
+      "tag": "R6",
+      "msg": "UPGRADE: Haas updates Suspension to Lv.6 (-$16.9M).",
+      "ts": 1793752232.5
+    },
+    {
+      "id": 28952,
+      "kind": "WEEKEND",
+      "tag": "R6",
+      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (DRY, 24% rain risk)!",
+      "ts": 1793752232.5
+    },
+    {
+      "id": 28953,
+      "kind": "RADIO",
+      "tag": "R6",
+      "msg": "GRID STRATEGY: #63 RUS confirmed starting on MEDIUM tyres!",
+      "ts": 1793752232.5
     }
   ],
-  "event_seq": 28915
+  "event_seq": 28953
 }
