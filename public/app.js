@@ -3,12 +3,32 @@ import { CircuitRenderer } from "/canvas.js";
 import { teamLogoSVG } from "/logos.js";
 
 const TIRE_META = {
-  SOFT:   { code: "S", color: "#ff2800" },
-  MEDIUM: { code: "M", color: "#ffd200" },
-  HARD:   { code: "H", color: "#f0f2f5" },
-  INTER:  { code: "I", color: "#38b000" },
-  WET:    { code: "W", color: "#0096ff" },
+  SOFT:   { code: "S", color: "#ff2800", optMin: 90, optMax: 106 },
+  MEDIUM: { code: "M", color: "#ffd200", optMin: 95, optMax: 113 },
+  HARD:   { code: "H", color: "#f0f2f5", optMin: 100, optMax: 120 },
+  INTER:  { code: "I", color: "#38b000", optMin: 70, optMax: 92 },
+  WET:    { code: "W", color: "#0096ff", optMin: 60, optMax: 85 },
 };
+
+function getTempColor(comp, ttemp) {
+  const tm = TIRE_META[comp] || TIRE_META.MEDIUM;
+  if (!ttemp) return "#d4d4e0";
+  if (ttemp > tm.optMax + 10) return "#ff2800"; // Blistering
+  if (ttemp > tm.optMax) return "#ff8c00";      // Overheating
+  if (ttemp < tm.optMin - 8) return "#0096ff";  // Cold
+  if (ttemp < tm.optMin) return "#00d2be";      // Warming
+  return "#00d26a";                             // Optimal
+}
+
+function getTempStatus(comp, ttemp) {
+  const tm = TIRE_META[comp] || TIRE_META.MEDIUM;
+  if (!ttemp) return "OPTIMAL";
+  if (ttemp > tm.optMax + 10) return "BLISTERING";
+  if (ttemp > tm.optMax) return "OVERHEATING";
+  if (ttemp < tm.optMin - 8) return "COLD";
+  if (ttemp < tm.optMin) return "WARMING";
+  return "OPTIMAL";
+}
 
 function fmtLap(sec) {
   if (!Number.isFinite(sec) || sec <= 0) return "--:--.---";
@@ -721,6 +741,8 @@ class F1App {
         const ersLabel = isV8 ? "KERS" : "ERS";
         const aeroLabel = (c.aero === "DRS" || c.drs) ? "DRS" : (c.aero === "STRAIGHT" ? "STR" : "CRN");
         const aeroColor = (c.aero === "DRS" || c.drs) ? "#00d26a" : (c.aero === "STRAIGHT" ? "#00d2be" : "#ffffff");
+        const tCol = getTempColor(c.comp, c.ttemp);
+        const tStat = getTempStatus(c.comp, c.ttemp);
         return `
           <div class="pw-card" style="border-top-color:${c.tcol}">
             <div class="pw-top">
@@ -738,7 +760,7 @@ class F1App {
                 <span>LAT <strong>${c.g_lat != null ? Math.abs(c.g_lat).toFixed(1) : "0.0"}G</strong></span>
                 <span>AERO <strong style="color:${aeroColor}">${aeroLabel}</strong></span>
                 <span>${ersLabel} <strong>${Math.min(100, Math.max(0, c.bat))}%</strong></span>
-                <span><span class="pirelli-badge" style="border-color:${tm.color};width:14px;height:14px;font-size:8.5px">${tm.code}</span> ${100 - c.wear}% (${c.tage}L)</span>
+                <span><span class="pirelli-badge" style="border-color:${tm.color};width:14px;height:14px;font-size:8.5px">${tm.code}</span> ${100 - c.wear}% (${c.tage}L) · <strong style="color:${tCol}" title="Tyre Temperature: ${c.ttemp}°C (${tStat})">${c.ttemp}°C</strong></span>
               </div>
             </div>
 
@@ -836,6 +858,8 @@ class F1App {
     tag.innerHTML = `<span class="inline-team">${teamLogoSVG(car.tid, 14)} #${car.num} ${car.code} | P${car.pos}</span>`;
     const spdPct = Math.min(100, (car.kph / 360) * 100);
     const spdColor = car.ovt ? "#00d26a" : car.kph > 290 ? "#00d2be" : "#e10600";
+    const tCol = getTempColor(car.comp, car.ttemp);
+    const tStat = getTempStatus(car.comp, car.ttemp);
     const manDisplay = {
       DIVEBOMB: "DIVEBOMB INSIDE",
       OUTSIDE: "OUTSIDE SEND",
@@ -871,6 +895,7 @@ class F1App {
 
       <div class="tel-grid">
         <div class="tel-kv"><span>Compound</span><strong>${car.comp} (${100 - car.wear}%)</strong></div>
+        <div class="tel-kv"><span>Tyre Temp</span><strong style="color:${tCol}">${car.ttemp}°C (${tStat})</strong></div>
         <div class="tel-kv"><span>Maneuver</span><strong style="color:${car.man ? "#ffb366" : "#d4d4e0"}">${manDisplay}</strong></div>
         <div class="tel-kv"><span>Last Lap</span><strong>${fmtLap(car.last)}</strong></div>
         <div class="tel-kv"><span>Personal Best</span><strong style="color:#a855f7">${fmtLap(car.best)}</strong></div>

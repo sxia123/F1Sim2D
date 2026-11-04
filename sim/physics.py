@@ -5,7 +5,13 @@ import math
 import random
 from typing import Any
 from types import SimpleNamespace
-from sim.data import TIRE_COMPOUNDS, team_car_rating
+from sim.data import (
+    TIRE_COMPOUNDS,
+    team_car_rating,
+    tire_thermal_wear_mult,
+    tire_thermal_grip_mult,
+    tire_temp_status,
+)
 from sim.tracks import CompiledTrack
 from sim.track_geometry import pit_lateral_offset, in_pit_tunnel
 from sim.radio import RadioDispatcher
@@ -550,7 +556,9 @@ class CarState:
         self.compounds_used: set[str] = {start_compound}
         self.tire_wear: float = random.uniform(0.01, 0.04)
         self.tire_age_laps: int = 0
-        self.tire_temp: float = 96.0
+        comp_spec_init = TIRE_COMPOUNDS.get(start_compound, TIRE_COMPOUNDS["MEDIUM"])
+        self.tire_temp: float = comp_spec_init.get("ideal_temp", 98.0) - random.uniform(2.0, 5.0)
+        self.thermal_radio_cooldown: float = 0.0
         self.fuel_kg: float = round(total_laps * 1.75 + 2.0, 2)
         self.wing_damage: float = 0.0
         self.wing_damage_side: str = "NONE"  # "NONE", "LEFT", "RIGHT", "BOTH"
@@ -1821,8 +1829,8 @@ class RaceSession:
                     self.radio_dispatcher.trigger_push_mode(
                         car, "PUSH", is_pit_wall=False, event_cb=event_cb, clock=self.race_clock, turn=turn
                     )
-            elif car.pace_mode in ("PUSH", "ATTACK") and (car.tire_wear > 0.65 or gap_ahead_s > 2.2):
-                if car.tire_wear > 0.68:
+            elif car.pace_mode in ("PUSH", "ATTACK") and (car.tire_wear > 0.65 or gap_ahead_s > 2.2 or car.tire_temp > comp_spec.get("opt_temp_max", 112.0) + 6.0):
+                if car.tire_wear > 0.68 or car.tire_temp > comp_spec.get("opt_temp_max", 112.0) + 10.0:
                     car.pace_mode = "CONSERVE"
                     turn = self.track.nearest_corner(car.s) if hasattr(self.track, "nearest_corner") else 1
                     self.radio_dispatcher.trigger_conserve_mode(
@@ -1832,12 +1840,14 @@ class RaceSession:
                     car.pace_mode = "BALANCED"
 
         fw_grip_factor = 1.0 - car.wing_damage * (0.28 if smp["curv"] > 0.005 else 0.12)
+        thermal_grip_mod = tire_thermal_grip_mult(car.compound, car.tire_temp)
         grip_mult = (
             comp_spec["base_grip"]
             * wear_factor
             * weather_grip
             * warmup_factor
             * pace_grip_mod
+            * thermal_grip_mod
             * (1.0 - dirty_air_loss)
             * fw_grip_factor
             * (1.0 + (u["active_aero"] - 5) * 0.0036 + (u["chassis"] - 5) * 0.0030 + (u["suspension"] - 5) * 0.0026)
@@ -2233,6 +2243,7 @@ class RaceSession:
         car.steer_angle = round(max(-0.42, min(0.42, ackerman_steer + lane_steer)), 4)
 
         km_step = ds / 1000.0
+        thermal_wear_mod = tire_thermal_wear_mult(car.compound, car.tire_temp)
         wear_rate = (
             comp_spec["wear_per_km"]
             * self.track.tire_abrasion
@@ -2241,12 +2252,65 @@ class RaceSession:
             * (1.0 - (u["chassis"] - 5) * 0.018)
             * (1.28 if dirty_air_loss > 0.015 else 1.0)
             * (1.65 if (self.wetness < 0.08 and car.compound in ("INTER", "WET")) else 1.0)
+            * thermal_wear_mod
         )
         car.tire_wear = min(0.99, car.tire_wear + km_step * max(0.002, wear_rate))
-        target_temp = 96.0 + (12.0 if car.pace_mode in ("PUSH", "ATTACK") else (-6.0 if car.pace_mode == "CONSERVE" else 0.0))
-        if dirty_air_loss > 0.01:
-            target_temp += 6.0
-        car.tire_temp += (target_temp - car.tire_temp) * min(1.0, dt * 0.35)
+
+        # Multi-factor thermal dynamic model
+        comp_ideal = comp_spec.get("ideal_temp", 100.0)
+        track_temp_bias = (self.track_temp_c - 28.0) * 0.32
+
+        # 1. Cornering scrub friction heat (scales with lateral speed and curvature)
+        lateral_heat = min(14.0, smp["curv"] * max(car.v, 12.0) * 8.2)
+
+        # 2. Straight-line convective air cooling at high speed
+        straight_cooling = -4.5 if (smp["curv"] < 0.0018 and car.v > 58.0) else 0.0
+
+        # 3. Pace mode driver input bias
+        pace_temp_bias = {
+            "ATTACK": 13.0,
+            "PUSH": 7.5,
+            "BALANCED": 0.0,
+            "CONSERVE": -8.0,
+        }.get(car.pace_mode, 0.0)
+
+        # 4. Dirty air wake heating (cooling radiator airflow loss + slip-angle micro-slides)
+        dirty_air_heat = 7.5 if dirty_air_loss > 0.012 else (3.5 if dirty_air_loss > 0.004 else 0.0)
+
+        # 5. Track wetness / evaporative water cooling
+        if car.compound in ("INTER", "WET"):
+            if self.wetness < 0.08:
+                dry_overheat_spike = 24.0  # Massive thermal overheating on dry track
+            else:
+                dry_overheat_spike = -(self.wetness * 22.0)
+        else:
+            dry_overheat_spike = -(self.wetness * 32.0)
+
+        target_temp = (
+            comp_ideal
+            + track_temp_bias
+            + lateral_heat
+            + straight_cooling
+            + pace_temp_bias
+            + dirty_air_heat
+            + dry_overheat_spike
+        )
+
+        thermal_rate = dt * (0.28 if target_temp > car.tire_temp else 0.18)
+        car.tire_temp += (target_temp - car.tire_temp) * min(1.0, thermal_rate)
+        car.tire_temp = max(40.0, min(145.0, car.tire_temp))
+
+        # Overheating warning radio
+        opt_max = comp_spec.get("opt_temp_max", 112.0)
+        car.thermal_radio_cooldown = max(0.0, getattr(car, "thermal_radio_cooldown", 0.0) - dt)
+        if car.tire_temp >= opt_max + 10.0 and car.thermal_radio_cooldown <= 0.0:
+            car.thermal_radio_cooldown = random.uniform(90.0, 160.0)
+            status_str = "BLISTERING" if car.tire_temp >= opt_max + 14.0 else "OVERHEATING"
+            event_cb(
+                "RADIO",
+                f"PIT WALL ({car.team_short} / #{car.number} {car.code}): Tyre temps critical ({int(round(car.tire_temp))}°C - {status_str}). Manage the rear traction and look after the carcass.",
+            )
+
         car.fuel_kg = max(0.1, car.fuel_kg - km_step * 0.31)
 
         self._check_solo_incidents(car, smp, dt, event_cb)
@@ -2421,7 +2485,8 @@ class RaceSession:
                 car.compounds_used.add(car.compound)
                 car.tire_wear = 0.0
                 car.tire_age_laps = 0
-                car.tire_temp = 86.0
+                new_comp = TIRE_COMPOUNDS.get(car.compound, TIRE_COMPOUNDS["MEDIUM"])
+                car.tire_temp = round(new_comp.get("ideal_temp", 100.0) - 14.0, 1)
                 car.pit_stops += 1
                 car.pit_phase = "EXIT"
                 car.v = PIT_SPEED_LIMIT_MS
@@ -2536,6 +2601,7 @@ class RaceSession:
                 car.spin_timer = random.uniform(3.2, 5.5)
                 car.smoke = 2.8
                 car.tire_wear = min(0.98, car.tire_wear + 0.06)
+                car.tire_temp = min(140.0, car.tire_temp + random.uniform(8.0, 15.0))
                 self.radio_dispatcher.trigger_spin(car, turn, event_cb, self.race_clock)
                 if random.random() < 0.20:
                     car.wing_damage = min(0.75, car.wing_damage + random.uniform(0.24, 0.48))

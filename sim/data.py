@@ -20,6 +20,10 @@ TIRE_COMPOUNDS = {
         "optimal_wet_min": 0.0,
         "optimal_wet_max": 0.12,
         "warmup_rate": 0.18,
+        "opt_temp_min": 90.0,
+        "opt_temp_max": 106.0,
+        "ideal_temp": 98.0,
+        "overheat_sens": 0.035,
     },
     "MEDIUM": {
         "code": "M",
@@ -31,6 +35,10 @@ TIRE_COMPOUNDS = {
         "optimal_wet_min": 0.0,
         "optimal_wet_max": 0.14,
         "warmup_rate": 0.12,
+        "opt_temp_min": 95.0,
+        "opt_temp_max": 113.0,
+        "ideal_temp": 104.0,
+        "overheat_sens": 0.028,
     },
     "HARD": {
         "code": "H",
@@ -42,6 +50,10 @@ TIRE_COMPOUNDS = {
         "optimal_wet_min": 0.0,
         "optimal_wet_max": 0.15,
         "warmup_rate": 0.08,
+        "opt_temp_min": 100.0,
+        "opt_temp_max": 120.0,
+        "ideal_temp": 110.0,
+        "overheat_sens": 0.022,
     },
     "INTER": {
         "code": "I",
@@ -53,6 +65,10 @@ TIRE_COMPOUNDS = {
         "optimal_wet_min": 0.13,
         "optimal_wet_max": 0.62,
         "warmup_rate": 0.15,
+        "opt_temp_min": 70.0,
+        "opt_temp_max": 92.0,
+        "ideal_temp": 81.0,
+        "overheat_sens": 0.045,
     },
     "WET": {
         "code": "W",
@@ -64,6 +80,10 @@ TIRE_COMPOUNDS = {
         "optimal_wet_min": 0.50,
         "optimal_wet_max": 1.00,
         "warmup_rate": 0.16,
+        "opt_temp_min": 60.0,
+        "opt_temp_max": 85.0,
+        "ideal_temp": 72.0,
+        "overheat_sens": 0.050,
     },
 }
 
@@ -1239,3 +1259,66 @@ def team_car_rating(team: dict) -> float:
 
 def clone_initial_roster() -> tuple[list[dict], list[dict]]:
     return copy.deepcopy(INITIAL_TEAMS), copy.deepcopy(INITIAL_DRIVERS)
+
+
+def tire_thermal_wear_mult(compound: str, temp_c: float) -> float:
+    """Thermal degradation multiplier on tire wear rate.
+
+    Inside [opt_temp_min, opt_temp_max]: 1.0 (nominal degradation rate).
+    Overheating (> opt_temp_max): Non-linear accelerated degradation & blistering.
+    Cold (< opt_temp_min): Cold surface graining under heavy shear loads.
+    """
+    spec = TIRE_COMPOUNDS.get(compound, TIRE_COMPOUNDS["MEDIUM"])
+    t_min = spec.get("opt_temp_min", 95.0)
+    t_max = spec.get("opt_temp_max", 113.0)
+    sens = spec.get("overheat_sens", 0.028)
+
+    if t_min <= temp_c <= t_max:
+        return 1.0
+    elif temp_c > t_max:
+        excess = temp_c - t_max
+        # Quadratic thermal degradation runaway (blistering & carcass overheating)
+        return round(min(3.2, 1.0 + excess * sens + 0.0016 * (excess ** 2)), 3)
+    else:
+        deficit = t_min - temp_c
+        # Cold graining: stiff glassy rubber under shear loads
+        return round(min(1.35, 1.0 + deficit * 0.009), 3)
+
+
+def tire_thermal_grip_mult(compound: str, temp_c: float) -> float:
+    """Thermal effect on tire surface friction / grip.
+
+    Inside [opt_temp_min, opt_temp_max]: 1.00 (peak chemical adhesion).
+    Overheating (> opt_temp_max): Thermal fading / surface greasing (up to -15% grip).
+    Cold (< opt_temp_min): Glass transition stiffness / lack of mechanical keying.
+    """
+    spec = TIRE_COMPOUNDS.get(compound, TIRE_COMPOUNDS["MEDIUM"])
+    t_min = spec.get("opt_temp_min", 95.0)
+    t_max = spec.get("opt_temp_max", 113.0)
+
+    if t_min <= temp_c <= t_max:
+        return 1.0
+    elif temp_c > t_max:
+        excess = temp_c - t_max
+        return round(max(0.85, 1.0 - excess * 0.0055 - 0.00015 * (excess ** 2)), 3)
+    else:
+        deficit = t_min - temp_c
+        return round(max(0.84, 1.0 - deficit * 0.0075), 3)
+
+
+def tire_temp_status(compound: str, temp_c: float) -> str:
+    """Human-readable temperature status string."""
+    spec = TIRE_COMPOUNDS.get(compound, TIRE_COMPOUNDS["MEDIUM"])
+    t_min = spec.get("opt_temp_min", 95.0)
+    t_max = spec.get("opt_temp_max", 113.0)
+    if temp_c > t_max + 14.0:
+        return "BLISTERING"
+    elif temp_c > t_max:
+        return "OVERHEATING"
+    elif temp_c < t_min - 10.0:
+        return "COLD"
+    elif temp_c < t_min:
+        return "WARMING"
+    else:
+        return "OPTIMAL"
+
