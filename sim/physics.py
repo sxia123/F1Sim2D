@@ -1245,7 +1245,7 @@ class RaceSession:
     def set_starting_compound(self, driver_id: str, compound: str) -> bool:
         if compound in TIRE_COMPOUNDS and driver_id in self.cars_by_id:
             car = self.cars_by_id[driver_id]
-            if car.crossed_start_line or self.lights_out:
+            if self.lights_out or self.flag_state not in ("GRID", "LIGHTS") or car.laps_completed > 0:
                 return False
             if car.compound == compound:
                 return True
@@ -1261,7 +1261,6 @@ class RaceSession:
             car.tire_wear = 0.01
             self.starting_compounds[driver_id] = compound
             return True
-        return False
         return False
 
     def _team_pit_box_s(self, car: CarState) -> float:

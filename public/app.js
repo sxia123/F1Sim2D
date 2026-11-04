@@ -224,9 +224,14 @@ class F1App {
           if (this.liveTick && this.liveTick.cars) {
             const myCar = this.liveTick.cars.find(c => c.id === driverId);
             if (myCar) {
+              const oldComp = myCar.comp;
               myCar.comp = val;
               myCar.ncomp = val;
-              this.renderPitWallCards(this.liveTick);
+              if (myCar.tsets && oldComp !== val) {
+                if (myCar.tsets[oldComp] != null) myCar.tsets[oldComp]++;
+                if (myCar.tsets[val] != null && myCar.tsets[val] > 0) myCar.tsets[val]--;
+              }
+              this.renderPitWall(this.liveTick);
             }
           }
         }
@@ -239,7 +244,19 @@ class F1App {
       else if (cmd === "order") payload.team_order = val;
 
       const res = await this.apiPost("/api/pit_wall", payload);
-      if (res.ok) this.lastDomSyncMs = 0;
+      if (res.ok) {
+        if (cmd === "ncomp") {
+          this.showToast(`NEXT TYRE QUEUED: #${driverId.toUpperCase()} on ${val} tyres!`);
+          if (this.liveTick && this.liveTick.cars) {
+            const myCar = this.liveTick.cars.find(c => c.id === driverId);
+            if (myCar) {
+              myCar.ncomp = val;
+              this.renderPitWall(this.liveTick);
+            }
+          }
+        }
+        this.lastDomSyncMs = 0;
+      }
     });
 
     const modal = document.getElementById("team-modal");

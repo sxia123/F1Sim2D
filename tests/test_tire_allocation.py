@@ -239,6 +239,61 @@ class TestTireAllocation(unittest.TestCase):
             self.assertIn("MEDIUM", car_payload["tsets"])
             self.assertIn("HARD", car_payload["tsets"])
 
+    def test_set_starting_compound_on_positive_progress_track(self):
+        """Grid compound changes must succeed on tracks where grid box progress_m > 0 (e.g. Portugal)."""
+        portugal_track = next((t for t in COMPILED_TRACKS if t.id == "portugal"), None)
+        self.assertIsNotNone(portugal_track)
+        self.assertGreater(portugal_track.grid_boxes[0]["progress_m"], 0.0)
+
+        allocations = {d["id"]: dict(DEFAULT_WEEKEND_TIRE_SETS) for d in self.active_drivers}
+        p_drv = self.active_drivers[0]["id"]
+        rs = RaceSession(
+            track=portugal_track,
+            teams_by_id=self.teams_by_id,
+            grid_drivers=self.active_drivers,
+            wetness=0.0,
+            rain_forecast=0.0,
+            player_team_id=self.active_drivers[0]["team_id"],
+            starting_compounds={p_drv: "MEDIUM"},
+            tire_allocations=allocations,
+        )
+
+        # Car total_dist is positive on Portugal's grid, but lights are NOT out
+        self.assertGreater(rs.cars_by_id[p_drv].total_dist, 0.0)
+        self.assertFalse(rs.lights_out)
+        self.assertEqual(rs.flag_state, "LIGHTS")
+
+        # Switching to SOFT must succeed
+        ok = rs.set_starting_compound(p_drv, "SOFT")
+        self.assertTrue(ok)
+        self.assertEqual(rs.cars_by_id[p_drv].compound, "SOFT")
+        self.assertEqual(allocations[p_drv]["MEDIUM"], 3)
+        self.assertEqual(allocations[p_drv]["SOFT"], 7)
+
+    def test_championship_pit_wall_ncomp_queue(self):
+        """Pit wall command during race queues car.next_compound and respects weekend allocation."""
+        coord = ChampionshipWorld()
+        coord._init_fresh_career("williams")
+        coord._prepare_race_grid()
+        coord.phase = "RACE"
+        coord.race_session.lights_out = True
+        coord.race_session.flag_state = "GREEN"
+
+        my_drv = [d["id"] for d in coord.drivers if d["team_id"] == coord.player_team_id][0]
+        car = coord.race_session.cars_by_id[my_drv]
+
+        # Queue HARD
+        res = coord.pit_wall_command(my_drv, {"next_compound": "HARD"})
+        self.assertTrue(res.get("ok"))
+        self.assertEqual(car.next_compound, "HARD")
+
+        # Deplete INTER and attempt to queue INTER
+        coord.tire_allocations[my_drv]["INTER"] = 0
+        res_fail = coord.pit_wall_command(my_drv, {"next_compound": "INTER"})
+        self.assertFalse(res_fail.get("ok"))
+        self.assertIn("No INTER tyre sets", res_fail.get("error", ""))
+        self.assertEqual(car.next_compound, "HARD")
+
 
 if __name__ == "__main__":
     unittest.main()

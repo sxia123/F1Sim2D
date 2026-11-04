@@ -436,7 +436,10 @@ class ChampionshipWorld:
             if self.race_session:
                 ok = self.race_session.set_starting_compound(driver_id, compound)
                 if not ok:
-                    return {"ok": False, "error": f"Cannot fit {compound} tyres (no sets remaining in weekend allocation or race started)."}
+                    alloc = getattr(self.race_session, "tire_allocations", self.tire_allocations).get(driver_id, {})
+                    if alloc.get(compound, 0) <= 0:
+                        return {"ok": False, "error": f"Cannot fit {compound} tyres (no sets remaining in weekend allocation)."}
+                    return {"ok": False, "error": f"Cannot fit {compound} tyres (race has already started)."}
                 car = self.race_session.cars_by_id.get(driver_id)
                 if car:
                     car.next_compound = compound
@@ -1758,7 +1761,11 @@ class ChampionshipWorld:
                     return res
             elif "next_compound" in cmd and cmd["next_compound"] in TIRE_COMPOUNDS:
                 comp = cmd["next_compound"]
-                is_pre = self.phase in ("GRID_WALK", "PRE_WEEKEND") or (self.race_session and (self.race_session.flag_state in ("GRID", "LIGHTS") or self.race_session.lights_countdown > 0 or (car.lap <= 1 and car.v < 10.0)))
+                is_pre = (not self.race_session) or (
+                    not self.race_session.lights_out
+                    and self.race_session.flag_state in ("GRID", "LIGHTS")
+                    and car.laps_completed == 0
+                )
                 if is_pre:
                     res = self.set_starting_compound(driver_id, comp)
                     if not res.get("ok"):
@@ -1768,6 +1775,10 @@ class ChampionshipWorld:
                     if alloc.get(comp, 0) <= 0:
                         return {"ok": False, "error": f"No {comp} tyre sets remaining in weekend allocation."}
                     car.next_compound = comp
+                    self._push_event(
+                        "RADIO",
+                        f"PIT WALL (#{car.number} {car.code}): Strategy updated — queued {comp} tyres for next pit stop.",
+                    )
             if "box_this_lap" in cmd:
                 car.box_this_lap = bool(cmd["box_this_lap"])
                 if car.box_this_lap and not car.radio_box_announced:
