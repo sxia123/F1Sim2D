@@ -2338,24 +2338,37 @@ class RaceSession:
         comp_ideal = comp_spec.get("ideal_temp", 100.0)
         track_temp_bias = (self.track_temp_c - 28.0) * 0.32
 
-        # 1. Cornering scrub friction heat (scales with lateral speed and curvature)
-        lateral_heat = min(14.0, smp["curv"] * max(car.v, 12.0) * 8.2)
-
-        # 2. Straight-line convective air cooling at high speed
-        straight_cooling = -4.5 if (smp["curv"] < 0.0018 and car.v > 58.0) else 0.0
-
-        # 3. Pace mode driver input bias
-        pace_temp_bias = {
-            "ATTACK": 13.0,
-            "PUSH": 7.5,
-            "BALANCED": 0.0,
-            "CONSERVE": -8.0,
+        # Physical driving stress delta relative to standard (BALANCED) driving:
+        # Instead of an artificial flat temperature jump on input change, heating is
+        # derived from the physical difference in driving: apex scrub work, braking stress,
+        # and traction demand versus lift-and-coast smooth tire preservation.
+        driving_stress = {
+            "ATTACK": 1.00,
+            "PUSH": 0.55,
+            "BALANCED": 0.00,
+            "CONSERVE": -0.65,
         }.get(car.pace_mode, 0.0)
 
-        # 4. Dirty air wake heating (cooling radiator airflow loss + slip-angle micro-slides)
-        dirty_air_heat = 7.5 if dirty_air_loss > 0.012 else (3.5 if dirty_air_loss > 0.004 else 0.0)
+        # 1. Cornering scrub friction heat (derived from actual lateral G and curvature)
+        # Higher lateral G and higher apex velocity physically generate contact patch scrub work.
+        base_corner_heat = min(11.0, abs(car.g_lat) * 2.5) if smp["curv"] > 0.0015 else 0.0
+        corner_scrub_heat = base_corner_heat * (1.0 + 0.65 * driving_stress)
 
-        # 5. Track wetness / evaporative water cooling
+        # 2. Braking & deceleration friction heat (kinetic energy dissipated into contact patch)
+        # Braking zones heat tires longitudinally; pushing brakes harder/later, conserve lifts & coasts.
+        is_braking_zone = car.braking or self.is_braking[st]
+        braking_heat = (3.2 * (1.0 + 0.85 * driving_stress)) if is_braking_zone else 0.0
+
+        # 3. Longitudinal traction acceleration scrub (powering out of slower corners)
+        traction_heat = max(0.0, (1.0 - car.v / 55.0)) * 3.2 * max(0.0, driving_stress) if not is_braking_zone else 0.0
+
+        # 4. Straight-line convective air cooling at high speed
+        straight_cooling = -min(5.5, max(0.0, car.v - 48.0) * 0.12) if (smp["curv"] < 0.0020 and car.v > 48.0) else 0.0
+
+        # 5. Dirty air wake heating (cooling radiator airflow loss + turbulent wake micro-slides)
+        dirty_air_heat = 6.5 if dirty_air_loss > 0.012 else (3.0 if dirty_air_loss > 0.004 else 0.0)
+
+        # 6. Track wetness / evaporative water cooling
         if car.compound in ("INTER", "WET"):
             if self.wetness < 0.08:
                 dry_overheat_spike = 24.0  # Massive thermal overheating on dry track
@@ -2367,14 +2380,16 @@ class RaceSession:
         target_temp = (
             comp_ideal
             + track_temp_bias
-            + lateral_heat
+            + corner_scrub_heat
+            + braking_heat
+            + traction_heat
             + straight_cooling
-            + pace_temp_bias
             + dirty_air_heat
             + dry_overheat_spike
         )
 
-        thermal_rate = dt * (0.28 if target_temp > car.tire_temp else 0.18)
+        # Carcass thermal mass inertia: progressive temperature evolution over laps (~12-16s time constant)
+        thermal_rate = dt * (0.075 if target_temp > car.tire_temp else 0.055)
         car.tire_temp += (target_temp - car.tire_temp) * min(1.0, thermal_rate)
         car.tire_temp = max(40.0, min(145.0, car.tire_temp))
 

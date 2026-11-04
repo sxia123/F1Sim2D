@@ -75,7 +75,7 @@ class TestTireHeatDegradation(unittest.TestCase):
         self.assertLess(g_cold, 0.88, "Cold tires have reduced chemical grip")
 
     def test_dynamic_thermal_evolution_in_race_session(self):
-        """In a dynamic simulation step, pushing generates higher tire heat and degradation than conserving."""
+        """In a dynamic simulation step, pushing generates higher tire heat and degradation than conserving on the same compound."""
         race = RaceSession(
             self.track,
             self.teams,
@@ -83,6 +83,7 @@ class TestTireHeatDegradation(unittest.TestCase):
             wetness=0.0,
             rain_forecast=0.0,
             player_team_id="mclaren",
+            starting_compounds={self.drivers[0]["id"]: "MEDIUM", self.drivers[1]["id"]: "MEDIUM"},
             rain_scheduled=False,
         )
 
@@ -162,9 +163,46 @@ class TestTireHeatDegradation(unittest.TestCase):
         )
 
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_pace_mode_heating_derived_from_driving_not_flat_step(self):
+        """Pace mode heating is derived from physical driving work (cornering G & braking), not an instant flat input step."""
+        race = RaceSession(
+            self.track,
+            self.teams,
+            self.drivers[:2],
+            wetness=0.0,
+            rain_forecast=0.0,
+            player_team_id="mclaren",
+            rain_scheduled=False,
+        )
+        car_std = race.cars[0]
+        car_attack = race.cars[1]
+        car_std.auto_strategy = False
+        car_attack.auto_strategy = False
 
+        car_std.pace_mode = "BALANCED"
+        car_attack.pace_mode = "ATTACK"
+
+        # Position both cars on a long straight traveling at 80 m/s
+        for c in (car_std, car_attack):
+            c.s = 200.0  # Main straight
+            c.v = 80.0
+            c.tire_temp = 98.0
+            c.braking = False
+
+        # Run for 2 seconds (40 physics ticks) on the straight
+        dt = 0.05
+        for _ in range(40):
+            race.race_clock += dt
+            race.step(dt, lambda *args: None)
+
+        # On the straight, because there is no cornering scrub or hard braking,
+        # ATTACK mode does NOT produce an immediate artificial 13C temperature spike
+        temp_diff = car_attack.tire_temp - car_std.tire_temp
+        self.assertLess(
+            temp_diff,
+            3.0,
+            f"On a straight, ATTACK should not instantly spike temperature by a flat offset (diff was {temp_diff:.2f}C)",
+        )
 
 
 if __name__ == "__main__":

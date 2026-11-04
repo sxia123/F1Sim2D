@@ -2,7 +2,7 @@
   "season_year": 2028,
   "calendar_version": 1,
   "legacy_calendar": false,
-  "current_round": 6,
+  "current_round": 8,
   "player_team_id": "mercedes",
   "teams": [
     {
@@ -13,14 +13,14 @@
       "engine": "Mercedes",
       "color": "#00d2be",
       "secondary": "#c8d0d8",
-      "budget_m": 16.54,
+      "budget_m": 2.89,
       "sponsor_id": "apex_cloud",
       "upgrades": {
         "power_unit": 8,
         "active_aero": 7,
         "chassis": 8,
         "suspension": 8,
-        "reliability": 8,
+        "reliability": 9,
         "pit_crew": 7
       }
     },
@@ -32,7 +32,7 @@
       "engine": "Ferrari",
       "color": "#e8002d",
       "secondary": "#ffffff",
-      "budget_m": 25.15,
+      "budget_m": 25.69,
       "sponsor_id": "chronos_swiss",
       "upgrades": {
         "power_unit": 9,
@@ -51,7 +51,7 @@
       "engine": "Red Bull Ford",
       "color": "#3671c6",
       "secondary": "#ff1e42",
-      "budget_m": 24.38,
+      "budget_m": 28.8,
       "sponsor_id": "apex_cloud",
       "upgrades": {
         "power_unit": 8,
@@ -70,7 +70,7 @@
       "engine": "Mercedes",
       "color": "#ff8000",
       "secondary": "#181c24",
-      "budget_m": 23.23,
+      "budget_m": 46.46,
       "sponsor_id": "apex_cloud",
       "upgrades": {
         "power_unit": 9,
@@ -89,7 +89,7 @@
       "engine": "Red Bull Ford",
       "color": "#6692ff",
       "secondary": "#ffffff",
-      "budget_m": 23.83,
+      "budget_m": 31.12,
       "sponsor_id": "nova_fintech",
       "upgrades": {
         "power_unit": 6,
@@ -108,7 +108,7 @@
       "engine": "Mercedes",
       "color": "#0093cc",
       "secondary": "#ff87bc",
-      "budget_m": 30.31,
+      "budget_m": 24.66,
       "sponsor_id": "nova_fintech",
       "upgrades": {
         "power_unit": 5,
@@ -116,7 +116,7 @@
         "chassis": 6,
         "suspension": 6,
         "reliability": 6,
-        "pit_crew": 6
+        "pit_crew": 7
       }
     },
     {
@@ -127,7 +127,7 @@
       "engine": "Audi",
       "color": "#f50537",
       "secondary": "#b8c0c8",
-      "budget_m": 45.69,
+      "budget_m": 25.6,
       "sponsor_id": "hyperion_ai",
       "upgrades": {
         "power_unit": 5,
@@ -135,7 +135,7 @@
         "chassis": 5,
         "suspension": 6,
         "reliability": 6,
-        "pit_crew": 5
+        "pit_crew": 7
       }
     },
     {
@@ -146,7 +146,7 @@
       "engine": "Ferrari",
       "color": "#b6babd",
       "secondary": "#e6002b",
-      "budget_m": 33.14,
+      "budget_m": 26.77,
       "sponsor_id": "titan_logistics",
       "upgrades": {
         "power_unit": 5,
@@ -154,7 +154,7 @@
         "chassis": 6,
         "suspension": 6,
         "reliability": 6,
-        "pit_crew": 5
+        "pit_crew": 6
       }
     },
     {
@@ -165,7 +165,7 @@
       "engine": "Mercedes",
       "color": "#1868db",
       "secondary": "#64c4ff",
-      "budget_m": 29.45,
+      "budget_m": 35.52,
       "sponsor_id": "hyperion_ai",
       "upgrades": {
         "power_unit": 6,
@@ -184,7 +184,7 @@
       "engine": "Honda",
       "color": "#229971",
       "secondary": "#cedc00",
-      "budget_m": 28.41,
+      "budget_m": 32.27,
       "sponsor_id": "titan_logistics",
       "upgrades": {
         "power_unit": 6,
@@ -203,14 +203,14 @@
       "engine": "Ferrari",
       "color": "#d4af37",
       "secondary": "#1e3f8f",
-      "budget_m": 39.51,
+      "budget_m": 29.43,
       "sponsor_id": "titan_logistics",
       "upgrades": {
         "power_unit": 5,
         "active_aero": 6,
         "chassis": 6,
         "suspension": 6,
-        "reliability": 5,
+        "reliability": 6,
         "pit_crew": 6
       }
     }
@@ -234,7 +234,7 @@
       "value_m": 46.0,
       "contract_years": 2,
       "helmet": "#00d2ff",
-      "penalty_points": 0
+      "penalty_points": 1
     },
     {
       "id": "antonelli",
@@ -254,7 +254,7 @@
       "value_m": 36.0,
       "contract_years": 3,
       "helmet": "#00a86b",
-      "penalty_points": 2
+      "penalty_points": 4
     },
     {
       "id": "leclerc",
@@ -294,7 +294,7 @@
       "value_m": 38.0,
       "contract_years": 2,
       "helmet": "#ffd000",
-      "penalty_points": 1
+      "penalty_points": 2
     },
     {
       "id": "verstappen",
@@ -355,7 +355,7 @@
       "value_m": 48.0,
       "contract_years": 3,
       "helmet": "#ccff00",
-      "penalty_points": 0,
+      "penalty_points": 2,
       "career_number": 4
     },
     {
@@ -456,7 +456,7 @@
       "value_m": 19.0,
       "contract_years": 2,
       "helmet": "#74c0fc",
-      "penalty_points": 2
+      "penalty_points": 4
     },
     {
       "id": "hulkenberg",
@@ -496,7 +496,7 @@
       "value_m": 22.0,
       "contract_years": 3,
       "helmet": "#00f5d4",
-      "penalty_points": 2
+      "penalty_points": 4
     },
     {
       "id": "ocon",
@@ -1049,25 +1049,25 @@
     }
   ],
   "driver_points": {
-    "russell": 137,
-    "antonelli": 2,
-    "leclerc": 60,
-    "hamilton": 65,
-    "verstappen": 97,
-    "hadjar": 57,
-    "norris": 139,
-    "piastri": 123,
-    "lawson": 6,
+    "russell": 178,
+    "antonelli": 4,
+    "leclerc": 80,
+    "hamilton": 94,
+    "verstappen": 126,
+    "hadjar": 78,
+    "norris": 215,
+    "piastri": 183,
+    "lawson": 24,
     "lindblad": 1,
     "gasly": 2,
-    "colapinto": 13,
+    "colapinto": 36,
     "hulkenberg": 18,
-    "bortoleto": 8,
+    "bortoleto": 16,
     "ocon": 1,
     "bearman": 14,
-    "sainz": 0,
-    "albon": 15,
-    "alonso": 153,
+    "sainz": 5,
+    "albon": 21,
+    "alonso": 190,
     "stroll": 2,
     "perez": 6,
     "bottas": 4,
@@ -1098,7 +1098,7 @@
     "hamilton": 0,
     "verstappen": 0,
     "hadjar": 0,
-    "norris": 1,
+    "norris": 3,
     "piastri": 1,
     "lawson": 0,
     "lindblad": 0,
@@ -1110,7 +1110,7 @@
     "bearman": 0,
     "sainz": 0,
     "albon": 0,
-    "alonso": 4,
+    "alonso": 5,
     "stroll": 0,
     "perez": 0,
     "bottas": 0,
@@ -1135,25 +1135,25 @@
     "mansell": 0
   },
   "driver_podiums": {
-    "russell": 4,
+    "russell": 6,
     "antonelli": 0,
     "leclerc": 0,
     "hamilton": 0,
     "verstappen": 1,
     "hadjar": 1,
-    "norris": 5,
-    "piastri": 4,
-    "lawson": 0,
+    "norris": 7,
+    "piastri": 6,
+    "lawson": 1,
     "lindblad": 0,
     "gasly": 0,
-    "colapinto": 0,
+    "colapinto": 1,
     "hulkenberg": 1,
     "bortoleto": 0,
     "ocon": 0,
     "bearman": 0,
     "sainz": 0,
     "albon": 1,
-    "alonso": 4,
+    "alonso": 5,
     "stroll": 0,
     "perez": 0,
     "bottas": 0,
@@ -1182,9 +1182,9 @@
     "antonelli": 0,
     "leclerc": 0,
     "hamilton": 0,
-    "verstappen": 0,
+    "verstappen": 2,
     "hadjar": 0,
-    "norris": 2,
+    "norris": 3,
     "piastri": 1,
     "lawson": 0,
     "lindblad": 0,
@@ -1264,23 +1264,23 @@
     "mansell": 0
   },
   "team_points": {
-    "mercedes": 290,
-    "ferrari": 125,
-    "redbull": 154,
-    "mclaren": 262,
-    "racingbulls": 7,
-    "alpine": 15,
-    "audi": 26,
+    "mercedes": 368,
+    "ferrari": 174,
+    "redbull": 204,
+    "mclaren": 398,
+    "racingbulls": 25,
+    "alpine": 38,
+    "audi": 34,
     "haas": 15,
-    "williams": 15,
-    "aston": 4,
+    "williams": 26,
+    "aston": 6,
     "cadillac": 10
   },
   "team_wins": {
-    "mercedes": 5,
+    "mercedes": 6,
     "ferrari": 0,
     "redbull": 0,
-    "mclaren": 2,
+    "mclaren": 4,
     "racingbulls": 0,
     "alpine": 0,
     "audi": 0,
@@ -2484,6 +2484,519 @@
           "dnf": false,
           "dnf_reason": "",
           "gap": "+47.788s"
+        }
+      ]
+    },
+    {
+      "round": 6,
+      "track_id": "miami",
+      "gp": "Miami Grand Prix",
+      "circuit": "Miami International Autodrome",
+      "city": "Miami",
+      "country": "USA",
+      "is_sprint": false,
+      "laps": 22,
+      "sprint_winner_code": "",
+      "winner_code": "NOR",
+      "winner_name": "Lando Norris",
+      "winner_team": "McLaren",
+      "winner_color": "#ff8000",
+      "p2_code": "PIA",
+      "p3_code": "RUS",
+      "pole_code": "NOR",
+      "fastest_lap_code": "RUS",
+      "top10": [
+        {
+          "pos": 1,
+          "driver_id": "norris",
+          "code": "NOR",
+          "name": "Lando Norris",
+          "number": 4,
+          "team_id": "mclaren",
+          "team_short": "McLaren",
+          "team_color": "#ff8000",
+          "points": 25,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "WINNER"
+        },
+        {
+          "pos": 2,
+          "driver_id": "piastri",
+          "code": "PIA",
+          "name": "Oscar Piastri",
+          "number": 81,
+          "team_id": "mclaren",
+          "team_short": "McLaren",
+          "team_color": "#ff8000",
+          "points": 18,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+11.250s"
+        },
+        {
+          "pos": 3,
+          "driver_id": "russell",
+          "code": "RUS",
+          "name": "George Russell",
+          "number": 63,
+          "team_id": "mercedes",
+          "team_short": "Mercedes",
+          "team_color": "#00d2be",
+          "points": 15,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+13.600s"
+        },
+        {
+          "pos": 4,
+          "driver_id": "verstappen",
+          "code": "VER",
+          "name": "Max Verstappen",
+          "number": 1,
+          "team_id": "redbull",
+          "team_short": "Red Bull",
+          "team_color": "#3671c6",
+          "points": 12,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+14.150s"
+        },
+        {
+          "pos": 5,
+          "driver_id": "alonso",
+          "code": "ALO",
+          "name": "Fernando Alonso",
+          "number": 14,
+          "team_id": "mercedes",
+          "team_short": "Mercedes",
+          "team_color": "#00d2be",
+          "points": 10,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+5.984s"
+        },
+        {
+          "pos": 6,
+          "driver_id": "hamilton",
+          "code": "HAM",
+          "name": "Lewis Hamilton",
+          "number": 44,
+          "team_id": "ferrari",
+          "team_short": "Ferrari",
+          "team_color": "#e8002d",
+          "points": 8,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+6.495s"
+        },
+        {
+          "pos": 7,
+          "driver_id": "leclerc",
+          "code": "LEC",
+          "name": "Charles Leclerc",
+          "number": 16,
+          "team_id": "ferrari",
+          "team_short": "Ferrari",
+          "team_color": "#e8002d",
+          "points": 6,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+7.718s"
+        },
+        {
+          "pos": 8,
+          "driver_id": "albon",
+          "code": "ALB",
+          "name": "Alexander Albon",
+          "number": 23,
+          "team_id": "williams",
+          "team_short": "Williams",
+          "team_color": "#1868db",
+          "points": 4,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+15.489s"
+        },
+        {
+          "pos": 9,
+          "driver_id": "hadjar",
+          "code": "HAD",
+          "name": "Isack Hadjar",
+          "number": 6,
+          "team_id": "redbull",
+          "team_short": "Red Bull",
+          "team_color": "#3671c6",
+          "points": 2,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+18.762s"
+        },
+        {
+          "pos": 10,
+          "driver_id": "sainz",
+          "code": "SAI",
+          "name": "Carlos Sainz",
+          "number": 55,
+          "team_id": "williams",
+          "team_short": "Williams",
+          "team_color": "#1868db",
+          "points": 1,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+26.104s"
+        }
+      ]
+    },
+    {
+      "round": 7,
+      "track_id": "canada",
+      "gp": "Canadian Grand Prix",
+      "circuit": "Circuit Gilles-Villeneuve",
+      "city": "Montreal",
+      "country": "CAN",
+      "is_sprint": true,
+      "laps": 26,
+      "sprint_winner_code": "PIA",
+      "winner_code": "ALO",
+      "winner_name": "Fernando Alonso",
+      "winner_team": "Mercedes",
+      "winner_color": "#00d2be",
+      "p2_code": "PIA",
+      "p3_code": "RUS",
+      "pole_code": "VER",
+      "fastest_lap_code": "LEC",
+      "top10": [
+        {
+          "pos": 1,
+          "driver_id": "alonso",
+          "code": "ALO",
+          "name": "Fernando Alonso",
+          "number": 14,
+          "team_id": "mercedes",
+          "team_short": "Mercedes",
+          "team_color": "#00d2be",
+          "points": 25,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "WINNER"
+        },
+        {
+          "pos": 2,
+          "driver_id": "piastri",
+          "code": "PIA",
+          "name": "Oscar Piastri",
+          "number": 81,
+          "team_id": "mclaren",
+          "team_short": "McLaren",
+          "team_color": "#ff8000",
+          "points": 18,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+0.350s"
+        },
+        {
+          "pos": 3,
+          "driver_id": "russell",
+          "code": "RUS",
+          "name": "George Russell",
+          "number": 63,
+          "team_id": "mercedes",
+          "team_short": "Mercedes",
+          "team_color": "#00d2be",
+          "points": 15,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+2.450s"
+        },
+        {
+          "pos": 4,
+          "driver_id": "norris",
+          "code": "NOR",
+          "name": "Lando Norris",
+          "number": 4,
+          "team_id": "mclaren",
+          "team_short": "McLaren",
+          "team_color": "#ff8000",
+          "points": 12,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+5.250s"
+        },
+        {
+          "pos": 5,
+          "driver_id": "hadjar",
+          "code": "HAD",
+          "name": "Isack Hadjar",
+          "number": 6,
+          "team_id": "redbull",
+          "team_short": "Red Bull",
+          "team_color": "#3671c6",
+          "points": 10,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+7.700s"
+        },
+        {
+          "pos": 6,
+          "driver_id": "colapinto",
+          "code": "COL",
+          "name": "Franco Colapinto",
+          "number": 43,
+          "team_id": "alpine",
+          "team_short": "Alpine",
+          "team_color": "#0093cc",
+          "points": 8,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+7.700s"
+        },
+        {
+          "pos": 7,
+          "driver_id": "hamilton",
+          "code": "HAM",
+          "name": "Lewis Hamilton",
+          "number": 44,
+          "team_id": "ferrari",
+          "team_short": "Ferrari",
+          "team_color": "#e8002d",
+          "points": 6,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+13.300s"
+        },
+        {
+          "pos": 8,
+          "driver_id": "sainz",
+          "code": "SAI",
+          "name": "Carlos Sainz",
+          "number": 55,
+          "team_id": "williams",
+          "team_short": "Williams",
+          "team_color": "#1868db",
+          "points": 4,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+14.700s"
+        },
+        {
+          "pos": 9,
+          "driver_id": "albon",
+          "code": "ALB",
+          "name": "Alexander Albon",
+          "number": 23,
+          "team_id": "williams",
+          "team_short": "Williams",
+          "team_color": "#1868db",
+          "points": 2,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+10.311s"
+        },
+        {
+          "pos": 10,
+          "driver_id": "leclerc",
+          "code": "LEC",
+          "name": "Charles Leclerc",
+          "number": 16,
+          "team_id": "ferrari",
+          "team_short": "Ferrari",
+          "team_color": "#e8002d",
+          "points": 1,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+11.023s"
+        }
+      ]
+    },
+    {
+      "round": 8,
+      "track_id": "monaco",
+      "gp": "Monaco Grand Prix",
+      "circuit": "Circuit de Monaco",
+      "city": "Monte Carlo",
+      "country": "MON",
+      "is_sprint": true,
+      "laps": 28,
+      "sprint_winner_code": "RUS",
+      "winner_code": "NOR",
+      "winner_name": "Lando Norris",
+      "winner_team": "McLaren",
+      "winner_color": "#ff8000",
+      "p2_code": "LAW",
+      "p3_code": "COL",
+      "pole_code": "VER",
+      "fastest_lap_code": "NOR",
+      "top10": [
+        {
+          "pos": 1,
+          "driver_id": "norris",
+          "code": "NOR",
+          "name": "Lando Norris",
+          "number": 4,
+          "team_id": "mclaren",
+          "team_short": "McLaren",
+          "team_color": "#ff8000",
+          "points": 25,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "WINNER"
+        },
+        {
+          "pos": 2,
+          "driver_id": "lawson",
+          "code": "LAW",
+          "name": "Liam Lawson",
+          "number": 30,
+          "team_id": "racingbulls",
+          "team_short": "Racing Bulls",
+          "team_color": "#6692ff",
+          "points": 18,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+3.150s"
+        },
+        {
+          "pos": 3,
+          "driver_id": "colapinto",
+          "code": "COL",
+          "name": "Franco Colapinto",
+          "number": 43,
+          "team_id": "alpine",
+          "team_short": "Alpine",
+          "team_color": "#0093cc",
+          "points": 15,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+3.500s"
+        },
+        {
+          "pos": 4,
+          "driver_id": "piastri",
+          "code": "PIA",
+          "name": "Oscar Piastri",
+          "number": 81,
+          "team_id": "mclaren",
+          "team_short": "McLaren",
+          "team_color": "#ff8000",
+          "points": 12,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+6.650s"
+        },
+        {
+          "pos": 5,
+          "driver_id": "hamilton",
+          "code": "HAM",
+          "name": "Lewis Hamilton",
+          "number": 44,
+          "team_id": "ferrari",
+          "team_short": "Ferrari",
+          "team_color": "#e8002d",
+          "points": 10,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+10.150s"
+        },
+        {
+          "pos": 6,
+          "driver_id": "bortoleto",
+          "code": "BOR",
+          "name": "Gabriel Bortoleto",
+          "number": 20,
+          "team_id": "audi",
+          "team_short": "Audi",
+          "team_color": "#f50537",
+          "points": 8,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+11.650s"
+        },
+        {
+          "pos": 7,
+          "driver_id": "verstappen",
+          "code": "VER",
+          "name": "Max Verstappen",
+          "number": 1,
+          "team_id": "redbull",
+          "team_short": "Red Bull",
+          "team_color": "#3671c6",
+          "points": 6,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+11.900s"
+        },
+        {
+          "pos": 8,
+          "driver_id": "leclerc",
+          "code": "LEC",
+          "name": "Charles Leclerc",
+          "number": 16,
+          "team_id": "ferrari",
+          "team_short": "Ferrari",
+          "team_color": "#e8002d",
+          "points": 4,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+12.950s"
+        },
+        {
+          "pos": 9,
+          "driver_id": "russell",
+          "code": "RUS",
+          "name": "George Russell",
+          "number": 63,
+          "team_id": "mercedes",
+          "team_short": "Mercedes",
+          "team_color": "#00d2be",
+          "points": 2,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+16.800s"
+        },
+        {
+          "pos": 10,
+          "driver_id": "alonso",
+          "code": "ALO",
+          "name": "Fernando Alonso",
+          "number": 14,
+          "team_id": "mercedes",
+          "team_short": "Mercedes",
+          "team_color": "#00d2be",
+          "points": 1,
+          "pit_stops": 1,
+          "dnf": false,
+          "dnf_reason": "",
+          "gap": "+11.686s"
         }
       ]
     }
@@ -11126,26 +11639,26 @@
       "total_rounds": 24,
       "completed_rounds": 24,
       "wdc_champion": {
-        "id": "alonso",
-        "name": "Fernando Alonso",
-        "code": "ALO",
-        "number": 14,
-        "team": "Mercedes",
-        "team_id": "mercedes",
-        "team_color": "#00d2be",
-        "points": 153,
-        "wins": 4,
-        "podiums": 4,
-        "poles": 0
+        "id": "norris",
+        "name": "Lando Norris",
+        "code": "NOR",
+        "number": 4,
+        "team": "McLaren",
+        "team_id": "mclaren",
+        "team_color": "#ff8000",
+        "points": 215,
+        "wins": 3,
+        "podiums": 7,
+        "poles": 3
       },
       "wcc_champion": {
-        "id": "mercedes",
-        "name": "Mercedes-AMG PETRONAS F1 Team",
-        "short": "Mercedes",
-        "color": "#00d2be",
+        "id": "mclaren",
+        "name": "McLaren Formula 1 Team",
+        "short": "McLaren",
+        "color": "#ff8000",
         "engine": "Mercedes",
-        "points": 290,
-        "wins": 5
+        "points": 398,
+        "wins": 4
       },
       "races": [
         {
@@ -11981,31 +12494,31 @@
           "winner_id": "norris",
           "winner_name": "Lando Norris",
           "winner_code": "NOR",
-          "winner_number": 1,
+          "winner_number": 4,
           "winner_team": "McLaren",
           "winner_team_id": "mclaren",
           "winner_color": "#ff8000",
-          "p2_name": "Charles Leclerc",
-          "p2_code": "LEC",
-          "p2_team": "Ferrari",
-          "p2_color": "#e8002d",
-          "p3_name": "Kimi Antonelli",
-          "p3_code": "ANT",
+          "p2_name": "Oscar Piastri",
+          "p2_code": "PIA",
+          "p2_team": "McLaren",
+          "p2_color": "#ff8000",
+          "p3_name": "George Russell",
+          "p3_code": "RUS",
           "p3_team": "Mercedes",
           "p3_color": "#00d2be",
-          "pole_code": "LEC",
-          "pole_name": "Charles Leclerc",
-          "fastest_lap_code": "ANT",
-          "fastest_lap_name": "Kimi Antonelli",
-          "sprint_winner_code": null,
-          "sprint_winner_name": null,
+          "pole_code": "NOR",
+          "pole_name": "NOR",
+          "fastest_lap_code": "RUS",
+          "fastest_lap_name": "RUS",
+          "sprint_winner_code": "",
+          "sprint_winner_name": "",
           "top10": [
             {
               "pos": 1,
               "id": "norris",
               "code": "NOR",
               "name": "Lando Norris",
-              "number": 1,
+              "number": 4,
               "team": "McLaren",
               "team_id": "mclaren",
               "team_color": "#ff8000",
@@ -12015,84 +12528,6 @@
             },
             {
               "pos": 2,
-              "id": "leclerc",
-              "code": "LEC",
-              "name": "Charles Leclerc",
-              "number": 16,
-              "team": "Ferrari",
-              "team_id": "ferrari",
-              "team_color": "#e8002d",
-              "points": 18,
-              "gap": "+3.42s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 3,
-              "id": "antonelli",
-              "code": "ANT",
-              "name": "Kimi Antonelli",
-              "number": 12,
-              "team": "Mercedes",
-              "team_id": "mercedes",
-              "team_color": "#00d2be",
-              "points": 16,
-              "gap": "+7.92s",
-              "fastest_lap": true
-            },
-            {
-              "pos": 4,
-              "id": "lawson",
-              "code": "LAW",
-              "name": "Liam Lawson",
-              "number": 30,
-              "team": "Racing Bulls",
-              "team_id": "racingbulls",
-              "team_color": "#6692ff",
-              "points": 12,
-              "gap": "+16.26s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 5,
-              "id": "lindblad",
-              "code": "LIN",
-              "name": "Arvid Lindblad",
-              "number": 41,
-              "team": "Racing Bulls",
-              "team_id": "racingbulls",
-              "team_color": "#6692ff",
-              "points": 10,
-              "gap": "+22.6s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 6,
-              "id": "ocon",
-              "code": "OCO",
-              "name": "Esteban Ocon",
-              "number": 31,
-              "team": "Haas",
-              "team_id": "haas",
-              "team_color": "#b6babd",
-              "points": 8,
-              "gap": "+30.1s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 7,
-              "id": "perez",
-              "code": "PER",
-              "name": "Sergio Perez",
-              "number": 11,
-              "team": "Cadillac",
-              "team_id": "cadillac",
-              "team_color": "#d4af37",
-              "points": 6,
-              "gap": "+39.54s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 8,
               "id": "piastri",
               "code": "PIA",
               "name": "Oscar Piastri",
@@ -12100,34 +12535,112 @@
               "team": "McLaren",
               "team_id": "mclaren",
               "team_color": "#ff8000",
-              "points": 4,
-              "gap": "+50.98s",
+              "points": 18,
+              "gap": "+11.250s",
               "fastest_lap": false
             },
             {
-              "pos": 9,
+              "pos": 3,
+              "id": "russell",
+              "code": "RUS",
+              "name": "George Russell",
+              "number": 63,
+              "team": "Mercedes",
+              "team_id": "mercedes",
+              "team_color": "#00d2be",
+              "points": 15,
+              "gap": "+13.600s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 4,
+              "id": "verstappen",
+              "code": "VER",
+              "name": "Max Verstappen",
+              "number": 1,
+              "team": "Red Bull",
+              "team_id": "redbull",
+              "team_color": "#3671c6",
+              "points": 12,
+              "gap": "+14.150s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 5,
               "id": "alonso",
               "code": "ALO",
               "name": "Fernando Alonso",
               "number": 14,
-              "team": "Aston Martin",
-              "team_id": "aston",
-              "team_color": "#229971",
+              "team": "Mercedes",
+              "team_id": "mercedes",
+              "team_color": "#00d2be",
+              "points": 10,
+              "gap": "+5.984s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 6,
+              "id": "hamilton",
+              "code": "HAM",
+              "name": "Lewis Hamilton",
+              "number": 44,
+              "team": "Ferrari",
+              "team_id": "ferrari",
+              "team_color": "#e8002d",
+              "points": 8,
+              "gap": "+6.495s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 7,
+              "id": "leclerc",
+              "code": "LEC",
+              "name": "Charles Leclerc",
+              "number": 16,
+              "team": "Ferrari",
+              "team_id": "ferrari",
+              "team_color": "#e8002d",
+              "points": 6,
+              "gap": "+7.718s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 8,
+              "id": "albon",
+              "code": "ALB",
+              "name": "Alexander Albon",
+              "number": 23,
+              "team": "Williams",
+              "team_id": "williams",
+              "team_color": "#1868db",
+              "points": 4,
+              "gap": "+15.489s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 9,
+              "id": "hadjar",
+              "code": "HAD",
+              "name": "Isack Hadjar",
+              "number": 6,
+              "team": "Red Bull",
+              "team_id": "redbull",
+              "team_color": "#3671c6",
               "points": 2,
-              "gap": "+61.52s",
+              "gap": "+18.762s",
               "fastest_lap": false
             },
             {
               "pos": 10,
-              "id": "gasly",
-              "code": "GAS",
-              "name": "Pierre Gasly",
-              "number": 10,
-              "team": "Alpine",
-              "team_id": "alpine",
-              "team_color": "#0093cc",
+              "id": "sainz",
+              "code": "SAI",
+              "name": "Carlos Sainz",
+              "number": 55,
+              "team": "Williams",
+              "team_id": "williams",
+              "team_color": "#1868db",
               "points": 1,
-              "gap": "+73.02s",
+              "gap": "+26.104s",
               "fastest_lap": false
             }
           ]
@@ -12142,108 +12655,43 @@
           "is_sprint": true,
           "laps": 26,
           "status": "COMPLETED",
-          "winner_id": "leclerc",
-          "winner_name": "Charles Leclerc",
-          "winner_code": "LEC",
-          "winner_number": 16,
-          "winner_team": "Ferrari",
-          "winner_team_id": "ferrari",
-          "winner_color": "#e8002d",
-          "p2_name": "Max Verstappen",
-          "p2_code": "VER",
-          "p2_team": "Red Bull",
-          "p2_color": "#3671c6",
-          "p3_name": "Lando Norris",
-          "p3_code": "NOR",
-          "p3_team": "McLaren",
-          "p3_color": "#ff8000",
-          "pole_code": "LEC",
-          "pole_name": "Charles Leclerc",
+          "winner_id": "alonso",
+          "winner_name": "Fernando Alonso",
+          "winner_code": "ALO",
+          "winner_number": 14,
+          "winner_team": "Mercedes",
+          "winner_team_id": "mercedes",
+          "winner_color": "#00d2be",
+          "p2_name": "Oscar Piastri",
+          "p2_code": "PIA",
+          "p2_team": "McLaren",
+          "p2_color": "#ff8000",
+          "p3_name": "George Russell",
+          "p3_code": "RUS",
+          "p3_team": "Mercedes",
+          "p3_color": "#00d2be",
+          "pole_code": "VER",
+          "pole_name": "VER",
           "fastest_lap_code": "LEC",
-          "fastest_lap_name": "Charles Leclerc",
-          "sprint_winner_code": "LEC",
-          "sprint_winner_name": "Charles Leclerc",
+          "fastest_lap_name": "LEC",
+          "sprint_winner_code": "PIA",
+          "sprint_winner_name": "PIA",
           "top10": [
             {
               "pos": 1,
-              "id": "leclerc",
-              "code": "LEC",
-              "name": "Charles Leclerc",
-              "number": 16,
-              "team": "Ferrari",
-              "team_id": "ferrari",
-              "team_color": "#e8002d",
-              "points": 26,
+              "id": "alonso",
+              "code": "ALO",
+              "name": "Fernando Alonso",
+              "number": 14,
+              "team": "Mercedes",
+              "team_id": "mercedes",
+              "team_color": "#00d2be",
+              "points": 25,
               "gap": "WINNER",
-              "fastest_lap": true
+              "fastest_lap": false
             },
             {
               "pos": 2,
-              "id": "verstappen",
-              "code": "VER",
-              "name": "Max Verstappen",
-              "number": 3,
-              "team": "Red Bull",
-              "team_id": "redbull",
-              "team_color": "#3671c6",
-              "points": 18,
-              "gap": "+3.79s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 3,
-              "id": "norris",
-              "code": "NOR",
-              "name": "Lando Norris",
-              "number": 1,
-              "team": "McLaren",
-              "team_id": "mclaren",
-              "team_color": "#ff8000",
-              "points": 15,
-              "gap": "+8.44s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 4,
-              "id": "stroll",
-              "code": "STR",
-              "name": "Lance Stroll",
-              "number": 18,
-              "team": "Aston Martin",
-              "team_id": "aston",
-              "team_color": "#229971",
-              "points": 12,
-              "gap": "+17.07s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 5,
-              "id": "bearman",
-              "code": "BEA",
-              "name": "Oliver Bearman",
-              "number": 87,
-              "team": "Haas",
-              "team_id": "haas",
-              "team_color": "#b6babd",
-              "points": 10,
-              "gap": "+23.55s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 6,
-              "id": "bottas",
-              "code": "BOT",
-              "name": "Valtteri Bottas",
-              "number": 77,
-              "team": "Cadillac",
-              "team_id": "cadillac",
-              "team_color": "#d4af37",
-              "points": 8,
-              "gap": "+31.25s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 7,
               "id": "piastri",
               "code": "PIA",
               "name": "Oscar Piastri",
@@ -12251,21 +12699,86 @@
               "team": "McLaren",
               "team_id": "mclaren",
               "team_color": "#ff8000",
+              "points": 18,
+              "gap": "+0.350s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 3,
+              "id": "russell",
+              "code": "RUS",
+              "name": "George Russell",
+              "number": 63,
+              "team": "Mercedes",
+              "team_id": "mercedes",
+              "team_color": "#00d2be",
+              "points": 15,
+              "gap": "+2.450s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 4,
+              "id": "norris",
+              "code": "NOR",
+              "name": "Lando Norris",
+              "number": 4,
+              "team": "McLaren",
+              "team_id": "mclaren",
+              "team_color": "#ff8000",
+              "points": 12,
+              "gap": "+5.250s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 5,
+              "id": "hadjar",
+              "code": "HAD",
+              "name": "Isack Hadjar",
+              "number": 6,
+              "team": "Red Bull",
+              "team_id": "redbull",
+              "team_color": "#3671c6",
+              "points": 10,
+              "gap": "+7.700s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 6,
+              "id": "colapinto",
+              "code": "COL",
+              "name": "Franco Colapinto",
+              "number": 43,
+              "team": "Alpine",
+              "team_id": "alpine",
+              "team_color": "#0093cc",
+              "points": 8,
+              "gap": "+7.700s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 7,
+              "id": "hamilton",
+              "code": "HAM",
+              "name": "Lewis Hamilton",
+              "number": 44,
+              "team": "Ferrari",
+              "team_id": "ferrari",
+              "team_color": "#e8002d",
               "points": 6,
-              "gap": "+40.88s",
+              "gap": "+13.300s",
               "fastest_lap": false
             },
             {
               "pos": 8,
-              "id": "antonelli",
-              "code": "ANT",
-              "name": "Kimi Antonelli",
-              "number": 12,
-              "team": "Mercedes",
-              "team_id": "mercedes",
-              "team_color": "#00d2be",
+              "id": "sainz",
+              "code": "SAI",
+              "name": "Carlos Sainz",
+              "number": 55,
+              "team": "Williams",
+              "team_id": "williams",
+              "team_color": "#1868db",
               "points": 4,
-              "gap": "+52.46s",
+              "gap": "+14.700s",
               "fastest_lap": false
             },
             {
@@ -12278,20 +12791,20 @@
               "team_id": "williams",
               "team_color": "#1868db",
               "points": 2,
-              "gap": "+63.14s",
+              "gap": "+10.311s",
               "fastest_lap": false
             },
             {
               "pos": 10,
-              "id": "sainz",
-              "code": "SAI",
-              "name": "Carlos Sainz",
-              "number": 55,
-              "team": "Williams",
-              "team_id": "williams",
-              "team_color": "#1868db",
+              "id": "leclerc",
+              "code": "LEC",
+              "name": "Charles Leclerc",
+              "number": 16,
+              "team": "Ferrari",
+              "team_id": "ferrari",
+              "team_color": "#e8002d",
               "points": 1,
-              "gap": "+74.79s",
+              "gap": "+11.023s",
               "fastest_lap": false
             }
           ]
@@ -12306,147 +12819,56 @@
           "is_sprint": true,
           "laps": 28,
           "status": "COMPLETED",
-          "winner_id": "leclerc",
-          "winner_name": "Charles Leclerc",
-          "winner_code": "LEC",
-          "winner_number": 16,
-          "winner_team": "Ferrari",
-          "winner_team_id": "ferrari",
-          "winner_color": "#e8002d",
-          "p2_name": "George Russell",
-          "p2_code": "RUS",
-          "p2_team": "Mercedes",
-          "p2_color": "#00d2be",
-          "p3_name": "Carlos Sainz",
-          "p3_code": "SAI",
-          "p3_team": "Williams",
-          "p3_color": "#1868db",
-          "pole_code": "RUS",
-          "pole_name": "George Russell",
-          "fastest_lap_code": "HAM",
-          "fastest_lap_name": "Lewis Hamilton",
-          "sprint_winner_code": "LEC",
-          "sprint_winner_name": "Charles Leclerc",
+          "winner_id": "norris",
+          "winner_name": "Lando Norris",
+          "winner_code": "NOR",
+          "winner_number": 4,
+          "winner_team": "McLaren",
+          "winner_team_id": "mclaren",
+          "winner_color": "#ff8000",
+          "p2_name": "Liam Lawson",
+          "p2_code": "LAW",
+          "p2_team": "Racing Bulls",
+          "p2_color": "#6692ff",
+          "p3_name": "Franco Colapinto",
+          "p3_code": "COL",
+          "p3_team": "Alpine",
+          "p3_color": "#0093cc",
+          "pole_code": "VER",
+          "pole_name": "VER",
+          "fastest_lap_code": "NOR",
+          "fastest_lap_name": "NOR",
+          "sprint_winner_code": "RUS",
+          "sprint_winner_name": "RUS",
           "top10": [
             {
               "pos": 1,
-              "id": "leclerc",
-              "code": "LEC",
-              "name": "Charles Leclerc",
-              "number": 16,
-              "team": "Ferrari",
-              "team_id": "ferrari",
-              "team_color": "#e8002d",
+              "id": "norris",
+              "code": "NOR",
+              "name": "Lando Norris",
+              "number": 4,
+              "team": "McLaren",
+              "team_id": "mclaren",
+              "team_color": "#ff8000",
               "points": 25,
               "gap": "WINNER",
               "fastest_lap": false
             },
             {
               "pos": 2,
-              "id": "russell",
-              "code": "RUS",
-              "name": "George Russell",
-              "number": 63,
-              "team": "Mercedes",
-              "team_id": "mercedes",
-              "team_color": "#00d2be",
+              "id": "lawson",
+              "code": "LAW",
+              "name": "Liam Lawson",
+              "number": 30,
+              "team": "Racing Bulls",
+              "team_id": "racingbulls",
+              "team_color": "#6692ff",
               "points": 18,
-              "gap": "+4.16s",
+              "gap": "+3.150s",
               "fastest_lap": false
             },
             {
               "pos": 3,
-              "id": "sainz",
-              "code": "SAI",
-              "name": "Carlos Sainz",
-              "number": 55,
-              "team": "Williams",
-              "team_id": "williams",
-              "team_color": "#1868db",
-              "points": 15,
-              "gap": "+8.96s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 4,
-              "id": "bearman",
-              "code": "BEA",
-              "name": "Oliver Bearman",
-              "number": 87,
-              "team": "Haas",
-              "team_id": "haas",
-              "team_color": "#b6babd",
-              "points": 12,
-              "gap": "+17.88s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 5,
-              "id": "bottas",
-              "code": "BOT",
-              "name": "Valtteri Bottas",
-              "number": 77,
-              "team": "Cadillac",
-              "team_id": "cadillac",
-              "team_color": "#d4af37",
-              "points": 10,
-              "gap": "+24.5s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 6,
-              "id": "norris",
-              "code": "NOR",
-              "name": "Lando Norris",
-              "number": 1,
-              "team": "McLaren",
-              "team_id": "mclaren",
-              "team_color": "#ff8000",
-              "points": 8,
-              "gap": "+32.4s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 7,
-              "id": "hamilton",
-              "code": "HAM",
-              "name": "Lewis Hamilton",
-              "number": 44,
-              "team": "Ferrari",
-              "team_id": "ferrari",
-              "team_color": "#e8002d",
-              "points": 7,
-              "gap": "+42.22s",
-              "fastest_lap": true
-            },
-            {
-              "pos": 8,
-              "id": "albon",
-              "code": "ALB",
-              "name": "Alexander Albon",
-              "number": 23,
-              "team": "Williams",
-              "team_id": "williams",
-              "team_color": "#1868db",
-              "points": 4,
-              "gap": "+53.94s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 9,
-              "id": "alonso",
-              "code": "ALO",
-              "name": "Fernando Alonso",
-              "number": 14,
-              "team": "Aston Martin",
-              "team_id": "aston",
-              "team_color": "#229971",
-              "points": 2,
-              "gap": "+64.76s",
-              "fastest_lap": false
-            },
-            {
-              "pos": 10,
               "id": "colapinto",
               "code": "COL",
               "name": "Franco Colapinto",
@@ -12454,8 +12876,99 @@
               "team": "Alpine",
               "team_id": "alpine",
               "team_color": "#0093cc",
+              "points": 15,
+              "gap": "+3.500s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 4,
+              "id": "piastri",
+              "code": "PIA",
+              "name": "Oscar Piastri",
+              "number": 81,
+              "team": "McLaren",
+              "team_id": "mclaren",
+              "team_color": "#ff8000",
+              "points": 12,
+              "gap": "+6.650s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 5,
+              "id": "hamilton",
+              "code": "HAM",
+              "name": "Lewis Hamilton",
+              "number": 44,
+              "team": "Ferrari",
+              "team_id": "ferrari",
+              "team_color": "#e8002d",
+              "points": 10,
+              "gap": "+10.150s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 6,
+              "id": "bortoleto",
+              "code": "BOR",
+              "name": "Gabriel Bortoleto",
+              "number": 20,
+              "team": "Audi",
+              "team_id": "audi",
+              "team_color": "#f50537",
+              "points": 8,
+              "gap": "+11.650s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 7,
+              "id": "verstappen",
+              "code": "VER",
+              "name": "Max Verstappen",
+              "number": 1,
+              "team": "Red Bull",
+              "team_id": "redbull",
+              "team_color": "#3671c6",
+              "points": 6,
+              "gap": "+11.900s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 8,
+              "id": "leclerc",
+              "code": "LEC",
+              "name": "Charles Leclerc",
+              "number": 16,
+              "team": "Ferrari",
+              "team_id": "ferrari",
+              "team_color": "#e8002d",
+              "points": 4,
+              "gap": "+12.950s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 9,
+              "id": "russell",
+              "code": "RUS",
+              "name": "George Russell",
+              "number": 63,
+              "team": "Mercedes",
+              "team_id": "mercedes",
+              "team_color": "#00d2be",
+              "points": 2,
+              "gap": "+16.800s",
+              "fastest_lap": false
+            },
+            {
+              "pos": 10,
+              "id": "alonso",
+              "code": "ALO",
+              "name": "Fernando Alonso",
+              "number": 14,
+              "team": "Mercedes",
+              "team_id": "mercedes",
+              "team_color": "#00d2be",
               "points": 1,
-              "gap": "+76.56s",
+              "gap": "+11.686s",
               "fastest_lap": false
             }
           ]
@@ -15088,20 +15601,6 @@
       "wdc_standings": [
         {
           "rank": 1,
-          "id": "alonso",
-          "name": "Fernando Alonso",
-          "code": "ALO",
-          "number": 14,
-          "team": "Mercedes",
-          "team_id": "mercedes",
-          "team_color": "#00d2be",
-          "points": 153,
-          "wins": 4,
-          "podiums": 4,
-          "poles": 0
-        },
-        {
-          "rank": 2,
           "id": "norris",
           "name": "Lando Norris",
           "code": "NOR",
@@ -15109,27 +15608,27 @@
           "team": "McLaren",
           "team_id": "mclaren",
           "team_color": "#ff8000",
-          "points": 139,
-          "wins": 1,
-          "podiums": 5,
-          "poles": 2
+          "points": 215,
+          "wins": 3,
+          "podiums": 7,
+          "poles": 3
         },
         {
-          "rank": 3,
-          "id": "russell",
-          "name": "George Russell",
-          "code": "RUS",
-          "number": 63,
+          "rank": 2,
+          "id": "alonso",
+          "name": "Fernando Alonso",
+          "code": "ALO",
+          "number": 14,
           "team": "Mercedes",
           "team_id": "mercedes",
           "team_color": "#00d2be",
-          "points": 137,
-          "wins": 1,
-          "podiums": 4,
-          "poles": 5
+          "points": 190,
+          "wins": 5,
+          "podiums": 5,
+          "poles": 0
         },
         {
-          "rank": 4,
+          "rank": 3,
           "id": "piastri",
           "name": "Oscar Piastri",
           "code": "PIA",
@@ -15137,10 +15636,24 @@
           "team": "McLaren",
           "team_id": "mclaren",
           "team_color": "#ff8000",
-          "points": 123,
+          "points": 183,
           "wins": 1,
-          "podiums": 4,
+          "podiums": 6,
           "poles": 1
+        },
+        {
+          "rank": 4,
+          "id": "russell",
+          "name": "George Russell",
+          "code": "RUS",
+          "number": 63,
+          "team": "Mercedes",
+          "team_id": "mercedes",
+          "team_color": "#00d2be",
+          "points": 178,
+          "wins": 1,
+          "podiums": 6,
+          "poles": 5
         },
         {
           "rank": 5,
@@ -15151,10 +15664,10 @@
           "team": "Red Bull",
           "team_id": "redbull",
           "team_color": "#3671c6",
-          "points": 97,
+          "points": 126,
           "wins": 0,
           "podiums": 1,
-          "poles": 0
+          "poles": 2
         },
         {
           "rank": 6,
@@ -15165,7 +15678,7 @@
           "team": "Ferrari",
           "team_id": "ferrari",
           "team_color": "#e8002d",
-          "points": 65,
+          "points": 94,
           "wins": 0,
           "podiums": 0,
           "poles": 0
@@ -15179,7 +15692,7 @@
           "team": "Ferrari",
           "team_id": "ferrari",
           "team_color": "#e8002d",
-          "points": 60,
+          "points": 80,
           "wins": 0,
           "podiums": 0,
           "poles": 0
@@ -15193,13 +15706,55 @@
           "team": "Red Bull",
           "team_id": "redbull",
           "team_color": "#3671c6",
-          "points": 57,
+          "points": 78,
           "wins": 0,
           "podiums": 1,
           "poles": 0
         },
         {
           "rank": 9,
+          "id": "colapinto",
+          "name": "Franco Colapinto",
+          "code": "COL",
+          "number": 43,
+          "team": "Alpine",
+          "team_id": "alpine",
+          "team_color": "#0093cc",
+          "points": 36,
+          "wins": 0,
+          "podiums": 1,
+          "poles": 0
+        },
+        {
+          "rank": 10,
+          "id": "lawson",
+          "name": "Liam Lawson",
+          "code": "LAW",
+          "number": 30,
+          "team": "Racing Bulls",
+          "team_id": "racingbulls",
+          "team_color": "#6692ff",
+          "points": 24,
+          "wins": 0,
+          "podiums": 1,
+          "poles": 0
+        },
+        {
+          "rank": 11,
+          "id": "albon",
+          "name": "Alexander Albon",
+          "code": "ALB",
+          "number": 23,
+          "team": "Williams",
+          "team_id": "williams",
+          "team_color": "#1868db",
+          "points": 21,
+          "wins": 0,
+          "podiums": 1,
+          "poles": 0
+        },
+        {
+          "rank": 12,
           "id": "hulkenberg",
           "name": "Nico Hulkenberg",
           "code": "HUL",
@@ -15213,21 +15768,21 @@
           "poles": 0
         },
         {
-          "rank": 10,
-          "id": "albon",
-          "name": "Alexander Albon",
-          "code": "ALB",
-          "number": 23,
-          "team": "Williams",
-          "team_id": "williams",
-          "team_color": "#1868db",
-          "points": 15,
+          "rank": 13,
+          "id": "bortoleto",
+          "name": "Gabriel Bortoleto",
+          "code": "BOR",
+          "number": 20,
+          "team": "Audi",
+          "team_id": "audi",
+          "team_color": "#f50537",
+          "points": 16,
           "wins": 0,
-          "podiums": 1,
+          "podiums": 0,
           "poles": 0
         },
         {
-          "rank": 11,
+          "rank": 14,
           "id": "bearman",
           "name": "Oliver Bearman",
           "code": "BEA",
@@ -15241,35 +15796,7 @@
           "poles": 0
         },
         {
-          "rank": 12,
-          "id": "colapinto",
-          "name": "Franco Colapinto",
-          "code": "COL",
-          "number": 43,
-          "team": "Alpine",
-          "team_id": "alpine",
-          "team_color": "#0093cc",
-          "points": 13,
-          "wins": 0,
-          "podiums": 0,
-          "poles": 0
-        },
-        {
-          "rank": 13,
-          "id": "bortoleto",
-          "name": "Gabriel Bortoleto",
-          "code": "BOR",
-          "number": 20,
-          "team": "Audi",
-          "team_id": "audi",
-          "team_color": "#f50537",
-          "points": 8,
-          "wins": 0,
-          "podiums": 0,
-          "poles": 0
-        },
-        {
-          "rank": 14,
+          "rank": 15,
           "id": "perez",
           "name": "Sergio Perez",
           "code": "PER",
@@ -15283,21 +15810,35 @@
           "poles": 0
         },
         {
-          "rank": 15,
-          "id": "lawson",
-          "name": "Liam Lawson",
-          "code": "LAW",
-          "number": 30,
-          "team": "Racing Bulls",
-          "team_id": "racingbulls",
-          "team_color": "#6692ff",
-          "points": 6,
+          "rank": 16,
+          "id": "sainz",
+          "name": "Carlos Sainz",
+          "code": "SAI",
+          "number": 55,
+          "team": "Williams",
+          "team_id": "williams",
+          "team_color": "#1868db",
+          "points": 5,
           "wins": 0,
           "podiums": 0,
           "poles": 0
         },
         {
-          "rank": 16,
+          "rank": 17,
+          "id": "antonelli",
+          "name": "Kimi Antonelli",
+          "code": "ANT",
+          "number": 12,
+          "team": "Aston Martin",
+          "team_id": "aston",
+          "team_color": "#229971",
+          "points": 4,
+          "wins": 0,
+          "podiums": 0,
+          "poles": 0
+        },
+        {
+          "rank": 18,
           "id": "bottas",
           "name": "Valtteri Bottas",
           "code": "BOT",
@@ -15311,7 +15852,7 @@
           "poles": 0
         },
         {
-          "rank": 17,
+          "rank": 19,
           "id": "gasly",
           "name": "Pierre Gasly",
           "code": "GAS",
@@ -15325,21 +15866,7 @@
           "poles": 0
         },
         {
-          "rank": 18,
-          "id": "antonelli",
-          "name": "Kimi Antonelli",
-          "code": "ANT",
-          "number": 12,
-          "team": "Aston Martin",
-          "team_id": "aston",
-          "team_color": "#229971",
-          "points": 2,
-          "wins": 0,
-          "podiums": 0,
-          "poles": 0
-        },
-        {
-          "rank": 19,
+          "rank": 20,
           "id": "stroll",
           "name": "Lance Stroll",
           "code": "STR",
@@ -15353,7 +15880,7 @@
           "poles": 0
         },
         {
-          "rank": 20,
+          "rank": 21,
           "id": "ocon",
           "name": "Esteban Ocon",
           "code": "OCO",
@@ -15367,7 +15894,7 @@
           "poles": 0
         },
         {
-          "rank": 21,
+          "rank": 22,
           "id": "lindblad",
           "name": "Arvid Lindblad",
           "code": "LIN",
@@ -15379,42 +15906,28 @@
           "wins": 0,
           "podiums": 0,
           "poles": 0
-        },
-        {
-          "rank": 22,
-          "id": "sainz",
-          "name": "Carlos Sainz",
-          "code": "SAI",
-          "number": 55,
-          "team": "Williams",
-          "team_id": "williams",
-          "team_color": "#1868db",
-          "points": 0,
-          "wins": 0,
-          "podiums": 0,
-          "poles": 0
         }
       ],
       "wcc_standings": [
         {
           "rank": 1,
-          "id": "mercedes",
-          "name": "Mercedes-AMG PETRONAS F1 Team",
-          "short": "Mercedes",
-          "color": "#00d2be",
-          "engine": "Mercedes",
-          "points": 290,
-          "wins": 5
-        },
-        {
-          "rank": 2,
           "id": "mclaren",
           "name": "McLaren Formula 1 Team",
           "short": "McLaren",
           "color": "#ff8000",
           "engine": "Mercedes",
-          "points": 262,
-          "wins": 2
+          "points": 398,
+          "wins": 4
+        },
+        {
+          "rank": 2,
+          "id": "mercedes",
+          "name": "Mercedes-AMG PETRONAS F1 Team",
+          "short": "Mercedes",
+          "color": "#00d2be",
+          "engine": "Mercedes",
+          "points": 368,
+          "wins": 6
         },
         {
           "rank": 3,
@@ -15423,7 +15936,7 @@
           "short": "Red Bull",
           "color": "#3671c6",
           "engine": "Red Bull Ford",
-          "points": 154,
+          "points": 204,
           "wins": 0
         },
         {
@@ -15433,41 +15946,51 @@
           "short": "Ferrari",
           "color": "#e8002d",
           "engine": "Ferrari",
-          "points": 125,
+          "points": 174,
           "wins": 0
         },
         {
           "rank": 5,
-          "id": "audi",
-          "name": "Audi F1 Team",
-          "short": "Audi",
-          "color": "#f50537",
-          "engine": "Audi",
-          "points": 26,
-          "wins": 0
-        },
-        {
-          "rank": 6,
-          "id": "williams",
-          "name": "Atlassian Williams Racing",
-          "short": "Williams",
-          "color": "#1868db",
-          "engine": "Mercedes",
-          "points": 15,
-          "wins": 0
-        },
-        {
-          "rank": 7,
           "id": "alpine",
           "name": "BWT Alpine F1 Team",
           "short": "Alpine",
           "color": "#0093cc",
           "engine": "Mercedes",
-          "points": 15,
+          "points": 38,
+          "wins": 0
+        },
+        {
+          "rank": 6,
+          "id": "audi",
+          "name": "Audi F1 Team",
+          "short": "Audi",
+          "color": "#f50537",
+          "engine": "Audi",
+          "points": 34,
+          "wins": 0
+        },
+        {
+          "rank": 7,
+          "id": "williams",
+          "name": "Atlassian Williams Racing",
+          "short": "Williams",
+          "color": "#1868db",
+          "engine": "Mercedes",
+          "points": 26,
           "wins": 0
         },
         {
           "rank": 8,
+          "id": "racingbulls",
+          "name": "Visa Cash App Racing Bulls",
+          "short": "Racing Bulls",
+          "color": "#6692ff",
+          "engine": "Red Bull Ford",
+          "points": 25,
+          "wins": 0
+        },
+        {
+          "rank": 9,
           "id": "haas",
           "name": "MoneyGram Haas F1 Team",
           "short": "Haas",
@@ -15477,7 +16000,7 @@
           "wins": 0
         },
         {
-          "rank": 9,
+          "rank": 10,
           "id": "cadillac",
           "name": "Cadillac Formula 1 Team",
           "short": "Cadillac",
@@ -15487,27 +16010,17 @@
           "wins": 0
         },
         {
-          "rank": 10,
-          "id": "racingbulls",
-          "name": "Visa Cash App Racing Bulls",
-          "short": "Racing Bulls",
-          "color": "#6692ff",
-          "engine": "Red Bull Ford",
-          "points": 7,
-          "wins": 0
-        },
-        {
           "rank": 11,
           "id": "aston",
           "name": "Aston Martin Aramco F1 Team",
           "short": "Aston Martin",
           "color": "#229971",
           "engine": "Honda",
-          "points": 4,
+          "points": 6,
           "wins": 0
         }
       ],
-      "current_round": 6
+      "current_round": 8
     },
     "2029": {
       "season": 2029,
@@ -24441,569 +24954,665 @@
       "desc": "R5 Factory Operations & Logistics",
       "amount_m": -0.93,
       "balance_m": 16.54
+    },
+    {
+      "season": 2028,
+      "round": 6,
+      "category": "SPONSOR",
+      "desc": "R6 Apex Quantum Cloud (+Target Bonus!) & Points",
+      "amount_m": 8.0,
+      "balance_m": 21.94
+    },
+    {
+      "season": 2028,
+      "round": 6,
+      "category": "SALARY",
+      "desc": "R6 Driver Payroll",
+      "amount_m": -1.67,
+      "balance_m": 21.94
+    },
+    {
+      "season": 2028,
+      "round": 6,
+      "category": "OPERATIONS",
+      "desc": "R6 Factory Operations & Logistics",
+      "amount_m": -0.93,
+      "balance_m": 21.94
+    },
+    {
+      "season": 2028,
+      "round": 7,
+      "category": "SPRINT",
+      "desc": "R7 Sprint Points Commercial Bonus",
+      "amount_m": 0.12,
+      "balance_m": 22.06
+    },
+    {
+      "season": 2028,
+      "round": 7,
+      "category": "SPONSOR",
+      "desc": "R7 Apex Quantum Cloud (+Target Bonus!) & Points",
+      "amount_m": 10.1,
+      "balance_m": 29.56
+    },
+    {
+      "season": 2028,
+      "round": 7,
+      "category": "SALARY",
+      "desc": "R7 Driver Payroll",
+      "amount_m": -1.67,
+      "balance_m": 29.56
+    },
+    {
+      "season": 2028,
+      "round": 7,
+      "category": "OPERATIONS",
+      "desc": "R7 Factory Operations & Logistics",
+      "amount_m": -0.93,
+      "balance_m": 29.56
+    },
+    {
+      "season": 2028,
+      "round": 7,
+      "category": "R&D UPGRADE",
+      "desc": "Upgraded Cooling & PU Reliability to Lv.9",
+      "amount_m": -27.66,
+      "balance_m": 1.9
+    },
+    {
+      "season": 2028,
+      "round": 8,
+      "category": "SPRINT",
+      "desc": "R8 Sprint Points Commercial Bonus",
+      "amount_m": 1.08,
+      "balance_m": 2.98
+    },
+    {
+      "season": 2028,
+      "round": 8,
+      "category": "SPONSOR",
+      "desc": "R8 Apex Quantum Cloud (Base) & Points",
+      "amount_m": 2.52,
+      "balance_m": 2.89
+    },
+    {
+      "season": 2028,
+      "round": 8,
+      "category": "SALARY",
+      "desc": "R8 Driver Payroll",
+      "amount_m": -1.67,
+      "balance_m": 2.89
+    },
+    {
+      "season": 2028,
+      "round": 8,
+      "category": "OPERATIONS",
+      "desc": "R8 Factory Operations & Logistics",
+      "amount_m": -0.94,
+      "balance_m": 2.89
     }
   ],
   "event_feed": [
     {
-      "id": 28874,
+      "id": 33689,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#18 STR): 'Still close behind PER. Looking for a way through.'",
-      "ts": 1793745980.3
+      "tag": "L27/28",
+      "msg": "DRIVER (#31 OCO): 'Still close behind LIN. Looking for a way through.'",
+      "ts": 1793756235.9
     },
     {
-      "id": 28875,
+      "id": 33690,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P9: #30 LAW passes GAS near Turn 16 (SLIPSTREAM)!",
-      "ts": 1793745981.1
+      "tag": "L27/28",
+      "msg": "DUMMY MOVE P12: #10 GAS sells the feint and slices past BOT into Turn 4!",
+      "ts": 1793756236.0
     },
     {
-      "id": 28876,
+      "id": 33691,
+      "kind": "RADIO",
+      "tag": "L27/28",
+      "msg": "PIT WALL (Alpine / #43 COL): 'You're close to BOR, COL. Be patient and pick your moment.'",
+      "ts": 1793756236.0
+    },
+    {
+      "id": 33692,
+      "kind": "RADIO",
+      "tag": "L27/28",
+      "msg": "DRIVER (#20 BOR): 'Lost the place to COL near Turn 2.'",
+      "ts": 1793756236.0
+    },
+    {
+      "id": 33693,
+      "kind": "RADIO",
+      "tag": "L27/28",
+      "msg": "DRIVER (#10 GAS): 'I'm staying with BOT. Keeping the pressure on.'",
+      "ts": 1793756236.0
+    },
+    {
+      "id": 33694,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P11: #41 LIN passes ANT near Turn 16 (SLIPSTREAM)!",
-      "ts": 1793745982.6
+      "tag": "L27/28",
+      "msg": "SWITCHBACK P12: #10 GAS cuts back underneath BOT exiting Turn 6!",
+      "ts": 1793756236.0
     },
     {
-      "id": 28877,
+      "id": 33695,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#41 LIN): 'Got the place. P11. Staying on it.'",
-      "ts": 1793745982.6
+      "tag": "L27/28",
+      "msg": "DRIVER (#41 LIN): 'Still close behind BEA. Looking for a way through.'",
+      "ts": 1793756236.0
     },
     {
-      "id": 28878,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "PIT WALL (Williams / #55 SAI): 'You're close to LAW, SAI. Be patient and pick your moment.'",
-      "ts": 1793745986.2
-    },
-    {
-      "id": 28879,
+      "id": 33696,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P1: #81 PIA passes NOR near Turn 11 (SLIPSTREAM)!",
-      "ts": 1793745986.6
+      "tag": "L27/28",
+      "msg": "OUTSIDE SEND P5: #44 HAM sweeps around the outside of RUS through Turn 1 [OVERTAKE MODE]!",
+      "ts": 1793756236.0
     },
     {
-      "id": 28880,
+      "id": 33697,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#10 GAS): 'Still close behind SAI. Looking for a way through.'",
-      "ts": 1793745989.7
+      "tag": "L27/28",
+      "msg": "DRIVER (#43 COL): 'BOR came from a long way back near Turn 4. Lost the place.'",
+      "ts": 1793756236.1
     },
     {
-      "id": 28881,
+      "id": 33698,
+      "kind": "BLUE_FLAG",
+      "tag": "L27/28",
+      "msg": "BLUE FLAGS: #30 LAW (Racing Bulls) yields off-line to let #4 NOR through!",
+      "ts": 1793756236.1
+    },
+    {
+      "id": 33699,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#44 HAM): 'I'm staying with VER. Keeping the pressure on.'",
-      "ts": 1793745993.3
+      "tag": "L27/28",
+      "msg": "PIT WALL (Racing Bulls / #30 LAW): 'Blue flags, LAW. Let the faster car through safely.'",
+      "ts": 1793756236.1
     },
     {
-      "id": 28882,
+      "id": 33700,
+      "kind": "RADIO",
+      "tag": "L27/28",
+      "msg": "PIT WALL (Haas / #31 OCO): 'You're close to LIN, OCO. Be patient and pick your moment.'",
+      "ts": 1793756236.1
+    },
+    {
+      "id": 33701,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P4: #44 HAM passes VER near Turn 11 (SLIPSTREAM)!",
-      "ts": 1793745993.5
+      "tag": "L27/28",
+      "msg": "DUMMY MOVE P4: #44 HAM sells the feint and slices past VER into Turn 4!",
+      "ts": 1793756236.1
     },
     {
-      "id": 28883,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OUTSIDE SEND P1: #4 NOR sweeps around the outside of PIA through Turn 12!",
-      "ts": 1793745994.1
+      "id": 33702,
+      "kind": "BLUE_FLAG",
+      "tag": "L27/28",
+      "msg": "BLUE FLAGS: #30 LAW (Racing Bulls) yields off-line to let #4 NOR through!",
+      "ts": 1793756236.1
     },
     {
-      "id": 28884,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P4: #1 VER passes HAM near Turn 11!",
-      "ts": 1793745994.7
-    },
-    {
-      "id": 28885,
+      "id": 33703,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "PIT WALL (Mercedes / #63 RUS): 'You're close to NOR, RUS. Be patient and pick your moment.'",
-      "ts": 1793745996.8
+      "tag": "L27/28",
+      "msg": "DRIVER (#1 VER): 'Copy, mate. Pushing now.'",
+      "ts": 1793756236.1
     },
     {
-      "id": 28886,
+      "id": 33704,
+      "kind": "RACE_CONTROL",
+      "tag": "L27/28",
+      "msg": "STOUT DEFENSE P4: #1 VER shuts the door on HAM's OUTSIDE at Turn 5!",
+      "ts": 1793756236.1
+    },
+    {
+      "id": 33705,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "PIT WALL (Alpine / #43 COL): 'You're close to ALB, COL. Be patient and pick your moment.'",
-      "ts": 1793746000.4
+      "tag": "L27/28",
+      "msg": "PIT WALL (Ferrari / #44 HAM): 'You're close to VER, HAM. Be patient and pick your moment.'",
+      "ts": 1793756236.2
     },
     {
-      "id": 28887,
+      "id": 33706,
+      "kind": "RADIO",
+      "tag": "L27/28",
+      "msg": "PIT WALL (Alpine / #10 GAS): 'Allez, GAS. PUSH. Keep the commitment.'",
+      "ts": 1793756236.2
+    },
+    {
+      "id": 33707,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P1: #4 NOR passes PIA near Turn 13 (SLIPSTREAM)!",
-      "ts": 1793746002.7
+      "tag": "L27/28",
+      "msg": "DUMMY MOVE P4: #44 HAM sells the feint and slices past VER into Turn 6!",
+      "ts": 1793756236.2
     },
     {
-      "id": 28888,
+      "id": 33708,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#81 PIA): 'Lost the place to NOR near Turn 13.'",
-      "ts": 1793746002.7
+      "tag": "L27/28",
+      "msg": "DRIVER (#23 ALB): 'Copy, PUSH. Pushing now.'",
+      "ts": 1793756236.2
     },
     {
-      "id": 28889,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#41 LIN): 'I'm staying with GAS. Keeping the pressure on.'",
-      "ts": 1793746006.3
-    },
-    {
-      "id": 28890,
+      "id": 33709,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P4: #44 HAM passes VER near Turn 13 (SLIPSTREAM)!",
-      "ts": 1793746009.0
+      "tag": "L27/28",
+      "msg": "OUTSIDE SEND P3: #1 VER sweeps around the outside of LEC through Turn 8!",
+      "ts": 1793756236.2
     },
     {
-      "id": 28891,
+      "id": 33710,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#44 HAM): 'That's P4. Let's keep building on this.'",
-      "ts": 1793746009.0
+      "tag": "L27/28",
+      "msg": "DRIVER (#43 COL): 'I'm staying with BOR. Keeping the pressure on.'",
+      "ts": 1793756236.2
     },
     {
-      "id": 28892,
+      "id": 33711,
+      "kind": "BLUE_FLAG",
+      "tag": "L27/28",
+      "msg": "BLUE FLAGS: #18 STR (Aston Martin) yields off-line to let #14 ALO through!",
+      "ts": 1793756236.2
+    },
+    {
+      "id": 33712,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P9: #10 GAS passes SAI near Turn 6 (DEFEND)!",
-      "ts": 1793746012.2
+      "tag": "L27/28",
+      "msg": "OVERTAKE P4: #44 HAM passes VER near Turn 9!",
+      "ts": 1793756236.3
     },
     {
-      "id": 28893,
+      "id": 33713,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "PIT WALL (Williams / #55 SAI): 'GAS has gone through, SAI. Stay focused on your race.'",
-      "ts": 1793746012.2
+      "tag": "L27/28",
+      "msg": "DRIVER (#31 OCO): 'Keeping the pressure on LIN. Waiting for the opportunity.'",
+      "ts": 1793756236.3
     },
     {
-      "id": 28894,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P10: #41 LIN passes SAI near Turn 6 (SLIPSTREAM)!",
-      "ts": 1793746012.4
-    },
-    {
-      "id": 28895,
+      "id": 33714,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "PIT WALL (Cadillac / #77 BOT): 'You're close to ALB, BOT. Be patient and pick your moment.'",
-      "ts": 1793746015.7
+      "tag": "L27/28",
+      "msg": "PIT WALL (Red Bull / #1 VER): 'You're close to HAM, VER. Be patient and pick your moment.'",
+      "ts": 1793756236.3
     },
     {
-      "id": 28896,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P10: #55 SAI passes GAS near Turn 7!",
-      "ts": 1793746016.8
-    },
-    {
-      "id": 28897,
-      "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "DUMMY MOVE P1: #81 PIA sells the feint and slices past NOR into Turn 16!",
-      "ts": 1793746019.2
-    },
-    {
-      "id": 28898,
+      "id": 33715,
       "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#63 RUS): 'Still close behind PIA. Looking for a way through.'",
-      "ts": 1793746019.3
+      "tag": "L27/28",
+      "msg": "DRIVER (#44 HAM): 'Still close behind LEC. Looking for a way through.'",
+      "ts": 1793756236.3
     },
     {
-      "id": 28899,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#43 COL): 'I'm staying with BOT. Keeping the pressure on.'",
-      "ts": 1793746022.8
-    },
-    {
-      "id": 28900,
+      "id": 33716,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OUTSIDE SEND P10: #10 GAS sweeps around the outside of LIN through Turn 8!",
-      "ts": 1793746023.3
+      "tag": "L27/28",
+      "msg": "OUTSIDE SEND P3: #44 HAM sweeps around the outside of LEC through Turn 12!",
+      "ts": 1793756236.3
     },
     {
-      "id": 28901,
+      "id": 33717,
+      "kind": "RADIO",
+      "tag": "L27/28",
+      "msg": "DRIVER (#10 GAS): 'I'm staying with BOT. Keeping the pressure on.'",
+      "ts": 1793756236.4
+    },
+    {
+      "id": 33718,
+      "kind": "BLUE_FLAG",
+      "tag": "L27/28",
+      "msg": "BLUE FLAGS: #18 STR (Aston Martin) yields off-line to let #14 ALO through!",
+      "ts": 1793756236.4
+    },
+    {
+      "id": 33719,
+      "kind": "OVERTAKE",
+      "tag": "L27/28",
+      "msg": "OUTSIDE SEND P4: #1 VER sweeps around the outside of HAM through Turn 13!",
+      "ts": 1793756236.4
+    },
+    {
+      "id": 33720,
+      "kind": "RACE_CONTROL",
+      "tag": "L27/28",
+      "msg": "STOUT DEFENSE P3: #16 LEC shuts the door on HAM's DUMMY at Turn 14!",
+      "ts": 1793756236.4
+    },
+    {
+      "id": 33721,
+      "kind": "RADIO",
+      "tag": "L27/28",
+      "msg": "DRIVER (#43 COL): 'Still close behind BOR. Looking for a way through.'",
+      "ts": 1793756236.4
+    },
+    {
+      "id": 33722,
+      "kind": "OVERTAKE",
+      "tag": "L27/28",
+      "msg": "OVERTAKE P3: #44 HAM passes LEC near Turn 15 (DEFEND)!",
+      "ts": 1793756236.4
+    },
+    {
+      "id": 33723,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "DRIVER (#1 VER): 'Understood. Giving it everything.'",
+      "ts": 1793756236.4
+    },
+    {
+      "id": 33724,
+      "kind": "OVERTAKE",
+      "tag": "L28/28",
+      "msg": "OVERTAKE P3: #1 VER passes HAM near Turn 17 (OUTSIDE)!",
+      "ts": 1793756236.4
+    },
+    {
+      "id": 33725,
+      "kind": "BLUE_FLAG",
+      "tag": "L28/28",
+      "msg": "BLUE FLAGS: #18 STR (Aston Martin) yields off-line to let #14 ALO through!",
+      "ts": 1793756236.4
+    },
+    {
+      "id": 33726,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "DRIVER (#16 LEC): 'Okay. I will give it everything.'",
+      "ts": 1793756236.5
+    },
+    {
+      "id": 33727,
+      "kind": "OVERTAKE",
+      "tag": "L28/28",
+      "msg": "DUMMY MOVE P4: #16 LEC sells the feint and slices past HAM into Turn 19!",
+      "ts": 1793756236.5
+    },
+    {
+      "id": 33728,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "DRIVER (#18 STR): 'Copy blue flags. Making room for the car behind.'",
+      "ts": 1793756236.5
+    },
+    {
+      "id": 33729,
+      "kind": "OVERTAKE",
+      "tag": "L28/28",
+      "msg": "DUMMY MOVE P3: #44 HAM sells the feint and slices past VER into Turn 19!",
+      "ts": 1793756236.5
+    },
+    {
+      "id": 33730,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "PIT WALL (Ferrari / #44 HAM): 'Andiamo, HAM. PUSH now. Give it everything.'",
+      "ts": 1793756236.5
+    },
+    {
+      "id": 33731,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "PIT WALL (Alpine / #10 GAS): 'You're close to BOT, GAS. Be patient and pick your moment.'",
+      "ts": 1793756236.6
+    },
+    {
+      "id": 33732,
+      "kind": "OVERTAKE",
+      "tag": "L28/28",
+      "msg": "OVERTAKE P4: #16 LEC passes VER near Turn 2 (SLIPSTREAM) [OVERTAKE MODE]!",
+      "ts": 1793756236.6
+    },
+    {
+      "id": 33733,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "DRIVER (#1 VER): 'LEC is through, mate. What's the plan from here?'",
+      "ts": 1793756236.6
+    },
+    {
+      "id": 33734,
+      "kind": "OVERTAKE",
+      "tag": "L28/28",
+      "msg": "OVERTAKE P4: #1 VER passes LEC near Turn 2!",
+      "ts": 1793756236.6
+    },
+    {
+      "id": 33735,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "PIT WALL (Racing Bulls / #30 LAW): 'You're close to COL, LAW. Be patient and pick your moment.'",
+      "ts": 1793756236.6
+    },
+    {
+      "id": 33736,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "DRIVER (#31 OCO): 'I'm staying with LIN. Keeping the pressure on.'",
+      "ts": 1793756236.6
+    },
+    {
+      "id": 33737,
+      "kind": "RACE_CONTROL",
+      "tag": "L28/28",
+      "msg": "STOUT DEFENSE P4: #1 VER shuts the door on LEC's OUTSIDE at Turn 4!",
+      "ts": 1793756236.6
+    },
+    {
+      "id": 33738,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "DRIVER (#16 LEC): 'I'm staying with VER. Keeping the pressure on.'",
+      "ts": 1793756236.7
+    },
+    {
+      "id": 33739,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "PIT WALL (Alpine / #43 COL): 'LAW has gone through, COL. Stay focused on your race.'",
+      "ts": 1793756236.7
+    },
+    {
+      "id": 33740,
+      "kind": "OVERTAKE",
+      "tag": "L28/28",
+      "msg": "DUMMY MOVE P4: #16 LEC sells the feint and slices past VER into Turn 7!",
+      "ts": 1793756236.7
+    },
+    {
+      "id": 33741,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "PIT WALL (Haas / #31 OCO): 'Okay OCO, PUSH. Let's get the job done.'",
+      "ts": 1793756236.8
+    },
+    {
+      "id": 33742,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "PIT WALL (Williams / #23 ALB): 'ALB, PUSH. Let's make this opportunity count.'",
+      "ts": 1793756236.8
+    },
+    {
+      "id": 33743,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "DRIVER (#1 VER): 'Still close behind HAM. Looking for a way through.'",
+      "ts": 1793756236.8
+    },
+    {
+      "id": 33744,
+      "kind": "BLUE_FLAG",
+      "tag": "L28/28",
+      "msg": "BLUE FLAGS: #31 OCO (Haas) yields off-line to let #4 NOR through!",
+      "ts": 1793756236.8
+    },
+    {
+      "id": 33745,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "DRIVER (#16 LEC): 'Still close behind VER. Looking for a way through.'",
+      "ts": 1793756236.8
+    },
+    {
+      "id": 33746,
+      "kind": "BLUE_FLAG",
+      "tag": "L28/28",
+      "msg": "BLUE FLAGS: #20 BOR (Audi) yields off-line to let #81 PIA through!",
+      "ts": 1793756236.8
+    },
+    {
+      "id": 33747,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "PIT WALL (Audi / #20 BOR): 'Blue flags, BOR. Let the faster car through safely.'",
+      "ts": 1793756236.9
+    },
+    {
+      "id": 33748,
+      "kind": "BLUE_FLAG",
+      "tag": "L28/28",
+      "msg": "BLUE FLAGS: #31 OCO (Haas) yields off-line to let #4 NOR through!",
+      "ts": 1793756236.9
+    },
+    {
+      "id": 33749,
+      "kind": "RADIO",
+      "tag": "L28/28",
+      "msg": "DRIVER (#43 COL): 'Still close behind LAW. Looking for a way through.'",
+      "ts": 1793756236.9
+    },
+    {
+      "id": 33750,
+      "kind": "BLUE_FLAG",
+      "tag": "L28/28",
+      "msg": "BLUE FLAGS: #20 BOR (Audi) yields off-line to let #81 PIA through!",
+      "ts": 1793756236.9
+    },
+    {
+      "id": 33751,
       "kind": "CHEQUERED",
-      "tag": "L22/22",
+      "tag": "L28/28",
       "msg": "CHEQUERED FLAG (GRAND PRIX)! #4 Lando Norris (McLaren) crosses the line P1!",
-      "ts": 1793746024.2
+      "ts": 1793756236.9
     },
     {
-      "id": 28902,
+      "id": 33752,
       "kind": "RADIO",
-      "tag": "L22/22",
+      "tag": "L28/28",
       "msg": "PIT WALL (McLaren / #4 NOR): 'P1, NOR! A papaya win! Thank you from everyone in Woking.'",
-      "ts": 1793746024.2
+      "ts": 1793756236.9
     },
     {
-      "id": 28903,
+      "id": 33753,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OVERTAKE P10: #41 LIN passes GAS near Turn 10 (DEFEND)!",
-      "ts": 1793746029.0
+      "tag": "L28/28",
+      "msg": "OVERTAKE P2: #30 LAW passes PIA near Turn 1!",
+      "ts": 1793756236.9
     },
     {
-      "id": 28904,
-      "kind": "RADIO",
-      "tag": "L22/22",
-      "msg": "DRIVER (#41 LIN): 'Through on GAS. That's P10.'",
-      "ts": 1793746029.0
-    },
-    {
-      "id": 28905,
+      "id": 33754,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "DIVEBOMB P11: #12 ANT lunges late on the brakes inside LIN at Turn 11!",
-      "ts": 1793746036.3
+      "tag": "L28/28",
+      "msg": "OVERTAKE P3: #43 COL passes PIA near Turn 1!",
+      "ts": 1793756236.9
     },
     {
-      "id": 28906,
+      "id": 33755,
       "kind": "OVERTAKE",
-      "tag": "L22/22",
-      "msg": "OUTSIDE SEND P10: #41 LIN sweeps around the outside of GAS through Turn 11!",
-      "ts": 1793746036.7
+      "tag": "L28/28",
+      "msg": "OVERTAKE P5: #20 BOR passes HAM near Turn 1!",
+      "ts": 1793756237.0
     },
     {
-      "id": 28907,
+      "id": 33756,
+      "kind": "OVERTAKE",
+      "tag": "L28/28",
+      "msg": "OVERTAKE P5: #44 HAM passes BOR near Turn 1!",
+      "ts": 1793756237.0
+    },
+    {
+      "id": 33757,
       "kind": "PODIUM",
-      "tag": "R5",
-      "msg": "PODIUM (CHN): P1 Lando Norris (McLaren) | P2 PIA | P3 RUS",
-      "ts": 1793746042.2
+      "tag": "R8",
+      "msg": "PODIUM (MON): P1 Lando Norris (McLaren) | P2 LAW | P3 COL",
+      "ts": 1793756237.0
     },
     {
-      "id": 28908,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: McLaren brings a major $21.6M Pit Crew Lv.9 upgrade package!",
-      "ts": 1793746055.2
-    },
-    {
-      "id": 28909,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Racing Bulls introduces a $56.7M multi-stage development package (Suspension Lv.5, Active Aero Lv.5, Power Unit Lv.6)!",
-      "ts": 1793746055.2
-    },
-    {
-      "id": 28910,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Alpine introduces a $43.8M multi-stage development package (Power Unit Lv.5, Chassis Lv.5, Pit Crew Lv.5)!",
-      "ts": 1793746055.2
-    },
-    {
-      "id": 28911,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Audi introduces a $41.6M multi-stage development package (Power Unit Lv.4, Active Aero Lv.4, Suspension Lv.5)!",
-      "ts": 1793746055.2
-    },
-    {
-      "id": 28912,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Williams introduces a $56.5M multi-stage development package (Power Unit Lv.5, Active Aero Lv.5, Chassis Lv.6)!",
-      "ts": 1793746055.2
-    },
-    {
-      "id": 28913,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Aston Martin introduces a $46.0M multi-stage development package (Reliability Lv.5, Chassis Lv.5, Power Unit Lv.5)!",
-      "ts": 1793746055.2
-    },
-    {
-      "id": 28914,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Cadillac introduces a $46.5M multi-stage development package (Chassis Lv.4, Power Unit Lv.5, Chassis Lv.5)!",
-      "ts": 1793746055.2
-    },
-    {
-      "id": 28915,
+      "id": 33758,
       "kind": "WEEKEND",
-      "tag": "R6",
-      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (WET / RAIN, 24% rain risk)!",
-      "ts": 1793746055.2
+      "tag": "R8",
+      "msg": "ROUND 8/24 [SPRINT WEEKEND]: Welcome to Monte Carlo for the 2028 Monaco Grand Prix (WET / RAIN, 20% rain risk)!",
+      "ts": 1793756390.5
     },
     {
-      "id": 28916,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Ferrari brings a major $59.4M Power Unit Lv.9 upgrade package!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28917,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Red Bull introduces a $70.3M multi-stage development package (Active Aero Lv.8, Chassis Lv.8)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28918,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Racing Bulls introduces a $31.1M multi-stage development package (Reliability Lv.6, Suspension Lv.6)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28919,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Alpine introduces a $42.2M multi-stage development package (Chassis Lv.6, Active Aero Lv.6)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28920,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Audi introduces a $44.0M multi-stage development package (Chassis Lv.5, Active Aero Lv.5, Reliability Lv.5)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28921,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Williams introduces a $39.8M multi-stage development package (Active Aero Lv.6, Suspension Lv.6)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28922,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Aston Martin introduces a $34.7M multi-stage development package (Pit Crew Lv.5, Pit Crew Lv.6, Reliability Lv.6)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28923,
-      "kind": "WEEKEND",
-      "tag": "R6",
-      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (DRY, 24% rain risk)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28924,
+      "id": 33759,
       "kind": "SERVER",
-      "tag": "R6",
-      "msg": "Persistent Championship resumed at 2028 Round 6 (Miami Grand Prix).",
-      "ts": 1793752187.8
+      "tag": "R8",
+      "msg": "Persistent Championship resumed at 2028 Round 8 (Monaco Grand Prix).",
+      "ts": 1793756390.5
     },
     {
-      "id": 28925,
+      "id": 33760,
       "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Racing Bulls updates Pit Crew to Lv.6 (-$11.3M).",
-      "ts": 1793752187.8
+      "tag": "R8",
+      "msg": "UPGRADE: Alpine updates Pit Crew to Lv.7 (-$14.1M).",
+      "ts": 1793756390.5
     },
     {
-      "id": 28926,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Alpine updates Reliability to Lv.6 (-$14.2M).",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28927,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Audi introduces a $33.7M multi-stage development package (Power Unit Lv.5, Reliability Lv.6)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28928,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Haas introduces a $52.2M multi-stage development package (Active Aero Lv.5, Chassis Lv.5, Power Unit Lv.5)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28929,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Williams brings a major $25.8M Power Unit Lv.6 upgrade package!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28930,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Aston Martin introduces a $45.1M multi-stage development package (Chassis Lv.6, Power Unit Lv.6)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28931,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Cadillac introduces a $20.5M multi-stage development package (Pit Crew Lv.5, Pit Crew Lv.6)!",
-      "ts": 1793752187.8
-    },
-    {
-      "id": 28932,
+      "id": 33761,
       "kind": "WEEKEND",
-      "tag": "R6",
-      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (WET / RAIN, 24% rain risk)!",
-      "ts": 1793752187.8
+      "tag": "R8",
+      "msg": "ROUND 8/24 [SPRINT WEEKEND]: Welcome to Monte Carlo for the 2028 Monaco Grand Prix (DRY, 20% rain risk)!",
+      "ts": 1793756390.5
     },
     {
-      "id": 28933,
+      "id": 33762,
       "kind": "RADIO",
-      "tag": "R6",
+      "tag": "R8",
       "msg": "GRID STRATEGY: #63 RUS confirmed starting on MEDIUM tyres!",
-      "ts": 1793752187.8
+      "ts": 1793756390.5
     },
     {
-      "id": 28934,
+      "id": 33763,
       "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Alpine updates Pit Crew to Lv.6 (-$11.3M).",
-      "ts": 1793752207.8
+      "tag": "R8",
+      "msg": "UPGRADE: Audi updates Pit Crew to Lv.7 (-$14.1M).",
+      "ts": 1793756619.1
     },
     {
-      "id": 28935,
+      "id": 33764,
       "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Audi updates Suspension to Lv.6 (-$16.9M).",
-      "ts": 1793752207.8
+      "tag": "R8",
+      "msg": "UPGRADE: Cadillac updates Reliability to Lv.6 (-$14.2M).",
+      "ts": 1793756619.1
     },
     {
-      "id": 28936,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Haas introduces a $24.6M multi-stage development package (Reliability Lv.5, Suspension Lv.5)!",
-      "ts": 1793752207.8
-    },
-    {
-      "id": 28937,
+      "id": 33765,
       "kind": "WEEKEND",
-      "tag": "R6",
-      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (WET / RAIN, 24% rain risk)!",
-      "ts": 1793752207.8
+      "tag": "R8",
+      "msg": "ROUND 8/24 [SPRINT WEEKEND]: Welcome to Monte Carlo for the 2028 Monaco Grand Prix (DRY, 20% rain risk)!",
+      "ts": 1793756619.1
     },
     {
-      "id": 28938,
+      "id": 33766,
       "kind": "SERVER",
-      "tag": "R6",
-      "msg": "Persistent Championship resumed at 2028 Round 6 (Miami Grand Prix).",
-      "ts": 1793752207.8
+      "tag": "R8",
+      "msg": "Persistent Championship resumed at 2028 Round 8 (Monaco Grand Prix).",
+      "ts": 1793756619.1
     },
     {
-      "id": 28939,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Haas introduces a $33.5M multi-stage development package (Chassis Lv.6, Reliability Lv.6)!",
-      "ts": 1793752207.8
-    },
-    {
-      "id": 28940,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Aston Martin updates Suspension to Lv.6 (-$16.9M).",
-      "ts": 1793752207.8
-    },
-    {
-      "id": 28941,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "PADDOCK TECH: Cadillac introduces a $42.2M multi-stage development package (Active Aero Lv.6, Chassis Lv.6)!",
-      "ts": 1793752207.8
-    },
-    {
-      "id": 28942,
+      "id": 33767,
       "kind": "WEEKEND",
-      "tag": "R6",
-      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (DRY, 24% rain risk)!",
-      "ts": 1793752207.8
+      "tag": "R8",
+      "msg": "ROUND 8/24 [SPRINT WEEKEND]: Welcome to Monte Carlo for the 2028 Monaco Grand Prix (WET / RAIN, 20% rain risk)!",
+      "ts": 1793756619.1
     },
     {
-      "id": 28943,
+      "id": 33768,
       "kind": "RADIO",
-      "tag": "R6",
+      "tag": "R8",
       "msg": "GRID STRATEGY: #63 RUS confirmed starting on MEDIUM tyres!",
-      "ts": 1793752207.8
-    },
-    {
-      "id": 28944,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Racing Bulls updates Chassis to Lv.6 (-$19.3M).",
-      "ts": 1793752232.5
-    },
-    {
-      "id": 28945,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Alpine updates Suspension to Lv.6 (-$16.9M).",
-      "ts": 1793752232.5
-    },
-    {
-      "id": 28946,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Aston Martin updates Active Aero to Lv.6 (-$22.9M).",
-      "ts": 1793752232.5
-    },
-    {
-      "id": 28947,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Cadillac updates Suspension to Lv.6 (-$16.9M).",
-      "ts": 1793752232.5
-    },
-    {
-      "id": 28948,
-      "kind": "WEEKEND",
-      "tag": "R6",
-      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (DRY, 24% rain risk)!",
-      "ts": 1793752232.5
-    },
-    {
-      "id": 28949,
-      "kind": "SERVER",
-      "tag": "R6",
-      "msg": "Persistent Championship resumed at 2028 Round 6 (Miami Grand Prix).",
-      "ts": 1793752232.5
-    },
-    {
-      "id": 28950,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Racing Bulls updates Pit Crew to Lv.7 (-$14.1M).",
-      "ts": 1793752232.5
-    },
-    {
-      "id": 28951,
-      "kind": "UPGRADE",
-      "tag": "R6",
-      "msg": "UPGRADE: Haas updates Suspension to Lv.6 (-$16.9M).",
-      "ts": 1793752232.5
-    },
-    {
-      "id": 28952,
-      "kind": "WEEKEND",
-      "tag": "R6",
-      "msg": "ROUND 6/24: Welcome to Miami for the 2028 Miami Grand Prix (DRY, 24% rain risk)!",
-      "ts": 1793752232.5
-    },
-    {
-      "id": 28953,
-      "kind": "RADIO",
-      "tag": "R6",
-      "msg": "GRID STRATEGY: #63 RUS confirmed starting on MEDIUM tyres!",
-      "ts": 1793752232.5
+      "ts": 1793756619.1
     }
   ],
-  "event_seq": 28953
+  "event_seq": 33768
 }
