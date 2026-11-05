@@ -797,19 +797,30 @@ class QualifyingSession:
         if not heading_stepped:
             car._heading_tick = curr_tick
             tx, ty = smp["tx"], smp["ty"]
-            half_usable = self.track.width_px_at(car.s) * 0.39
-            v_forward_px = max(6.0, car.v * self.track.px_per_m)
-            v_lateral_px = (car.target_d - car.d) * 2.4 * half_usable * 0.18
-            drift_angle = max(-0.065, min(0.065, math.atan2(v_lateral_px, v_forward_px)))
-            track_heading = math.atan2(ty, tx)
-            yaw_attitude = getattr(car, "steer_angle", 0.0) * 0.20
-            target_heading = (track_heading + drift_angle + yaw_attitude + math.pi) % (2.0 * math.pi) - math.pi
+            nx, ny = smp["nx"], smp["ny"]
+            v_forward = max(0.5, car.v)
+            v_lateral = getattr(car, "lateral_velocity", 0.0)
+
+            if car.v < 0.5:
+                velocity_heading = math.atan2(ty, tx)
+            else:
+                # Real instantaneous vehicle velocity trajectory over ground
+                vx = tx * v_forward + nx * v_lateral
+                vy = ty * v_forward + ny * v_lateral
+                velocity_heading = math.atan2(vy, vx)
+
+            # Dynamic chassis turn-in attitude into apex & body slip angle
+            yaw_attitude = (
+                getattr(car, "steer_angle", 0.0) * 0.22
+                + getattr(car, "body_slip_angle", 0.0) * 0.35
+            )
+            target_heading = (velocity_heading + yaw_attitude + math.pi) % (2.0 * math.pi) - math.pi
 
             prev_h = getattr(car, "heading", None)
             cur_dt = getattr(self, "_current_dt", 0.05)
             if prev_h is not None and getattr(car, "_has_initial_heading", False):
                 dh = (target_heading - prev_h + math.pi) % (2.0 * math.pi) - math.pi
-                max_dh = 4.8 * cur_dt
+                max_dh = max(7.5, abs(car.v * smp["curv"]) * 1.6) * cur_dt
                 dh_clamped = max(-max_dh, min(max_dh, dh))
                 car.heading = round((prev_h + dh_clamped + math.pi) % (2.0 * math.pi) - math.pi, 4)
             else:
@@ -896,14 +907,22 @@ class QualifyingSession:
             car.total_dist += ds
             car.s = car.total_dist % L
             car.target_d = smp.get("racing_line_d", 0.0) + car.driver_line_bias
+            prev_d = car.d
             car.d += (car.target_d - car.d) * min(1.0, dt * 3.2)
+            half_usable_m = self.track.width_px_at(car.s) * 0.39 / self.track.px_per_m
+            car.lateral_velocity = (car.d - prev_d) * half_usable_m / max(dt, 0.001)
 
             # Vehicle dynamics in qualifying session
             a_lat = (car.v * car.v) * smp["curv"]
             car.g_lat = round((a_lat / GRAVITY) * smp["inside_sign"], 2)
-            car.body_slip_angle = 0.0
-            ackerman_steer = math.atan(3.6 * smp["curv"] * smp["inside_sign"])
-            car.steer_angle = round(max(-0.35, min(0.35, ackerman_steer + (car.target_d - car.d) * 0.12)), 4)
+            tire_grip = 1.08 if car.compound == "SOFT" else 1.0
+            cornering_stiffness = 1000.0 + (u.get("active_aero", 5) - 5) * 45.0 + (u.get("suspension", 5) - 5) * 35.0 + (u.get("chassis", 5) - 5) * 45.0
+            slip_calc = (a_lat * smp["inside_sign"]) / max(300.0, cornering_stiffness * tire_grip)
+            car.body_slip_angle = round(max(-0.070, min(0.070, slip_calc)), 4)
+            wheelbase_m = 3.6
+            ackerman_steer = math.atan(wheelbase_m * 1.65 * smp["curv"] * smp["inside_sign"])
+            lane_steer = math.atan2(car.lateral_velocity, max(car.v, 6.0))
+            car.steer_angle = round(max(-0.42, min(0.42, ackerman_steer + lane_steer)), 4)
             # Battery state in qualifying session (cycles between 50% and 95% of max era capacity, never exceeding 100%)
             charge_ratio = 0.50 + 0.45 * (0.5 + 0.5 * math.sin(self.elapsed * 0.4 + car.number))
             car.battery_mj = max(0.0, min(car.max_battery_mj, round(car.max_battery_mj * charge_ratio, 3)))
@@ -1292,21 +1311,31 @@ class RaceSession:
         if not heading_stepped:
             car._heading_tick = curr_tick
             tx, ty = smp["tx"], smp["ty"]
-            v_forward_px = max(6.0, car.v * self.track.px_per_m)
-            v_lateral_px = car.lateral_velocity * self.track.px_per_m * 0.18
+            nx, ny = smp["nx"], smp["ny"]
+            v_forward = max(0.5, car.v)
+            v_lateral = getattr(car, "lateral_velocity", 0.0)
 
-            drift_angle = max(-0.065, min(0.065, math.atan2(v_lateral_px, v_forward_px)))
-            track_heading = math.atan2(ty, tx)
+            if car.v < 0.5:
+                velocity_heading = math.atan2(ty, tx)
+            else:
+                # Real instantaneous vehicle velocity trajectory over ground
+                vx = tx * v_forward + nx * v_lateral
+                vy = ty * v_forward + ny * v_lateral
+                velocity_heading = math.atan2(vy, vx)
 
-            # Dynamic chassis yaw in corners: car nose turns naturally into apex
-            yaw_attitude = getattr(car, "steer_angle", 0.0) * 0.20
-            target_heading = (track_heading + drift_angle + yaw_attitude + math.pi) % (2.0 * math.pi) - math.pi
+            # Dynamic chassis yaw in corners: nose turns naturally into apex, damped by front wing damage understeer
+            understeer_mod = max(0.25, 1.0 - car.wing_damage * 0.75)
+            yaw_attitude = (
+                getattr(car, "steer_angle", 0.0) * 0.22 * understeer_mod
+                + getattr(car, "body_slip_angle", 0.0) * 0.35
+            )
+            target_heading = (velocity_heading + yaw_attitude + math.pi) % (2.0 * math.pi) - math.pi
 
             prev_h = getattr(car, "heading", None)
             cur_dt = getattr(self, "_current_dt", 0.05)
             if prev_h is not None and getattr(car, "_has_initial_heading", False):
                 dh = (target_heading - prev_h + math.pi) % (2.0 * math.pi) - math.pi
-                max_dh = 4.8 * cur_dt
+                max_dh = max(7.5, abs(car.v * smp["curv"]) * 1.6) * cur_dt
                 dh_clamped = max(-max_dh, min(max_dh, dh))
                 car.heading = round((prev_h + dh_clamped + math.pi) % (2.0 * math.pi) - math.pi, 4)
             else:
@@ -2330,14 +2359,23 @@ class RaceSession:
 
         self._move_laterally(car, dt)
 
-        # 2D Vehicle Dynamics: lateral G, front wheel steer angle with realistic hairpin steering lock
+        # 2D Vehicle Dynamics: lateral G, dynamic body slip angle (beta), and front wheel steer angle with realistic lock
         a_lat = (car.v * car.v) * smp["curv"]
         car.g_lat = round((a_lat / GRAVITY) * smp["inside_sign"], 2)
-        car.body_slip_angle = 0.0
+
+        # Dynamic body slip angle: increases with lateral acceleration, worn tires, or low grip (wet)
+        base_grip = comp_spec.get("grip", 1.0) * max(0.40, 1.0 - car.tire_wear * 0.45)
+        if self.wetness > 0.18 and car.compound not in ("INTER", "WET"):
+            base_grip *= max(0.35, 1.0 - self.wetness * 0.75)
+        chassis_stiffness = 950.0 + (u.get("active_aero", 5) - 5) * 45.0 + (u.get("suspension", 5) - 5) * 35.0 + (u.get("chassis", 5) - 5) * 45.0
+        slip_rad = (a_lat * smp["inside_sign"]) / max(300.0, chassis_stiffness * base_grip)
+        car.body_slip_angle = round(max(-0.075, min(0.075, slip_rad)), 4)
+
         wheelbase_m = 3.6
         ackerman_steer = math.atan(wheelbase_m * 1.65 * smp["curv"] * smp["inside_sign"])
         lane_steer = math.atan2(car.lateral_velocity, max(car.v, 6.0))
-        car.steer_angle = round(max(-0.42, min(0.42, ackerman_steer + lane_steer)), 4)
+        wing_steer_auth = max(0.45, 1.0 - car.wing_damage * 0.55)
+        car.steer_angle = round(max(-0.42, min(0.42, (ackerman_steer + lane_steer) * wing_steer_auth)), 4)
 
         km_step = ds / 1000.0
         thermal_wear_mod = tire_thermal_wear_mult(car.compound, car.tire_temp)

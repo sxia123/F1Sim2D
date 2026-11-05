@@ -1,3 +1,4 @@
+import random
 import unittest
 from sim.data import INITIAL_TEAMS, UPGRADE_DEPARTMENTS, upgrade_cost_m, team_car_rating
 from sim.championship import ChampionshipWorld
@@ -5,6 +6,9 @@ from sim.championship import ChampionshipWorld
 
 class TestAISpending(unittest.TestCase):
     def setUp(self):
+        state = random.getstate()
+        self.addCleanup(random.setstate, state)
+        random.seed(42)
         self.world = ChampionshipWorld()
 
     def test_ai_teams_spend_surplus_budget(self):

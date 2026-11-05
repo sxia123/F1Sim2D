@@ -54,7 +54,9 @@ const TEAM_LIVERY = {
 };
 
 function lerpAngle(a, b, t) {
-  const diff = ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+  let diff = (b - a) % (Math.PI * 2);
+  if (diff > Math.PI) diff -= Math.PI * 2;
+  if (diff < -Math.PI) diff += Math.PI * 2;
   return a + diff * t;
 }
 
@@ -246,13 +248,14 @@ export class CircuitRenderer {
           cx: c.x,
           cy: c.y,
           ch: c.h,
-          buffer: [{ tick: currentTick, x: c.x, y: c.y, h: c.h }],
+          steer: c.steer || 0.0,
+          buffer: [{ tick: currentTick, x: c.x, y: c.y, h: c.h, steer: c.steer || 0.0 }],
           data: c,
         };
         this.carInterp.set(c.id, st);
       } else {
         st.data = c;
-        st.buffer.push({ tick: currentTick, x: c.x, y: c.y, h: c.h });
+        st.buffer.push({ tick: currentTick, x: c.x, y: c.y, h: c.h, steer: c.steer || 0.0 });
         if (st.buffer.length > 10) {
           st.buffer.shift();
         }
@@ -424,10 +427,14 @@ export class CircuitRenderer {
           // Smoothstep angular lerp for C1 rotational continuity
           const smoothT = t * t * (3 - 2 * t);
           st.ch = lerpAngle(s1.h, s2.h, smoothT);
+          const s1Steer = s1.steer !== undefined ? s1.steer : (st.data?.steer || 0.0);
+          const s2Steer = s2.steer !== undefined ? s2.steer : (st.data?.steer || 0.0);
+          st.steer = s1Steer + (s2Steer - s1Steer) * smoothT;
         } else if (this.renderTick < buf[0].tick) {
           st.cx = buf[0].x;
           st.cy = buf[0].y;
           st.ch = buf[0].h;
+          st.steer = buf[0].steer || 0.0;
         } else {
           // If network tick arrived late, glide forward with last observed velocity
           const last = buf[buf.length - 1];
@@ -439,11 +446,13 @@ export class CircuitRenderer {
           st.cx = last.x + vx * extraTicks;
           st.cy = last.y + vy * extraTicks;
           st.ch = last.h;
+          st.steer = last.steer || 0.0;
         }
       } else {
         st.cx = buf[0].x;
         st.cy = buf[0].y;
         st.ch = buf[0].h;
+        st.steer = buf[0].steer || 0.0;
       }
     };
 
@@ -1080,7 +1089,7 @@ export class CircuitRenderer {
       if (!c.vis || c.pit_tunnel) continue;
       const st = this.carInterp.get(c.id);
       if (!st) continue;
-      this._drawSingleCar(ctx, st.cx, st.cy, st.ch, c, now);
+      this._drawSingleCar(ctx, st.cx, st.cy, st.ch, c, now, st.steer);
       if (this._viewTransform.scale < .45) {
         ctx.beginPath();ctx.arc(st.cx,st.cy,2.1/this._viewTransform.scale,0,Math.PI*2);
         ctx.fillStyle=c.tcol;ctx.fill();
@@ -1126,7 +1135,7 @@ export class CircuitRenderer {
     ctx.restore();
   }
 
-  _drawSingleCar(ctx, x, y, heading, c, now) {
+  _drawSingleCar(ctx, x, y, heading, c, now, steerInterp) {
     const isMyTeam = this.tick && c.tid === this.tick.player_team_id;
     const isSelected = c.id === this.selectedDriverId;
     const liv = TEAM_LIVERY[c.tid] || { body: c.tcol, pod: c.tcol, noseTip: c.tcol, stripe: c.scol };
@@ -1233,7 +1242,7 @@ export class CircuitRenderer {
       [rearAxle,-rearHub,geom.rear_tyre_diameter_m*ppm,geom.rear_tyre_width_m*ppm,false],
       [rearAxle, rearHub,geom.rear_tyre_diameter_m*ppm,geom.rear_tyre_width_m*ppm,false],
     ];
-    const steerRad = c.steer || 0.0;
+    const steerRad = (steerInterp !== undefined) ? steerInterp : (c.steer || 0.0);
     for (const [wx, wy, ww, wh, isFront] of wheelSpecs) {
       ctx.save();
       ctx.translate(wx,wy);
