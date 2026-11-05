@@ -336,21 +336,18 @@ def enforce_2d_car_separation(
                 if sat is None:
                     continue
 
-                in_active_pass = (
-                    (c1.maneuver_pass_timer > 0.0 and c1.maneuver_target_id == c2.driver_id)
-                    or (c2.maneuver_pass_timer > 0.0 and c2.maneuver_target_id == c1.driver_id)
-                    or (c1.battle_with == c2.driver_id and c2.battle_with == c1.driver_id)
+                pen_l1, pen_w1, pen_l2, pen_w2 = sat
+                min_pen_w = min(pen_w1, pen_w2)
+                min_pen_l = min(pen_l1, pen_l2)
+                is_lateral = (min_pen_w <= min_pen_l) or (abs(c1.d - c2.d) > 0.14)
+                is_contact = (
+                    (is_lateral and min_pen_w > 0.65)
+                    or (abs(c1.v - c2.v) > 4.5 and min_pen_l > 1.8)
                 )
-                severe_impact = (
-                    abs(c1.v - c2.v) > 6.5
-                    and min(sat[0], sat[2]) > 2.2
-                    and min(sat[1], sat[3]) > 1.8
-                )
-                if pass_idx == 0 and severe_impact and collision_cb is not None and not in_active_pass and not c1.in_pits and not c2.in_pits and not c1.dnf and not c2.dnf:
+                if pass_idx == 0 and is_contact and collision_cb is not None and not c1.in_pits and not c2.in_pits and not c1.dnf and not c2.dnf:
                     collision_cb(c1, c2, sat)
 
                 any_overlap = True
-                pen_l1, pen_w1, pen_l2, pen_w2 = sat
 
                 if arc_fwd < arc_bwd or (abs(arc_fwd - arc_bwd) < 0.05 and c1.total_dist >= c2.total_dist):
                     ahead, behind = c1, c2
@@ -617,6 +614,7 @@ class CarState:
         self.maneuver_pass_timer: float = 0.0
         self.maneuver_target_id: str | None = None
         self.maneuver_attempt_cooldown: float = 0.0
+        self.side_by_side_timer: float = 0.0
         self.tow_target_id: str | None = None
         self.free_air_target_v: float = 0.0
         self.spin_timer: float = 0.0
@@ -1771,20 +1769,42 @@ class RaceSession:
         car.contact_cooldown = max(0.0, car.contact_cooldown - dt)
         car.maneuver_attempt_cooldown = max(0.0, car.maneuver_attempt_cooldown - dt)
         if car.maneuver_pass_timer > 0.0:
+            target = self.cars_by_id.get(car.maneuver_target_id)
+            clearance = CAR_LEN_PX / self.track.px_per_m * 1.35
+            still_alongside = (
+                target is not None and not target.dnf and not target.in_pits
+                and abs(car.total_dist - target.total_dist) < clearance
+                and abs(compute_lateral_screen_px(self.track, car.d, car.s)
+                        - compute_lateral_screen_px(self.track, target.d, target.s)) > CAR_WID_PX * 0.5
+            )
+            if still_alongside:
+                car.side_by_side_timer = getattr(car, "side_by_side_timer", 0.0) + dt
+            else:
+                car.side_by_side_timer = 0.0
+
             car.maneuver_pass_timer = max(0.0, car.maneuver_pass_timer - dt)
-            if car.maneuver_pass_timer <= 0.0:
-                target = self.cars_by_id.get(car.maneuver_target_id)
-                clearance = CAR_LEN_PX / self.track.px_per_m * 1.35
-                still_alongside = (
-                    target is not None and not target.dnf and not target.in_pits
-                    and abs(car.total_dist - target.total_dist) < clearance
-                    and abs(compute_lateral_screen_px(self.track, car.d, car.s)
-                            - compute_lateral_screen_px(self.track, target.d, target.s)) > CAR_WID_PX * 0.5
-                )
-                if still_alongside:
+            if car.maneuver_pass_timer <= 0.0 or car.side_by_side_timer >= 3.2:
+                if still_alongside and car.side_by_side_timer < 3.2:
                     car.maneuver_pass_timer = 0.2
                 else:
+                    # Side-by-side battle timed out through corner sequence: resolve decisively!
+                    car.side_by_side_timer = 0.0
+                    car.maneuver_pass_timer = 0.0
                     car.maneuver_target_id = None
+                    car.battle_with = None
+                    if target is not None:
+                        target.battle_with = None
+                        if car.total_dist >= target.total_dist:
+                            # Attacker completed the pass on corner exit
+                            target.v = max(4.0, car.v - 2.2)
+                            target.target_d = car.d
+                        else:
+                            # Defender held track position
+                            car.v = max(4.0, target.v - 2.0)
+                            car.target_d = target.d
+                            car.maneuver_attempt_cooldown = random.uniform(2.5, 4.5)
+        else:
+            car.side_by_side_timer = 0.0
         if car.maneuver_timer > 0.0:
             car.maneuver_timer = max(0.0, car.maneuver_timer - dt)
             if car.maneuver_timer <= 0.0 and car.maneuver_pass_timer <= 0.0:
@@ -3069,8 +3089,31 @@ class RaceSession:
                             tgt.battle_with = c.driver_id
                             continue
                         lat_sep = abs(compute_lateral_screen_px(self.track, c.d,c.s) - compute_lateral_screen_px(self.track, tgt.d,tgt.s))
+                        smp_c = self.track.sample(c.s)
+                        in_corner = smp_c["curv"] > 0.005
+                        if in_corner:
+                            # Running side-by-side through a corner forces cars off the single optimal line, scrubbing speed
+                            c.v = max(4.0, c.v - 0.7 * dt)
+                            tgt.v = max(4.0, tgt.v - 0.7 * dt)
+
+                        # Roll for wheel-banging contact when fighting tight through corners
+                        if (
+                            in_corner
+                            and lat_sep < CAR_WID_PX * 1.05
+                            and c.contact_cooldown <= 0.0
+                            and tgt.contact_cooldown <= 0.0
+                            and c.lap > 1
+                        ):
+                            c_cons = c.skills.get("consistency", 90)
+                            tgt_cons = tgt.skills.get("consistency", 90)
+                            push_mult = 1.8 if (c.pace_mode in ("PUSH", "ATTACK") or tgt.pace_mode in ("PUSH", "ATTACK")) else 1.0
+                            contact_risk = 0.015 * push_mult * (1.22 - (c_cons + tgt_cons) / 230.0) * dt * 20.0
+                            if random.random() < contact_risk:
+                                turn = self.track.nearest_corner(c.s)
+                                self._trigger_side_by_side_contact(c, tgt, turn, event_cb)
+
                         if lat_sep >= CAR_WID_PX * 0.86:
-                            st_c = self.track.sample(c.s)["station"]
+                            st_c = smp_c["station"]
                             v_env_c = self.v_env[st_c]
                             if c.v < v_env_c and c.v < tgt.v + 1.2:
                                 c.v = min(v_env_c, c.v + 3.2 * dt)
@@ -3390,20 +3433,73 @@ class RaceSession:
 
             self.trigger_safety_car("SC", f"Debris at Turn {turn} ({attacker.code}/{defender.code})", event_cb)
 
+    def _trigger_side_by_side_contact(self, c1: CarState, c2: CarState, turn: int, event_cb) -> None:
+        """Wheel-banging contact physics during wheel-to-wheel battles."""
+        if c1.dnf or c2.dnf or c1.in_pits or c2.in_pits:
+            return
+        if self.flag_state in ("GRID", "LIGHTS") and not self.lights_out:
+            return
+        if c1.contact_cooldown > 0.0 or c2.contact_cooldown > 0.0:
+            return
+
+        c1.contact_cooldown = 5.0
+        c2.contact_cooldown = 5.0
+        c1.sparks = True
+        c2.sparks = True
+        c1.smoke = max(c1.smoke, 1.4)
+        c2.smoke = max(c2.smoke, 1.4)
+
+        # Physical lateral separation impulse (smooth target guidance, zero snap!)
+        d_diff = c1.d - c2.d
+        side_norm = 1.0 if d_diff >= 0.0 else -1.0
+        c1.target_d = max(-1.05, min(1.05, c1.d + side_norm * 0.18))
+        c2.target_d = max(-1.05, min(1.05, c2.d - side_norm * 0.18))
+
+        # Speed scrub from physical tire/bodywork collision
+        c1.v = max(8.0, c1.v - random.uniform(1.0, 2.2))
+        c2.v = max(8.0, c2.v - random.uniform(1.0, 2.2))
+
+        # Sidepod and front wing endplate damage
+        dmg1 = random.uniform(0.04, 0.12)
+        dmg2 = random.uniform(0.04, 0.12)
+        c1.wing_damage = min(0.85, c1.wing_damage + dmg1)
+        c2.wing_damage = min(0.85, c2.wing_damage + dmg2)
+        c1.wing_damage_side = "RIGHT" if c1.d < c2.d else "LEFT"
+        c2.wing_damage_side = "LEFT" if c1.d < c2.d else "RIGHT"
+        c1.repair_cost_m += round(dmg1 * 0.75, 2)
+        c2.repair_cost_m += round(dmg2 * 0.75, 2)
+
+        # Tire scrub and thermal spike
+        c1.tire_wear = min(0.99, c1.tire_wear + 0.012)
+        c2.tire_wear = min(0.99, c2.tire_wear + 0.012)
+        c1.tire_temp = min(140.0, c1.tire_temp + random.uniform(5.0, 10.0))
+        c2.tire_temp = min(140.0, c2.tire_temp + random.uniform(5.0, 10.0))
+
+        if c1.wing_damage >= 0.35 and not c1.box_this_lap:
+            c1.box_this_lap = True
+        if c2.wing_damage >= 0.35 and not c2.box_this_lap:
+            c2.box_this_lap = True
+
+        event_cb(
+            "INCIDENT",
+            f"WHEEL BANGING! Contact between #{c1.number} {c1.code} and #{c2.number} {c2.code} fighting through Turn {turn}!",
+        )
+        self.radio_dispatcher.trigger_contact(c1, c2, turn, event_cb, self.race_clock)
+        self.stewards_queue.append(
+            {
+                "timer": 7.0,
+                "stage": "NOTED",
+                "turn": turn,
+                "culprit_id": c1.driver_id if c1.d < c2.d else c2.driver_id,
+                "summary": f"{c1.code} & {c2.code} side-by-side",
+                "reason": "Wheel-to-wheel contact",
+                "verdict": random.choice(["NFA", "NFA", "5S"]),
+            }
+        )
+
     def _on_physical_contact(self, c1: CarState, c2: CarState, sat: tuple[float, float, float, float], event_cb) -> None:
         """Physical contact physics: sparks, smoke, deceleration scrub, front wing/sidepod damage, stewards."""
         if c1.dnf or c2.dnf or c1.in_pits or c2.in_pits:
-            return
-
-        # Passing or battling cars are holding designated adjacent lanes; clean racing is never an incident
-        if (
-            c1.maneuver_pass_timer > 0.0
-            or c2.maneuver_pass_timer > 0.0
-            or c1.maneuver_timer > 0.0
-            or c2.maneuver_timer > 0.0
-            or c1.battle_with == c2.driver_id
-            or c2.battle_with == c1.driver_id
-        ):
             return
 
         # Lap 1 start discipline: pack is compressed 22-wide; SAT cushions without false contact alerts/damage
@@ -3426,61 +3522,12 @@ class RaceSession:
         pen_l1, pen_w1, pen_l2, pen_w2 = sat
         min_pen_w = min(pen_w1, pen_w2)
         delta_v = behind.v - ahead.v
-        speed_gap = abs(c1.v - c2.v)
 
         # Distinguish side-by-side vs nose-to-tail contact
-        is_side_by_side = min_pen_w < 3.2 and abs(c1.d - c2.d) > 0.22
+        is_side_by_side = min_pen_w < 3.2 and abs(c1.d - c2.d) > 0.16
 
         if is_side_by_side:
-            # Physical lateral separation impulse (smooth target guidance, zero snap!)
-            d_diff = c1.d - c2.d
-            side_norm = 1.0 if d_diff >= 0.0 else -1.0
-            c1.target_d = max(-1.05, min(1.05, c1.d + side_norm * 0.18))
-            c2.target_d = max(-1.05, min(1.05, c2.d - side_norm * 0.18))
-            c1.sparks = True
-            c2.sparks = True
-            # Authentic sidepod/endplate abrasion damage whenever physical contact occurs
-            contact_dmg = random.uniform(0.04, 0.09)
-            c1.wing_damage = min(0.85, c1.wing_damage + contact_dmg)
-            c2.wing_damage = min(0.85, c2.wing_damage + contact_dmg)
-            c1.tire_wear = min(0.99, c1.tire_wear + 0.008)
-            c2.tire_wear = min(0.99, c2.tire_wear + 0.008)
-
-            if speed_gap > 5.5:
-                c1.contact_cooldown = 6.0
-                c2.contact_cooldown = 6.0
-                c1.smoke = max(c1.smoke, 1.4)
-                c2.smoke = max(c2.smoke, 1.4)
-                c1.v = max(12.0, c1.v - 1.2)
-                c2.v = max(12.0, c2.v - 1.2)
-                c1.tire_wear = min(0.99, c1.tire_wear + 0.012)
-                c2.tire_wear = min(0.99, c2.tire_wear + 0.012)
-
-                side_car = c1 if c1.v > c2.v else c2
-                other_car = c2 if side_car is c1 else c1
-                side = "RIGHT" if side_car.d < other_car.d else "LEFT"
-                side_car.wing_damage = min(0.35, side_car.wing_damage + random.uniform(0.06, 0.12))
-                side_car.wing_damage_side = side
-                side_car.repair_cost_m += round(random.uniform(0.08, 0.18), 2)
-                if side_car.wing_damage >= 0.35 and not side_car.box_this_lap:
-                    side_car.box_this_lap = True
-
-                event_cb(
-                    "INCIDENT",
-                    f"WHEEL BANGING! Contact between #{c1.number} {c1.code} and #{c2.number} {c2.code} fighting through Turn {turn}!",
-                )
-                self.radio_dispatcher.trigger_contact(c1, c2, turn, event_cb, self.race_clock)
-                self.stewards_queue.append(
-                    {
-                        "timer": 7.0,
-                        "stage": "NOTED",
-                        "turn": turn,
-                        "culprit_id": c1.driver_id if c1.d < c2.d else c2.driver_id,
-                        "summary": f"{c1.code} & {c2.code} side-by-side",
-                        "reason": "Wheel-to-wheel contact",
-                        "verdict": random.choice(["NFA", "NFA", "5S"]),
-                    }
-                )
+            self._trigger_side_by_side_contact(c1, c2, turn, event_cb)
         else:
             # Longitudinal contact: trailing car into rear of car ahead
             # Physical longitudinal impulse

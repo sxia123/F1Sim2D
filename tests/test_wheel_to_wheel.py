@@ -62,6 +62,8 @@ class WheelToWheelTests(unittest.TestCase):
 
     def test_contact_does_not_cancel_planned_passing_lanes(self):
         race = self.race()
+        race.lights_out = True
+        race.flag_state = "GREEN"
         a, b = race.cars
         s = self.straight(race.track)
         self.place(race, a, s, -.1)
@@ -91,6 +93,8 @@ class WheelToWheelTests(unittest.TestCase):
 
     def test_car_cannot_steer_across_an_occupied_lane_at_the_timing_line(self):
         race = self.race()
+        race.lights_out = True
+        race.flag_state = "GREEN"
         a, b = race.cars
         self.place(race, a, race.track.length_m - 1, .3)
         self.place(race, b, 1, -.3)
@@ -118,6 +122,8 @@ class WheelToWheelTests(unittest.TestCase):
 
     def test_passing_lane_is_retained_if_timer_expires_while_alongside(self):
         race = self.race()
+        race.lights_out = True
+        race.flag_state = "GREEN"
         a, b = race.cars
         s = self.straight(race.track)
         self.place(race, a, s, -.5)
@@ -133,6 +139,8 @@ class WheelToWheelTests(unittest.TestCase):
 
     def test_queue_correction_uses_the_actual_substep_duration(self):
         race = self.race()
+        race.lights_out = True
+        race.flag_state = "GREEN"
         a, b = race.cars
         s = self.straight(race.track)
         self.place(race, a, s)
@@ -158,6 +166,58 @@ class WheelToWheelTests(unittest.TestCase):
                     expected_y = sample["y"] + sample["ny"] * lateral
                     self.assertLess(math.hypot(c.x - expected_x, c.y - expected_y), .015,
                                     (track_id, c.code, "contact correction would reset next tick"))
+
+
+    def test_side_by_side_battle_resolves_without_infinite_multicorner_stalemate(self):
+        """Side-by-side battle must decisively resolve within ~3.5 seconds rather than locking cars parallel forever."""
+        race = self.race()
+        race.lights_out = True
+        race.flag_state = "GREEN"
+        a, b = race.cars
+        s = self.straight(race.track)
+        self.place(race, a, s, -.5)
+        self.place(race, b, s + 1, .5)
+        a.maneuver_pass_timer = 2.0
+        a.maneuver_target_id = b.driver_id
+        race.flag_state = "GREEN"
+
+        with patch.object(race, "_check_solo_incidents"):
+            for _ in range(80):  # 80 * 0.05 = 4.0 seconds of racing
+                race._step_car(a, b, b, False, .05, ignore_event)
+                race._step_car(b, a, a, False, .05, ignore_event)
+
+        # After 4 seconds through corners, battle must have concluded
+        self.assertEqual(a.maneuver_pass_timer, 0.0)
+        self.assertIsNone(a.maneuver_target_id)
+
+    def test_wheel_to_wheel_contact_causes_damage_and_incidents(self):
+        """Wheel-banging contact in wheel-to-wheel racing applies bodywork damage, sparks, and stewards inquiry."""
+        race = self.race()
+        race.lights_out = True
+        race.flag_state = "GREEN"
+        a, b = race.cars
+        events = []
+        turn = 4
+
+        # Initial damage is 0
+        self.assertEqual(a.wing_damage, 0.0)
+        self.assertEqual(b.wing_damage, 0.0)
+
+        race._trigger_side_by_side_contact(a, b, turn, lambda k, msg: events.append((k, msg)))
+
+        # Both cars take realistic sidepod / front wing endplate damage
+        self.assertGreater(a.wing_damage, 0.0)
+        self.assertGreater(b.wing_damage, 0.0)
+        self.assertIn(a.wing_damage_side, ("LEFT", "RIGHT"))
+        self.assertIn(b.wing_damage_side, ("LEFT", "RIGHT"))
+        self.assertTrue(a.sparks)
+        self.assertTrue(b.sparks)
+        self.assertGreater(a.contact_cooldown, 0.0)
+        self.assertGreater(b.contact_cooldown, 0.0)
+
+        # Incident broadcast and stewards queue updated
+        self.assertTrue(any(ev[0] == "INCIDENT" and "WHEEL BANGING" in ev[1] for ev in events))
+        self.assertTrue(any(st["reason"] == "Wheel-to-wheel contact" for st in race.stewards_queue))
 
 
 if __name__ == "__main__":
