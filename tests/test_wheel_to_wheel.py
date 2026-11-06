@@ -219,6 +219,91 @@ class WheelToWheelTests(unittest.TestCase):
         self.assertTrue(any(ev[0] == "INCIDENT" and "WHEEL BANGING" in ev[1] for ev in events))
         self.assertTrue(any(st["reason"] == "Wheel-to-wheel contact" for st in race.stewards_queue))
 
+    def test_ai_declines_going_three_wide_when_two_cars_ahead_are_side_by_side(self):
+        """AI trailing a 2-wide battle stays tucked in rather than fanning out 3-wide on straights or corners."""
+        race = self.race("bahrain", count=3)
+        race.lights_out = True
+        race.flag_state = "GREEN"
+        race.race_clock = 90.0
+        c1, c2, c3 = race.cars
+        s = self.straight(race.track)
+        self.place(race, c1, s + 12.0, -0.52)
+        self.place(race, c2, s + 11.0, 0.52)
+        self.place(race, c3, s, 0.45)
+        c1.v = c2.v = 80.0
+        c1.free_air_target_v = c2.free_air_target_v = 88.0
+        c3.v = 84.0
+        c3.free_air_target_v = 94.0
+        c3.pace_mode = "PUSH"
+        race.standings = [c1, c2, c3]
+
+        self.assertTrue(race._is_zone_already_two_wide(c3, c2, lookahead_m=12.0))
+        race._plan_tow_pass(c3, c2, 11.0)
+        self.assertEqual(c3.maneuver_pass_timer, 0.0)
+        self.assertEqual(c3.target_d, c2.d)
+
+        # Also verify corner battle resolution refuses 3-wide lunges
+        corner_s = race.track.corners[0]["s_m"]
+        self.place(race, c1, corner_s + 8.5, -0.52)
+        self.place(race, c2, corner_s + 7.5, 0.52)
+        self.place(race, c3, corner_s, 0.40)
+        c1.v = c2.v = 36.0
+        c3.v = 38.0
+        race.standings = [c1, c2, c3]
+        race._resolve_battles_and_incidents(0.05, ignore_event)
+        self.assertEqual(c3.maneuver_pass_timer, 0.0)
+        self.assertAlmostEqual(c3.target_d, c2.d, places=4)
+
+    def test_trailing_car_brakes_for_same_lane_blocker_behind_two_wide_pair(self):
+        """A 3rd car behind a 2-wide battle must brake for the car in its own lane even if P(i-1) is in the other lane."""
+        race = self.race("italy", count=3)
+        race.lights_out = True
+        race.flag_state = "GREEN"
+        p1, p2, p3 = race.cars
+        braking_st = next(i for i, b in enumerate(race.is_braking) if b)
+        s_brake = braking_st * race.track.ds_m
+
+        # p1 is ahead in the RIGHT lane braking hard; p2 is directly ahead in standings in the LEFT lane still fast
+        self.place(race, p1, s_brake, 0.55)
+        self.place(race, p2, s_brake - 2.0, -0.60)
+        self.place(race, p3, s_brake - 22.0, 0.55)
+        p1.v = 30.0
+        p2.v = 76.0
+        p3.v = 78.0
+        p1.pos, p2.pos, p3.pos = 1, 2, 3
+        race.standings = [p1, p2, p3]
+
+        with patch.object(race, "_check_solo_incidents"):
+            race._step_car(p3, p2, p1, False, 0.05, ignore_event)
+
+        self.assertLess(p3.v, 78.0)
+        self.assertLess(p3.accel, -5.0)
+
+    def test_longitudinally_separated_pass_does_not_trigger_phantom_wheel_banging(self):
+        """Corner pass preparation from >1 car length back must never roll side-by-side wheel-banging damage."""
+        race = self.race("australia", count=2)
+        race.lights_out = True
+        race.flag_state = "GREEN"
+        race.race_clock = 120.0
+        defender, attacker = race.cars
+        corner_st = max(range(race.track.NUM_STATIONS), key=lambda i: race.track.stations[i]["curv"])
+        corner_s = corner_st * race.track.ds_m
+
+        self.place(race, defender, corner_s + 12.0, 0.10)
+        self.place(race, attacker, corner_s, -0.32)
+        attacker.maneuver = "DIVEBOMB"
+        attacker.maneuver_pass_timer = 3.0
+        attacker.maneuver_target_id = defender.driver_id
+        race.standings = [defender, attacker]
+        events = []
+
+        with patch("sim.physics.random.random", return_value=0.0):
+            race._resolve_battles_and_incidents(0.05, lambda k, m: events.append((k, m)))
+
+        self.assertEqual(attacker.wing_damage, 0.0)
+        self.assertEqual(defender.wing_damage, 0.0)
+        self.assertFalse(any(k == "INCIDENT" for k, _ in events))
+
 
 if __name__ == "__main__":
     unittest.main()

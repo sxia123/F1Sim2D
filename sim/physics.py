@@ -213,20 +213,57 @@ def enforce_2d_car_separation(
             blockers.sort(key=lambda x: x[0])
             nearest_ds, nearest_ahead = blockers[0]
 
-            if (c.lap > nearest_ahead.lap or getattr(nearest_ahead, "blue_flag", False)) and allow_passing:
+            is_lapped_pass = (c.lap > nearest_ahead.lap or getattr(nearest_ahead, "blue_flag", False))
+            if is_lapped_pass and allow_passing:
                 nearest_ahead.target_d = 0.82 * track.pit_side
 
+            # Detect whether two cars in the immediate proximity are already 2-wide so AI avoids 3-wide pileups
+            close_others = [
+                o for o in on_track
+                if o is not c and min((o.s - c.s) % L, (c.s - o.s) % L) < min_long_m * 2.40
+            ]
+            already_two_wide = False
+            for bi in range(len(close_others)):
+                b1 = close_others[bi]
+                lat1 = compute_lateral_screen_px(track, b1.d, b1.s)
+                for bj in range(bi + 1, len(close_others)):
+                    b2 = close_others[bj]
+                    if min((b1.s - b2.s) % L, (b2.s - b1.s) % L) < min_long_m * 1.15:
+                        lat2 = compute_lateral_screen_px(track, b2.d, b2.s)
+                        if abs(lat1 - lat2) >= CAR_WID_PX * 0.70:
+                            already_two_wide = True
+                            break
+                if already_two_wide:
+                    break
+
             is_team_yield = (c.team_id == nearest_ahead.team_id and getattr(nearest_ahead, "team_order", "") == "YIELD")
-            wants_pass = (
-                allow_passing
-                and not (c.team_id == nearest_ahead.team_id and c.team_order == "HOLD")
-                and (
-                    c.v > nearest_ahead.v + 0.35
-                    or c.maneuver_pass_timer > 0.0
-                    or c.battle_with == nearest_ahead.driver_id
-                    or is_team_yield
+            in_planned_pass = getattr(c, "maneuver_pass_timer", 0.0) > 0.0
+            if already_two_wide:
+                wants_pass = (
+                    allow_passing
+                    and not (c.team_id == nearest_ahead.team_id and c.team_order == "HOLD")
+                    and (in_planned_pass or is_team_yield or is_lapped_pass)
                 )
-            )
+                if not wants_pass and nearest_ds > min_long_m * 0.65:
+                    cur_target_px = compute_lateral_screen_px(track, c.target_d, c.s)
+                    if all(
+                        abs(cur_target_px - compute_lateral_screen_px(track, b.d, b.s)) >= CAR_WID_PX * 0.75
+                        for _, b in blockers
+                    ):
+                        # Tuck into slipstream behind nearest lane rather than fanning out 3-wide
+                        closest_b = min((b for _, b in blockers), key=lambda b: abs(b.d - c.d))
+                        c.target_d = closest_b.d
+            else:
+                wants_pass = (
+                    allow_passing
+                    and not (c.team_id == nearest_ahead.team_id and c.team_order == "HOLD")
+                    and (
+                        in_planned_pass
+                        or is_team_yield
+                        or is_lapped_pass
+                        or c.v > nearest_ahead.v + 6.0
+                    )
+                )
             if wants_pass:
                 cur_target_px = compute_lateral_screen_px(track, c.target_d,c.s)
                 target_blocked = any(
@@ -272,7 +309,6 @@ def enforce_2d_car_separation(
                     is_passing = (
                         c.maneuver_pass_timer > 0.0
                         or getattr(o, "maneuver_pass_timer", 0.0) > 0.0
-                        or c.maneuver_timer > 0.0
                         or is_team_swap
                     )
                     if (lat_sep >= req_lat or is_passing) and allow_passing:
@@ -284,7 +320,7 @@ def enforce_2d_car_separation(
                             else:
                                 c.target_d = max(-0.92, c.target_d - need_d * 0.40)
                                 o.target_d = min(0.92, o.target_d + need_d * 0.40)
-                        if lat_sep >= CAR_WID_PX - 0.05 or is_passing:
+                        if lat_sep >= CAR_WID_PX * 0.82 or (is_passing and ds_m < min_long_m * 0.50):
                             continue
 
                     deficit = min_long_m - ds_m
@@ -336,23 +372,26 @@ def enforce_2d_car_separation(
                 if sat is None:
                     continue
 
+                if arc_fwd < arc_bwd or (abs(arc_fwd - arc_bwd) < 0.05 and c1.total_dist >= c2.total_dist):
+                    ahead, behind = c1, c2
+                else:
+                    ahead, behind = c2, c1
+
                 pen_l1, pen_w1, pen_l2, pen_w2 = sat
                 min_pen_w = min(pen_w1, pen_w2)
                 min_pen_l = min(pen_l1, pen_l2)
                 is_lateral = (min_pen_w <= min_pen_l) or (abs(c1.d - c2.d) > 0.14)
+                closing_long_v = behind.v - ahead.v
+                lat_dir = 1.0 if c1.d < c2.d else -1.0
+                closing_lat_v = (getattr(c1, "lateral_velocity", 0.0) - getattr(c2, "lateral_velocity", 0.0)) * lat_dir
                 is_contact = (
-                    (is_lateral and min_pen_w > 0.65)
-                    or (abs(c1.v - c2.v) > 4.5 and min_pen_l > 1.8)
+                    (is_lateral and min_pen_w > 1.35 and (closing_lat_v > 1.15 or min_pen_w > 2.15))
+                    or ((not is_lateral) and closing_long_v > 5.5 and min_pen_l > 2.10)
                 )
                 if pass_idx == 0 and is_contact and collision_cb is not None and not c1.in_pits and not c2.in_pits and not c1.dnf and not c2.dnf:
                     collision_cb(c1, c2, sat)
 
                 any_overlap = True
-
-                if arc_fwd < arc_bwd or (abs(arc_fwd - arc_bwd) < 0.05 and c1.total_dist >= c2.total_dist):
-                    ahead, behind = c1, c2
-                else:
-                    ahead, behind = c2, c1
 
                 # Case A: Pit entry/exit merge alongside an on-track car -> steer on-track car clear of pit blend line
                 if ahead.in_pits != behind.in_pits and not c1_off and not c2_off:
@@ -2144,43 +2183,70 @@ class RaceSession:
                 target_v = min(target_v, car_ahead.v + (gap_ahead_s - 0.65) * 14.0)
             else:
                 target_v = min(target_v, 66.0)
-        elif self.flag_state == "GREEN" and car_ahead and not car_ahead.in_pits:
+        elif self.flag_state == "GREEN":
             half_u = self.track.width_px_at(car.s) * 0.39
             min_d_w = CAR_WID_PX / half_u
-            lane_offset = abs(car.d - car_ahead.d)
-            # Continuous lateral overlap factor tapering smoothly (zero discrete flicker)
-            lateral_overlap = max(0.0, min(1.0, (min_d_w * 1.20 - lane_offset) / max(0.01, min_d_w * 0.45)))
-            dist_ahead_m = (car_ahead.s - car.s) % self.track.length_m
             min_long_car = CAR_LEN_PX / self.track.px_per_m
-            is_alongside = dist_ahead_m < min_long_car * 0.95 and lane_offset >= min_d_w * 0.75
-            in_active_pass = (
-                (car.maneuver_pass_timer > 0.0 and car.maneuver_target_id == car_ahead.driver_id)
-                or (car_ahead.maneuver_pass_timer > 0.0 and car_ahead.maneuver_target_id == car.driver_id)
-                or car.battle_with == car_ahead.driver_id
-                or is_alongside
-                or (car.team_id == car_ahead.team_id and getattr(car_ahead, "team_order", "") == "YIELD")
-            )
-            if not in_active_pass and dist_ahead_m < 110.0 and lateral_overlap > 0.001:
-                st_ahead = self.track.sample(car_ahead.s)["station"]
+            L_trk = self.track.length_m
+            base_free_v = target_v
+            nearest_obs = None
+            nearest_dist_m = 999.0
+            nearest_overlap = 0.0
+            for obs in self.cars:
+                if obs is car or obs.dnf or obs.in_pits or obs.spin_timer > 0.0:
+                    continue
+                dist_ahead_m = (obs.s - car.s) % L_trk
+                if dist_ahead_m >= 95.0 or dist_ahead_m <= 0.01:
+                    continue
+                if dist_ahead_m < min_long_car * 0.90 and car.lap == obs.lap and car.total_dist > obs.total_dist:
+                    continue
+                lane_offset = abs(car.d - obs.d)
+                # Continuous lateral overlap factor tapering smoothly (zero discrete flicker)
+                lateral_overlap = max(0.0, min(1.0, (min_d_w * 1.15 - lane_offset) / max(0.01, min_d_w * 0.42)))
+                if lateral_overlap <= 0.02:
+                    continue
+                is_alongside = dist_ahead_m < min_long_car * 0.95 and lane_offset >= min_d_w * 0.75
+                in_active_pass = (
+                    (car.maneuver_pass_timer > 0.0 and car.maneuver_target_id == obs.driver_id)
+                    or (obs.maneuver_pass_timer > 0.0 and obs.maneuver_target_id == car.driver_id)
+                    or is_alongside
+                    or (car.team_id == obs.team_id and getattr(obs, "team_order", "") == "YIELD")
+                )
+                if in_active_pass:
+                    # During pullout, avoid driving straight into the rear wing before clearing laterally
+                    if lane_offset < min_d_w * 0.65 and dist_ahead_m < min_long_car * 1.02 and car.v > obs.v:
+                        target_v = min(target_v, max(4.0, obs.v))
+                    continue
+                if dist_ahead_m < nearest_dist_m:
+                    nearest_dist_m = dist_ahead_m
+                    nearest_obs = obs
+                    nearest_overlap = lateral_overlap
+
+            if nearest_obs is not None:
+                obs = nearest_obs
+                dist_ahead_m = nearest_dist_m
+                lateral_overlap = nearest_overlap
+                st_ahead = self.track.sample(obs.s)["station"]
                 is_ahead_braking = self.is_braking[st_ahead]
-                brake_dist_req = max(0.0, car.v * car.v - car_ahead.v * car_ahead.v) / 85.0
-                if is_ahead_braking and dist_ahead_m < brake_dist_req + 28.0:
-                    margin = (brake_dist_req + 28.0) - dist_ahead_m
-                    brake_blend = min(1.0, margin / 16.0) * lateral_overlap
-                    approach_v = (1.0 - brake_blend) * target_v + brake_blend * car_ahead.v
+                brake_dist_req = max(0.0, car.v * car.v - obs.v * obs.v) / 84.0
+                obs_gap_s = dist_ahead_m / max(car.v, 25.0)
+                if is_ahead_braking and dist_ahead_m < brake_dist_req + 27.0:
+                    margin = (brake_dist_req + 27.0) - dist_ahead_m
+                    brake_blend = min(1.0, margin / 15.0) * lateral_overlap
+                    approach_v = (1.0 - brake_blend) * base_free_v + brake_blend * obs.v
                     target_v = min(target_v, approach_v)
-                elif gap_ahead_s < 0.92:
-                    gap_blend = max(0.0, min(1.0, (0.92 - gap_ahead_s) / 0.60))
+                elif obs_gap_s < 0.85:
+                    gap_blend = max(0.0, min(1.0, (0.85 - obs_gap_s) / 0.55))
                     blend = gap_blend * lateral_overlap
-                    if car.tow_target_id == car_ahead.driver_id:
+                    if car.tow_target_id == obs.driver_id or car.battle_with == obs.driver_id:
                         # Gather a run without sitting at the normal cruising
                         # headway forever. Braking anticipation above still applies.
-                        desired_gap = max(0.12, (min_long_car + 3.0) / max(car.v, 25.0))
+                        desired_gap = max(0.12, (min_long_car + 2.6) / max(car.v, 25.0))
                     else:
-                        desired_gap = 0.35
-                    follow_v = car_ahead.v + (gap_ahead_s - desired_gap) * 12.0
+                        desired_gap = 0.30
+                    follow_v = obs.v + (obs_gap_s - desired_gap) * 12.0
                     target_follow = max(4.0, follow_v)
-                    target_v = min(target_v, (1.0 - blend) * target_v + blend * target_follow)
+                    target_v = min(target_v, (1.0 - blend) * base_free_v + blend * target_follow)
 
         # Blue Flag AI: lapped cars yield off-line and lift throttle
         car.blue_flag_timer = max(0.0, car.blue_flag_timer - dt)
@@ -2732,9 +2798,9 @@ class RaceSession:
                     )
 
         slick_in_rain = self.wetness > 0.25 and car.compound in ("SOFT", "MEDIUM", "HARD")
-        # Base crash risk tuned to authentic F1 low attrition (0.000045)
+        # Base crash risk tuned to authentic F1 low attrition (0.000026)
         risk = (
-            0.000045
+            0.000026
             * push_mult
             * (1.20 - sk["consistency"] / 115.0)
             * (2.8 if slick_in_rain else (1.30 if self.wetness > 0.35 else 1.0))
@@ -3035,6 +3101,41 @@ class RaceSession:
                 options.append((cost, lane))
         return min(options)[1] if options else None
 
+    def _is_zone_already_two_wide(self, attacker: CarState, defender: CarState, lookahead_m: float = 18.0) -> bool:
+        """Return True if two cars in the immediate battle zone are already side-by-side (preventing 3-wide pileups)."""
+        track = self.track
+        L = track.length_m
+        car_len = CAR_LEN_PX / track.px_per_m
+        nearby: list[tuple[float, CarState, list[float]]] = []
+        for o in self.cars:
+            if o is attacker or o.dnf or o.in_pits or o.finished or o.spin_timer > 0.0:
+                continue
+            rel_s = (o.s - attacker.s + L * 0.5) % L - L * 0.5
+            if -car_len * 0.95 <= rel_s <= lookahead_m + car_len * 1.15:
+                lats = [compute_lateral_screen_px(track, o.d, o.s)]
+                if o.maneuver_pass_timer > 0.0:
+                    lats.append(compute_lateral_screen_px(track, o.target_d, o.s))
+                nearby.append((rel_s, o, lats))
+
+        for idx_a in range(len(nearby)):
+            s1, _, lats1 = nearby[idx_a]
+            for idx_b in range(idx_a + 1, len(nearby)):
+                s2, _, lats2 = nearby[idx_b]
+                if abs(s1 - s2) < car_len * 1.22:
+                    if any(abs(l1 - l2) >= CAR_WID_PX * 0.70 for l1 in lats1 for l2 in lats2):
+                        return True
+
+        lat_atk = compute_lateral_screen_px(track, attacker.d, attacker.s)
+        rel_def = (defender.s - attacker.s + L * 0.5) % L - L * 0.5
+        for rel_o, o, lats_o in nearby:
+            if o is defender:
+                continue
+            if abs(rel_o) < car_len * 1.05 and abs(rel_def - rel_o) < car_len * 1.22:
+                if any(abs(lat_atk - lo) >= CAR_WID_PX * 0.70 for lo in lats_o):
+                    return True
+
+        return False
+
     def _plan_tow_pass(self, attacker: CarState, defender: CarState, gap: float) -> None:
         """Use a tow to build a run, then let real pace complete a clear-lane pass."""
         attacker.maneuver = "SLIPSTREAM"
@@ -3061,6 +3162,17 @@ class RaceSession:
         if gap > pullout_gap:
             attacker.tow_target_id = defender.driver_id
             return
+
+        if self._is_zone_already_two_wide(attacker, defender, lookahead_m=gap):
+            allow_rare_three_wide = (
+                self.track.track_width_m >= 14.8
+                and attacker.pace_mode == "ATTACK"
+                and run >= 6.0
+                and attacker.skills["racecraft"] >= 92
+                and random.random() < 0.002
+            )
+            if not allow_rare_three_wide:
+                return
 
         attacker.target_d = lane
         attacker.maneuver_target_id = defender.driver_id
@@ -3127,36 +3239,39 @@ class RaceSession:
                             tgt.battle_with = c.driver_id
                             continue
                         lat_sep = abs(compute_lateral_screen_px(self.track, c.d,c.s) - compute_lateral_screen_px(self.track, tgt.d,tgt.s))
+                        long_gap_m = abs(c.total_dist - tgt.total_dist)
                         smp_c = self.track.sample(c.s)
                         in_corner = smp_c["curv"] > 0.005
-                        if in_corner:
+                        if in_corner and long_gap_m < min_long_m * 0.95:
                             # Running side-by-side through a corner forces cars off the single optimal line, scrubbing speed
                             c.v = max(4.0, c.v - 0.7 * dt)
                             tgt.v = max(4.0, tgt.v - 0.7 * dt)
 
-                        # Roll for wheel-banging contact when fighting tight through corners
+                        # Roll for wheel-banging contact only when genuinely alongside and tight through corners
                         if (
-                            in_corner
-                            and lat_sep < CAR_WID_PX * 1.05
+                            smp_c["curv"] > 0.0095
+                            and long_gap_m < min_long_m * 0.80
+                            and CAR_WID_PX * 0.80 <= lat_sep <= CAR_WID_PX * 1.22
                             and c.contact_cooldown <= 0.0
                             and tgt.contact_cooldown <= 0.0
                             and c.lap > 1
                         ):
                             c_cons = c.skills.get("consistency", 90)
                             tgt_cons = tgt.skills.get("consistency", 90)
-                            push_mult = 1.8 if (c.pace_mode in ("PUSH", "ATTACK") or tgt.pace_mode in ("PUSH", "ATTACK")) else 1.0
-                            contact_risk = 0.015 * push_mult * (1.22 - (c_cons + tgt_cons) / 230.0) * dt * 20.0
+                            push_mult = 1.6 if (c.pace_mode in ("PUSH", "ATTACK") or tgt.pace_mode in ("PUSH", "ATTACK")) else 1.0
+                            contact_risk = 0.012 * push_mult * max(0.18, 1.20 - (c_cons + tgt_cons) / 230.0) * dt
                             if random.random() < contact_risk:
                                 turn = self.track.nearest_corner(c.s)
                                 self._trigger_side_by_side_contact(c, tgt, turn, event_cb)
 
-                        if lat_sep >= CAR_WID_PX * 0.86:
+                        if lat_sep >= CAR_WID_PX * 0.76:
                             st_c = smp_c["station"]
                             v_env_c = self.v_env[st_c]
-                            if c.v < v_env_c and c.v < tgt.v + 1.2:
-                                c.v = min(v_env_c, c.v + 3.2 * dt)
-                            if c.total_dist > tgt.total_dist and tgt.v > c.v:
-                                tgt.v = max(4.0, tgt.v - 2.4 * dt)
+                            v_cap = min(v_env_c * 1.055, tgt.v + 3.4)
+                            if c.v < v_cap:
+                                c.v = min(v_cap, c.v + 5.0 * dt)
+                            if long_gap_m < min_long_m * 1.35 and tgt.v > c.v - 1.2:
+                                tgt.v = max(4.0, tgt.v - 2.6 * dt)
                             # Defending car leaves generous racing room on opposite flank
                             tgt_room_side = 1.0 if c.d < tgt.d else -1.0
                             tgt.target_d = max(-0.84, min(0.84, c.target_d + tgt_room_side * max(0.82, min_d_sep * 1.30)))
@@ -3218,6 +3333,34 @@ class RaceSession:
                 self._plan_tow_pass(attacker, defender, actual_gap)
                 continue
 
+            # Strongly discourage 3-wide corner lunges when cars ahead are already side-by-side or mid-pass
+            def_tgt = self.cars_by_id.get(defender.maneuver_target_id) if defender.maneuver_pass_timer > 0.0 and defender.maneuver_target_id else None
+            defender_in_close_pass = (
+                def_tgt is not None
+                and not def_tgt.dnf
+                and not def_tgt.in_pits
+                and abs(def_tgt.total_dist - defender.total_dist) < min_long_m * 1.85
+            )
+            defender_busy_in_pass = (
+                defender_in_close_pass
+                or attacker.maneuver_pass_timer > 0.0
+                or any(
+                    o is not attacker and o.maneuver_pass_timer > 0.0 and o.maneuver_target_id == defender.driver_id
+                    for o in active
+                )
+            )
+            if defender_busy_in_pass or self._is_zone_already_two_wide(
+                attacker, defender, lookahead_m=max(actual_gap, min_long_m * 1.5)
+            ):
+                if attacker.maneuver_pass_timer <= 0.0:
+                    attacker.target_d = defender.d
+                    attacker.attacking_side = 0.0
+                continue
+
+            max_attempt_gap = min_long_m * (2.85 if (smp.get("straight_mode", False) or self.is_braking[st]) else 2.05)
+            if actual_gap > max(max_attempt_gap * 1.45, min_long_m * 3.4):
+                continue
+
             attacker.battle_with = defender.driver_id
             defender.battle_with = attacker.driver_id
 
@@ -3241,21 +3384,23 @@ class RaceSession:
                     # Defender stays firmly locked on its committed defending line throughout the battle.
                     defender.target_d = defender.defending_side
 
-            # Ensure attacker's passing lane always clears defender laterally by >= min_d_sep * 1.30
+            # Subtle mirror-filling peek while setting up an imminent attack (keeps full braking protection until committed)
             if attacker.maneuver_timer <= 0.0 and attacker.maneuver_pass_timer <= 0.0:
-                if attacker.attacking_side == 0.0:
-                    attacker.attacking_side = -1.0 if defender.target_d >= 0.0 else 1.0
-                side = attacker.attacking_side
-                if defender.target_d + side * min_d_sep * 1.30 > 0.86:
-                    side = -1.0
-                    attacker.attacking_side = -1.0
-                elif defender.target_d + side * min_d_sep * 1.30 < -0.86:
-                    side = 1.0
-                    attacker.attacking_side = 1.0
-                attacker.target_d = max(-0.86, min(0.86, defender.target_d + side * max(0.85, min_d_sep * 1.30)))
+                if 0.0 <= actual_gap <= max_attempt_gap and attacker.v >= defender.v - 1.5:
+                    if attacker.attacking_side == 0.0:
+                        attacker.attacking_side = -1.0 if defender.target_d >= 0.0 else 1.0
+                    side = attacker.attacking_side
+                    if defender.target_d + side * min_d_sep * 1.30 > 0.86:
+                        side = -1.0
+                        attacker.attacking_side = -1.0
+                    elif defender.target_d + side * min_d_sep * 1.30 < -0.86:
+                        side = 1.0
+                        attacker.attacking_side = 1.0
+                    attacker.target_d = max(-0.86, min(0.86, defender.target_d + side * min_d_sep * 0.45))
+                else:
+                    attacker.target_d = defender.target_d
 
             # Aggressive slingshot attack launch window: up to 2.85x car lengths on straights / braking zones
-            max_attempt_gap = min_long_m * (2.85 if (smp.get("straight_mode", False) or self.is_braking[st]) else 1.85)
             if (
                 0.0 <= actual_gap <= max_attempt_gap
                 and attacker.maneuver_attempt_cooldown <= 0.0
@@ -3281,7 +3426,7 @@ class RaceSession:
 
                 if random.random() < p_success:
                     # Initiate clean side-by-side overtaking pass!
-                    attacker.maneuver_pass_timer = 2.6
+                    attacker.maneuver_pass_timer = 4.0
                     attacker.maneuver_target_id = defender.driver_id
                     if attacker.overtake_active:
                         # Slingshot punch: attacker surges past defender with smooth envelope-bounded velocity
@@ -3323,7 +3468,7 @@ class RaceSession:
                         if random.random() < lockup_prob:
                             attacker.smoke = 1.9
                             attacker.tire_wear = min(0.99, attacker.tire_wear + 0.012)
-                            inc_chance = 0.004 * max(0.2, 1.15 - attacker.skills["consistency"] / 100.0)
+                            inc_chance = 0.0016 * max(0.2, 1.15 - attacker.skills["consistency"] / 100.0)
                             if attacker.contact_cooldown <= 0.0 and defender.contact_cooldown <= 0.0 and random.random() < inc_chance:
                                 self._handle_collision(attacker, defender, smp["sector"], event_cb)
                                 continue
@@ -3346,7 +3491,7 @@ class RaceSession:
         roll = random.random()
 
         is_lap1 = attacker.lap == 1
-        if roll < 0.62 or is_lap1:
+        if roll < 0.78 or is_lap1:
             victim.v = max(8.0, victim.v - 2.2)
             deflect_dir = 1.0 if victim.d >= culprit.d else -1.0
             victim.target_d = max(-1.05, min(1.05, victim.d + deflect_dir * 0.22))
@@ -3387,7 +3532,7 @@ class RaceSession:
                     "verdict": random.choice(["NFA", "5S", "5S"]),
                 }
             )
-        elif roll < 0.985:
+        elif roll < 0.988:
             attacker.wing_damage = min(0.85, attacker.wing_damage + random.uniform(0.24, 0.45))
             attacker.wing_damage_side = "RIGHT" if attacker.d > defender.d else "LEFT"
             attacker.repair_cost_m += 0.45
@@ -3480,8 +3625,8 @@ class RaceSession:
         if c1.contact_cooldown > 0.0 or c2.contact_cooldown > 0.0:
             return
 
-        c1.contact_cooldown = 5.0
-        c2.contact_cooldown = 5.0
+        c1.contact_cooldown = 9.0
+        c2.contact_cooldown = 9.0
         c1.sparks = True
         c2.sparks = True
         c1.smoke = max(c1.smoke, 1.4)
@@ -3494,12 +3639,12 @@ class RaceSession:
         c2.target_d = max(-1.05, min(1.05, c2.d - side_norm * 0.18))
 
         # Speed scrub from physical tire/bodywork collision
-        c1.v = max(8.0, c1.v - random.uniform(1.0, 2.2))
-        c2.v = max(8.0, c2.v - random.uniform(1.0, 2.2))
+        c1.v = max(8.0, c1.v - random.uniform(0.8, 1.8))
+        c2.v = max(8.0, c2.v - random.uniform(0.8, 1.8))
 
         # Sidepod and front wing endplate damage
-        dmg1 = random.uniform(0.04, 0.12)
-        dmg2 = random.uniform(0.04, 0.12)
+        dmg1 = random.uniform(0.025, 0.085)
+        dmg2 = random.uniform(0.025, 0.085)
         c1.wing_damage = min(0.85, c1.wing_damage + dmg1)
         c2.wing_damage = min(0.85, c2.wing_damage + dmg2)
         c1.wing_damage_side = "RIGHT" if c1.d < c2.d else "LEFT"
@@ -3508,14 +3653,14 @@ class RaceSession:
         c2.repair_cost_m += round(dmg2 * 0.75, 2)
 
         # Tire scrub and thermal spike
-        c1.tire_wear = min(0.99, c1.tire_wear + 0.012)
-        c2.tire_wear = min(0.99, c2.tire_wear + 0.012)
-        c1.tire_temp = min(140.0, c1.tire_temp + random.uniform(5.0, 10.0))
-        c2.tire_temp = min(140.0, c2.tire_temp + random.uniform(5.0, 10.0))
+        c1.tire_wear = min(0.99, c1.tire_wear + 0.010)
+        c2.tire_wear = min(0.99, c2.tire_wear + 0.010)
+        c1.tire_temp = min(140.0, c1.tire_temp + random.uniform(4.0, 8.0))
+        c2.tire_temp = min(140.0, c2.tire_temp + random.uniform(4.0, 8.0))
 
-        if c1.wing_damage >= 0.35 and not c1.box_this_lap:
+        if c1.wing_damage >= 0.38 and not c1.box_this_lap:
             c1.box_this_lap = True
-        if c2.wing_damage >= 0.35 and not c2.box_this_lap:
+        if c2.wing_damage >= 0.38 and not c2.box_this_lap:
             c2.box_this_lap = True
 
         event_cb(
@@ -3531,7 +3676,7 @@ class RaceSession:
                 "culprit_id": c1.driver_id if c1.d < c2.d else c2.driver_id,
                 "summary": f"{c1.code} & {c2.code} side-by-side",
                 "reason": "Wheel-to-wheel contact",
-                "verdict": random.choice(["NFA", "NFA", "5S"]),
+                "verdict": random.choice(["NFA", "NFA", "NFA", "5S"]),
             }
         )
 
@@ -3568,40 +3713,40 @@ class RaceSession:
             self._trigger_side_by_side_contact(c1, c2, turn, event_cb)
         else:
             # Longitudinal contact: trailing car into rear of car ahead
+            c1.contact_cooldown = 8.0
+            c2.contact_cooldown = 8.0
             # Physical longitudinal impulse
             behind.v = max(8.0, ahead.v - 1.4)
             ahead.v = min(ahead.v + 0.8, 95.0)
             behind.sparks = True
             ahead.sparks = True
 
-            # Authentic damage: trailing car front wing takes real damage on closing contact (> 2.2 m/s / 8 km/h)
-            rear_dmg = min(0.35, max(0.08, delta_v * 0.038))
+            # Authentic damage: trailing car front wing takes real damage on closing contact
+            rear_dmg = min(0.30, max(0.06, delta_v * 0.032))
             behind.wing_damage = min(0.85, behind.wing_damage + rear_dmg)
             behind.wing_damage_side = "RIGHT" if behind.d > ahead.d else "LEFT"
             behind.repair_cost_m += round(rear_dmg * 0.65, 2)
             ahead.tire_wear = min(0.99, ahead.tire_wear + 0.012)
-            if behind.wing_damage >= 0.35 and not behind.box_this_lap:
+            if behind.wing_damage >= 0.38 and not behind.box_this_lap:
                 behind.box_this_lap = True
 
-            if delta_v > 6.0:
-                c1.contact_cooldown = 6.0
-                c2.contact_cooldown = 6.0
+            if delta_v > 6.8:
                 behind.smoke = max(behind.smoke, 1.5)
 
-                wing_add = random.uniform(0.18, 0.36)
+                wing_add = random.uniform(0.14, 0.28)
                 behind.wing_damage = min(0.85, behind.wing_damage + wing_add)
                 if behind.wing_damage_side == "NONE":
                     behind.wing_damage_side = "RIGHT" if behind.d > ahead.d else ("LEFT" if behind.d < ahead.d else "BOTH")
                 elif behind.wing_damage_side != "BOTH" and random.random() < 0.3:
                     behind.wing_damage_side = "BOTH"
 
-                behind.repair_cost_m += round(random.uniform(0.20, 0.45), 2)
-                behind.tire_wear = min(0.99, behind.tire_wear + 0.020)
-                ahead.tire_wear = min(0.99, ahead.tire_wear + 0.015)
-                if behind.wing_damage >= 0.35 and not behind.box_this_lap:
+                behind.repair_cost_m += round(random.uniform(0.18, 0.38), 2)
+                behind.tire_wear = min(0.99, behind.tire_wear + 0.018)
+                ahead.tire_wear = min(0.99, ahead.tire_wear + 0.012)
+                if behind.wing_damage >= 0.38 and not behind.box_this_lap:
                     behind.box_this_lap = True
 
-                if delta_v > 8.5 and random.random() < 0.40:
+                if delta_v > 9.5 and random.random() < 0.22:
                     ahead.spin_timer = random.uniform(2.8, 4.2)
                     ahead.spin_omega = random.choice([-5.8, 5.8]) * random.uniform(0.85, 1.25)
                     ahead.spin_lateral_dir = 1.0 if ahead.d >= 0.0 else -1.0
