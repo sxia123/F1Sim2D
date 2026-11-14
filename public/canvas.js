@@ -60,6 +60,24 @@ function lerpAngle(a, b, t) {
   return a + diff * t;
 }
 
+function unwrapAngleNear(angle, ref) {
+  let diff = (angle - ref) % (Math.PI * 2);
+  if (diff > Math.PI) diff -= Math.PI * 2;
+  if (diff < -Math.PI) diff += Math.PI * 2;
+  return ref + diff;
+}
+
+function catmullRomValue(v0, v1, v2, v3, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return 0.5 * (
+    (2 * v1)
+    + (-v0 + v2) * t
+    + (2 * v0 - 5 * v1 + 4 * v2 - v3) * t2
+    + (-v0 + 3 * v1 - 3 * v2 + v3) * t3
+  );
+}
+
 export class CircuitRenderer {
   constructor(canvas, onSelectDriver) {
     this.canvas = canvas;
@@ -424,12 +442,28 @@ export class CircuitRenderer {
             (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3
           );
 
-          // Smoothstep angular lerp for C1 rotational continuity
-          const smoothT = t * t * (3 - 2 * t);
-          st.ch = lerpAngle(s1.h, s2.h, smoothT);
-          const s1Steer = s1.steer !== undefined ? s1.steer : (st.data?.steer || 0.0);
-          const s2Steer = s2.steer !== undefined ? s2.steer : (st.data?.steer || 0.0);
-          st.steer = s1Steer + (s2Steer - s1Steer) * smoothT;
+          // Unwrapped cubic Catmull-Rom angular & steering interpolation for C1 continuity
+          const crIdx = buf.indexOf(s1);
+          const cr0 = buf[Math.max(0, crIdx - 1)];
+          const cr3 = buf[Math.min(buf.length - 1, crIdx + 2)];
+          const h1 = s1.h;
+          const h0 = unwrapAngleNear(cr0.h, h1);
+          const h2 = unwrapAngleNear(s2.h, h1);
+          const h3 = unwrapAngleNear(cr3.h, h2);
+          const jumpH = Math.abs(h1 - h0) > 0.45 || Math.abs(h2 - h1) > 0.45 || Math.abs(h3 - h2) > 0.45;
+          st.ch = jumpH
+            ? lerpAngle(s1.h, s2.h, t)
+            : unwrapAngleNear(catmullRomValue(h0, h1, h2, h3, t), 0);
+
+          const fallbackSteer = st.data?.steer || 0.0;
+          const st0 = cr0.steer !== undefined ? cr0.steer : fallbackSteer;
+          const st1 = s1.steer !== undefined ? s1.steer : fallbackSteer;
+          const st2 = s2.steer !== undefined ? s2.steer : fallbackSteer;
+          const st3 = cr3.steer !== undefined ? cr3.steer : fallbackSteer;
+          const jumpSteer = Math.abs(st1 - st0) > 0.45 || Math.abs(st2 - st1) > 0.45 || Math.abs(st3 - st2) > 0.45;
+          st.steer = jumpSteer
+            ? st1 + (st2 - st1) * t
+            : Math.max(-0.45, Math.min(0.45, catmullRomValue(st0, st1, st2, st3, t)));
         } else if (this.renderTick < buf[0].tick) {
           st.cx = buf[0].x;
           st.cy = buf[0].y;
@@ -445,8 +479,13 @@ export class CircuitRenderer {
           const extraTicks = Math.min(3.0, this.renderTick - last.tick);
           st.cx = last.x + vx * extraTicks;
           st.cy = last.y + vy * extraTicks;
-          st.ch = last.h;
-          st.steer = last.steer || 0.0;
+          const dhDiff = unwrapAngleNear(last.h, prev.h) - prev.h;
+          const dhPerTick = Math.max(-0.35, Math.min(0.35, dhDiff / dtTicks));
+          st.ch = unwrapAngleNear(last.h + dhPerTick * extraTicks, 0);
+          const prevSteer = prev.steer || 0.0;
+          const lastSteer = last.steer || 0.0;
+          const dsPerTick = Math.max(-0.2, Math.min(0.2, (lastSteer - prevSteer) / dtTicks));
+          st.steer = Math.max(-0.45, Math.min(0.45, lastSteer + dsPerTick * extraTicks));
         }
       } else {
         st.cx = buf[0].x;

@@ -134,6 +134,92 @@ def _update_pit_xy(track: CompiledTrack, car: "CarState", dt: float = 0.05, tick
         car._has_initial_heading = True
 
 
+def _apply_chassis_dynamics(
+    car: "CarState",
+    smp: dict,
+    dt: float,
+    tire_grip: float,
+    cornering_stiffness: float,
+    max_slip: float = 0.075,
+    wing_steer_auth: float = 1.0,
+) -> None:
+    """Update temporally smoothed lateral G, body slip angle, and front steer angle."""
+    curv = smp["curv"]
+    inside_sign = smp.get("inside_sign", 1.0)
+    raw_g_lat = (curv * (car.v * car.v) / 9.81) * inside_sign
+    target_g_lat = max(-6.5, min(6.5, raw_g_lat))
+
+    g_alpha = min(1.0, dt * 12.0)
+    prev_g = getattr(car, "g_lat", 0.0)
+    car.g_lat = round(prev_g + (target_g_lat - prev_g) * g_alpha, 3)
+
+    if car.v > 4.0 and abs(curv) > 1e-4:
+        stiffness_norm = cornering_stiffness / 1000.0 if cornering_stiffness > 10.0 else cornering_stiffness
+        slip_coeff = 0.011 / max(0.35, tire_grip * stiffness_norm)
+        target_slip = max(-max_slip, min(max_slip, target_g_lat * slip_coeff))
+    else:
+        target_slip = 0.0
+
+    slip_alpha = min(1.0, dt * 11.0)
+    prev_slip = getattr(car, "body_slip_angle", 0.0)
+    car.body_slip_angle = round(prev_slip + (target_slip - prev_slip) * slip_alpha, 4)
+
+    geom_steer = curv * inside_sign * 4.14
+    lat_steer = math.atan2(car.lateral_velocity, max(12.0, car.v)) * 0.85
+    raw_steer = (geom_steer + lat_steer + target_slip * 0.35) * wing_steer_auth
+    target_steer = max(-0.42, min(0.42, raw_steer))
+
+    steer_alpha = min(1.0, dt * 13.5)
+    prev_steer = getattr(car, "steer_angle", 0.0)
+    car.steer_angle = round(prev_steer + (target_steer - prev_steer) * steer_alpha, 4)
+
+
+def _update_car_heading(
+    car: "CarState",
+    smp: dict,
+    cur_dt: float,
+    curr_tick: int,
+    understeer_mod: float = 1.0,
+) -> None:
+    """Align car heading smoothly along its smoothed velocity vector and yaw slip."""
+    heading_stepped = curr_tick > 0 and (getattr(car, "_heading_tick", -1) == curr_tick)
+    if heading_stepped:
+        return
+    if curr_tick > 0:
+        car._heading_tick = curr_tick
+
+    has_init = getattr(car, "_has_initial_heading", False)
+    if not has_init:
+        v_lateral = car.lateral_velocity
+        car._smooth_lat_v = car.lateral_velocity
+    else:
+        v_lateral = getattr(car, "_smooth_lat_v", car.lateral_velocity)
+
+    if car.v <= 0.5:
+        target_heading = math.atan2(smp["ty"], smp["tx"])
+    else:
+        vx = smp["tx"] * car.v + smp["nx"] * v_lateral
+        vy = smp["ty"] * car.v + smp["ny"] * v_lateral
+        vel_heading = math.atan2(vy, vx)
+        yaw_offset = (
+            getattr(car, "body_slip_angle", 0.0) * 0.50
+            + getattr(car, "steer_angle", 0.0) * 0.10
+        ) * understeer_mod
+        target_heading = (vel_heading + yaw_offset + math.pi) % (2.0 * math.pi) - math.pi
+
+    prev_h = getattr(car, "heading", None)
+    if prev_h is not None and has_init:
+        dh_raw = (target_heading - prev_h + math.pi) % (2.0 * math.pi) - math.pi
+        track_alpha = min(1.0, cur_dt * 15.5)
+        dh = dh_raw * track_alpha
+        max_dh = max(5.2, abs(car.v * smp["curv"]) * 2.8) * cur_dt
+        dh_clamped = max(-max_dh, min(max_dh, dh))
+        car.heading = round((prev_h + dh_clamped + math.pi) % (2.0 * math.pi) - math.pi, 4)
+    else:
+        car.heading = round(target_heading, 4)
+        car._has_initial_heading = True
+
+
 def _pit_exit_blend_target(
     track: CompiledTrack,
     car: "CarState",
@@ -343,7 +429,19 @@ def enforce_2d_car_separation(
                     and not (c.team_id == nearest_ahead.team_id and c.team_order == "HOLD")
                     and (in_planned_pass or is_team_yield or is_lapped_pass)
                 )
-                if not wants_pass and nearest_ds > min_long_m * 0.65:
+                side_alongside = any(
+                    min((o.s - c.s) % L, (c.s - o.s) % L) < min_long_m * 1.10
+                    for o in close_others
+                )
+                if (
+                    not wants_pass
+                    and nearest_ds > min_long_m * 0.65
+                    and c.maneuver_timer <= 0.0
+                    and c.maneuver_pass_timer <= 0.0
+                    and getattr(c, "_sep_lane_timer", 0.0) <= 0.0
+                    and not side_alongside
+                    and not (in_planned_pass or is_team_yield or is_lapped_pass)
+                ):
                     cur_target_px = compute_lateral_screen_px(track, c.target_d, c.s)
                     if all(
                         abs(cur_target_px - compute_lateral_screen_px(track, b.d, b.s)) >= CAR_WID_PX * 0.75
@@ -352,6 +450,7 @@ def enforce_2d_car_separation(
                         # Tuck into slipstream behind nearest lane rather than fanning out 3-wide
                         closest_b = min((b for _, b in blockers), key=lambda b: abs(b.d - c.d))
                         c.target_d = closest_b.d
+                        c._sep_lane_timer = max(getattr(c, "_sep_lane_timer", 0.0), 0.40)
             else:
                 wants_pass = (
                     allow_passing
@@ -370,13 +469,25 @@ def enforce_2d_car_separation(
                     for _, b in blockers
                 )
                 if target_blocked:
+                    side_cars = [
+                        o for o in close_others
+                        if min((o.s - c.s) % L, (c.s - o.s) % L) < min_long_m * 1.05
+                    ]
                     best_lane = None
                     best_cost = 999.0
                     for cand in lane_candidates:
                         cand_px = compute_lateral_screen_px(track, cand,c.s)
+                        if any(
+                            (o.d - c.d) * (cand - c.d) > 0.0 and abs(o.d - c.d) < abs(cand - c.d)
+                            for o in side_cars
+                        ):
+                            continue
                         if all(
                             abs(cand_px - compute_lateral_screen_px(track, b.d,b.s)) >= CAR_WID_PX * 1.03
                             for _, b in blockers
+                        ) and all(
+                            abs(cand_px - compute_lateral_screen_px(track, o.d, o.s)) >= CAR_WID_PX * 1.03
+                            for o in side_cars
                         ):
                             cost = abs(cand - c.d) + abs(cand) * 0.15
                             if cost < best_cost:
@@ -384,6 +495,7 @@ def enforce_2d_car_separation(
                                 best_lane = cand
                     if best_lane is not None:
                         c.target_d = best_lane
+                        c._sep_lane_timer = max(getattr(c, "_sep_lane_timer", 0.0), 0.40)
 
         on_track.sort(key=lambda c: c.total_dist, reverse=True)
         for _ in range(2):
@@ -419,6 +531,8 @@ def enforce_2d_car_separation(
                             else:
                                 c.target_d = max(-0.92, c.target_d - need_d * 0.40)
                                 o.target_d = min(0.92, o.target_d + need_d * 0.40)
+                            c._sep_lane_timer = max(getattr(c, "_sep_lane_timer", 0.0), 0.35)
+                            o._sep_lane_timer = max(getattr(o, "_sep_lane_timer", 0.0), 0.35)
                         if lat_sep >= CAR_WID_PX * 0.82 or (is_passing and ds_m < min_long_m * 0.50):
                             continue
 
@@ -511,9 +625,9 @@ def enforce_2d_car_separation(
                 min_pen_l = min(pen_l1, pen_l2)
                 is_lateral = (min_pen_w <= min_pen_l) or (abs(ahead.d - behind.d) > 0.14)
                 if is_lateral and not ahead.in_pits and not behind.in_pits and not c1_off and not c2_off and allow_passing:
-                    lat_budget_a = max(0.0, 1.1 * dt - getattr(ahead, "_tick_lat_shift", 0.0))
-                    lat_budget_b = max(0.0, 1.1 * dt - getattr(behind, "_tick_lat_shift", 0.0))
-                    need_d = min(0.14, (max(pen_w1, pen_w2) + 0.15) / half_usable)
+                    lat_budget_a = max(0.0, 1.5 * dt - getattr(ahead, "_tick_lat_shift", 0.0))
+                    lat_budget_b = max(0.0, 1.5 * dt - getattr(behind, "_tick_lat_shift", 0.0))
+                    need_d = min(0.16, (max(pen_w1, pen_w2) + 0.15) / half_usable)
                     max_shift_a = min(lat_budget_a, need_d * 0.50)
                     max_shift_b = min(lat_budget_b, need_d * 0.50)
                     if max_shift_a > 0.001 or max_shift_b > 0.001:
@@ -535,6 +649,8 @@ def enforce_2d_car_separation(
                         else:
                             ahead.target_d = max(ahead.target_d, ahead.d)
                             behind.target_d = min(behind.target_d, behind.d)
+                        ahead._sep_lane_timer = max(getattr(ahead, "_sep_lane_timer", 0.0), 0.35)
+                        behind._sep_lane_timer = max(getattr(behind, "_sep_lane_timer", 0.0), 0.35)
                         update_xy_fn(ahead)
                         update_xy_fn(behind)
                         continue
@@ -715,6 +831,8 @@ class CarState:
         self.steer_angle: float = 0.0         # Dynamic steering wheel angle in radians
         self.body_slip_angle: float = 0.0     # Vehicle slip / yaw drift in radians
         self.g_lat: float = 0.0               # Lateral G-force
+        self._smooth_lat_v: float = 0.0
+        self._sep_lane_timer: float = 0.0
         self.pit_blend_active: bool = False   # True while bounded by pit exit line past Turn 1/2
         self.driver_line_bias: float = round(random.gauss(0.0, 0.032), 3)
 
@@ -1007,44 +1125,16 @@ class QualifyingSession:
             )
             return
         smp = self.track.sample(car.s)
-        lat_px = compute_lateral_screen_px(self.track, car.d,car.s)
+        lat_px = compute_lateral_screen_px(self.track, car.d, car.s)
         car.x = round(smp["x"] + smp["nx"] * lat_px, 2)
         car.y = round(smp["y"] + smp["ny"] * lat_px, 2)
 
-        curr_tick = getattr(self, "tick_count", 0)
-        heading_stepped = (getattr(car, "_heading_tick", -1) == curr_tick)
-        if not heading_stepped:
-            car._heading_tick = curr_tick
-            tx, ty = smp["tx"], smp["ty"]
-            nx, ny = smp["nx"], smp["ny"]
-            v_forward = max(0.5, car.v)
-            v_lateral = getattr(car, "lateral_velocity", 0.0)
-
-            if car.v < 0.5:
-                velocity_heading = math.atan2(ty, tx)
-            else:
-                # Real instantaneous vehicle velocity trajectory over ground
-                vx = tx * v_forward + nx * v_lateral
-                vy = ty * v_forward + ny * v_lateral
-                velocity_heading = math.atan2(vy, vx)
-
-            # Dynamic chassis turn-in attitude into apex & body slip angle
-            yaw_attitude = (
-                getattr(car, "steer_angle", 0.0) * 0.22
-                + getattr(car, "body_slip_angle", 0.0) * 0.35
-            )
-            target_heading = (velocity_heading + yaw_attitude + math.pi) % (2.0 * math.pi) - math.pi
-
-            prev_h = getattr(car, "heading", None)
-            cur_dt = getattr(self, "_current_dt", 0.05)
-            if prev_h is not None and getattr(car, "_has_initial_heading", False):
-                dh = (target_heading - prev_h + math.pi) % (2.0 * math.pi) - math.pi
-                max_dh = max(7.5, abs(car.v * smp["curv"]) * 1.6) * cur_dt
-                dh_clamped = max(-max_dh, min(max_dh, dh))
-                car.heading = round((prev_h + dh_clamped + math.pi) % (2.0 * math.pi) - math.pi, 4)
-            else:
-                car.heading = round(target_heading, 4)
-                car._has_initial_heading = True
+        _update_car_heading(
+            car,
+            smp,
+            getattr(self, "_current_dt", 0.05),
+            getattr(self, "tick_count", 0),
+        )
 
     def _compute_flying_lap(self, car: CarState, fallback_penalty: float = 0.0) -> float:
         u = car.upgrades
@@ -1260,18 +1350,13 @@ class QualifyingSession:
                 lat_step = max(-max_lat_d, min(max_lat_d, lat_step))
             car.d += lat_step
             car.lateral_velocity = (car.d - prev_d) * half_usable_m / max(dt, 0.001)
+            prev_slv = getattr(car, "_smooth_lat_v", car.lateral_velocity)
+            car._smooth_lat_v = prev_slv + (car.lateral_velocity - prev_slv) * min(1.0, dt * 11.0)
 
             # Vehicle dynamics in qualifying session
-            a_lat = (car.v * car.v) * smp["curv"]
-            car.g_lat = round((a_lat / GRAVITY) * smp["inside_sign"], 2)
             tire_grip = 1.08 if car.compound == "SOFT" else 1.0
             cornering_stiffness = 1000.0 + (u.get("active_aero", 5) - 5) * 45.0 + (u.get("suspension", 5) - 5) * 35.0 + (u.get("chassis", 5) - 5) * 45.0
-            slip_calc = (a_lat * smp["inside_sign"]) / max(300.0, cornering_stiffness * tire_grip)
-            car.body_slip_angle = round(max(-0.070, min(0.070, slip_calc)), 4)
-            wheelbase_m = 3.6
-            ackerman_steer = math.atan(wheelbase_m * 1.65 * smp["curv"] * smp["inside_sign"])
-            lane_steer = math.atan2(car.lateral_velocity, max(car.v, 6.0))
-            car.steer_angle = round(max(-0.42, min(0.42, ackerman_steer + lane_steer)), 4)
+            _apply_chassis_dynamics(car, smp, dt, tire_grip, cornering_stiffness, max_slip=0.070, wing_steer_auth=1.0)
             # Battery state in qualifying session
             if car.quali_run_phase == "PUSH":
                 charge_ratio = 0.50 + 0.45 * (0.5 + 0.5 * math.sin(self.elapsed * 0.4 + car.number))
@@ -1746,7 +1831,7 @@ class RaceSession:
             return
 
         smp = self.track.sample(car.s)
-        lat_px = compute_lateral_screen_px(self.track, car.d,car.s)
+        lat_px = compute_lateral_screen_px(self.track, car.d, car.s)
         car.x = round(smp["x"] + smp["nx"] * lat_px, 2)
         car.y = round(smp["y"] + smp["ny"] * lat_px, 2)
 
@@ -1755,42 +1840,14 @@ class RaceSession:
             car.heading = round((math.atan2(smp["ty"], smp["tx"]) + car.spin_timer * omega) % (2.0 * math.pi) - math.pi, 4)
             return
 
-        # Heading is integrated at most once per 50ms simulation tick to prevent multi-pass SAT multiplier artifacts
-        curr_tick = getattr(self, "tick_count", 0)
-        heading_stepped = (getattr(car, "_heading_tick", -1) == curr_tick)
-        if not heading_stepped:
-            car._heading_tick = curr_tick
-            tx, ty = smp["tx"], smp["ty"]
-            nx, ny = smp["nx"], smp["ny"]
-            v_forward = max(0.5, car.v)
-            v_lateral = getattr(car, "lateral_velocity", 0.0)
-
-            if car.v < 0.5:
-                velocity_heading = math.atan2(ty, tx)
-            else:
-                # Real instantaneous vehicle velocity trajectory over ground
-                vx = tx * v_forward + nx * v_lateral
-                vy = ty * v_forward + ny * v_lateral
-                velocity_heading = math.atan2(vy, vx)
-
-            # Dynamic chassis yaw in corners: nose turns naturally into apex, damped by front wing damage understeer
-            understeer_mod = max(0.25, 1.0 - car.wing_damage * 0.75)
-            yaw_attitude = (
-                getattr(car, "steer_angle", 0.0) * 0.22 * understeer_mod
-                + getattr(car, "body_slip_angle", 0.0) * 0.35
-            )
-            target_heading = (velocity_heading + yaw_attitude + math.pi) % (2.0 * math.pi) - math.pi
-
-            prev_h = getattr(car, "heading", None)
-            cur_dt = getattr(self, "_current_dt", 0.05)
-            if prev_h is not None and getattr(car, "_has_initial_heading", False):
-                dh = (target_heading - prev_h + math.pi) % (2.0 * math.pi) - math.pi
-                max_dh = max(7.5, abs(car.v * smp["curv"]) * 1.6) * cur_dt
-                dh_clamped = max(-max_dh, min(max_dh, dh))
-                car.heading = round((prev_h + dh_clamped + math.pi) % (2.0 * math.pi) - math.pi, 4)
-            else:
-                car.heading = round(target_heading, 4)
-                car._has_initial_heading = True
+        understeer_mod = max(0.25, 1.0 - car.wing_damage * 0.75)
+        _update_car_heading(
+            car,
+            smp,
+            getattr(self, "_current_dt", 0.05),
+            getattr(self, "tick_count", 0),
+            understeer_mod=understeer_mod,
+        )
 
     def _update_sc_xy(self, sc_d: float = 0.0) -> None:
         smp = self.track.sample(self.sc_s)
@@ -2235,6 +2292,7 @@ class RaceSession:
         car.overtake_cooldown = max(0.0, car.overtake_cooldown - dt)
         car.contact_cooldown = max(0.0, car.contact_cooldown - dt)
         car.maneuver_attempt_cooldown = max(0.0, car.maneuver_attempt_cooldown - dt)
+        car._sep_lane_timer = max(0.0, getattr(car, "_sep_lane_timer", 0.0) - dt)
         if car.maneuver_pass_timer > 0.0:
             target = self.cars_by_id.get(car.maneuver_target_id)
             clearance = CAR_LEN_PX / self.track.px_per_m * 1.35
@@ -2706,9 +2764,9 @@ class RaceSession:
         # FIA Rule 33.4 Defense cooldown & reset (Car is permitted at most ONE defensive move)
         if car.defense_timer > 0.0:
             car.defense_timer = max(0.0, car.defense_timer - dt)
-            if car.defense_timer <= 0.0 and car.battle_with is None:
-                car.defense_moves = 0
-                car.defending_side = 0.0
+        if car.defense_timer <= 0.0 and car.defense_moves > 0 and car.battle_with is None:
+            car.defense_moves = 0
+            car.defending_side = 0.0
 
         if car.v < target_v:
             pu_acc = 13.8 * ice_power_mult * fuel_mass_accel * (1.0 + (u["power_unit"] - 5) * 0.022) * (1.0 - car.wing_damage * 0.08)
@@ -2852,10 +2910,12 @@ class RaceSession:
                 _pit_exit_blend_target(self.track, car, clamped_line_d, self.cars)
         elif car.pit_blend_active:
             car.target_d = _pit_exit_blend_target(self.track, car, clamped_line_d, self.cars)
+        elif car.maneuver_pass_timer > 0.0 or getattr(car, "_sep_lane_timer", 0.0) > 0.0:
+            pass
         elif car.defense_moves > 0 or car.defense_timer > 0.0:
             # Defending car: STRICT ONE-MOVE RULE (cars must NOT move more than once)
-            car.target_d = car.defending_side
-        elif car.battle_with is None and car.maneuver_timer <= 0.0 and car.maneuver_pass_timer <= 0.0:
+            car.target_d = self._clamp_lane_for_alongside(car, car.defending_side)
+        elif car.battle_with is None and car.maneuver_timer <= 0.0:
             # Disciplined race start: hold starting grid lane down the main straight until approaching Turn 1
             t1_s = self.track.corners[0]["s_m"] if self.track.corners else 320.0
             if car.lap == 1 and car.pit_stops == 0 and car.total_dist < t1_s * 0.72:
@@ -2864,27 +2924,17 @@ class RaceSession:
                 blend = min(1.0, max(0.0, (car.total_dist - t1_s * 0.72) / max(t1_s * 0.28, 1.0)))
                 car.target_d = (1.0 - blend) * car.grid_start_d + blend * clamped_line_d
             else:
-                car.target_d = clamped_line_d
+                car.target_d = self._clamp_lane_for_alongside(car, clamped_line_d)
 
         self._move_laterally(car, dt)
 
-        # 2D Vehicle Dynamics: lateral G, dynamic body slip angle (beta), and front wheel steer angle with realistic lock
-        a_lat = (car.v * car.v) * smp["curv"]
-        car.g_lat = round((a_lat / GRAVITY) * smp["inside_sign"], 2)
-
-        # Dynamic body slip angle: increases with lateral acceleration, worn tires, or low grip (wet)
+        # 2D Vehicle Dynamics: lateral G, smoothed body slip angle (beta), and front wheel steer angle
         base_grip = comp_spec.get("grip", 1.0) * max(0.40, 1.0 - car.tire_wear * 0.45)
         if local_wetness > 0.18 and car.compound not in ("INTER", "WET"):
             base_grip *= max(0.35, 1.0 - local_wetness * 0.78)
         chassis_stiffness = 950.0 + (u.get("active_aero", 5) - 5) * 45.0 + (u.get("suspension", 5) - 5) * 35.0 + (u.get("chassis", 5) - 5) * 45.0
-        slip_rad = (a_lat * smp["inside_sign"]) / max(300.0, chassis_stiffness * base_grip)
-        car.body_slip_angle = round(max(-0.075, min(0.075, slip_rad)), 4)
-
-        wheelbase_m = 3.6
-        ackerman_steer = math.atan(wheelbase_m * 1.65 * smp["curv"] * smp["inside_sign"])
-        lane_steer = math.atan2(car.lateral_velocity, max(car.v, 6.0))
         wing_steer_auth = max(0.45, 1.0 - car.wing_damage * 0.55)
-        car.steer_angle = round(max(-0.42, min(0.42, (ackerman_steer + lane_steer) * wing_steer_auth)), 4)
+        _apply_chassis_dynamics(car, smp, dt, base_grip, chassis_stiffness, max_slip=0.075, wing_steer_auth=wing_steer_auth)
 
         km_step = ds / 1000.0
         thermal_wear_mod = tire_thermal_wear_mult(car.compound, car.tire_temp)
@@ -2984,24 +3034,15 @@ class RaceSession:
 
         self._advance_car_progress(car, ds, leader_finished, event_cb)
 
-    def _move_laterally(self, car: CarState, dt: float) -> None:
-        """Steer with bounded lateral acceleration and keep an occupied lane clear."""
-        if dt <= 0.0:
-            return
+    def _lateral_neighbor_bounds(self, car: CarState) -> tuple[float, float, float]:
+        """Return usable half-width (m) and safe lateral d bounds around side-by-side cars."""
         half_width_m = self.track.width_px_at(car.s) * 0.39 / self.track.px_per_m
-        if car.maneuver_pass_timer > 0.0 or car.maneuver_timer > 0.0:
-            steer_rate, max_lat_v = 2.6, 4.5
-        elif car.pit_blend_active:
-            steer_rate, max_lat_v = 1.65, 2.8
-        else:
-            steer_rate, max_lat_v = 2.0, 4.5
-        desired_v = max(-max_lat_v, min(max_lat_v, (car.target_d - car.d) * steer_rate * half_width_m))
-        velocity = car.lateral_velocity
-        velocity += max(-10.0 * dt, min(10.0 * dt, desired_v - velocity))
-        proposed = car.d + velocity * dt / half_width_m
         length = self.track.length_m
         overlap_distance = CAR_LEN_PX / self.track.px_per_m * 1.15
         current_lat = compute_lateral_screen_px(self.track, car.d, car.s)
+        clearance_d = CAR_WID_PX * 1.06 / (half_width_m * self.track.px_per_m)
+        bound_lo = -10.0
+        bound_hi = 10.0
         for other in self.cars:
             if other is car or other.in_pits or other.dnf or other.spin_timer > 0.0:
                 continue
@@ -3009,15 +3050,57 @@ class RaceSession:
             if abs(gap) >= overlap_distance:
                 continue
             other_lat = compute_lateral_screen_px(self.track, other.d, other.s)
-            clearance_d = CAR_WID_PX * 1.06 / (half_width_m * self.track.px_per_m)
             other_d = other_lat / (half_width_m * self.track.px_per_m)
-            # If already touching, leave resolution to the contact solver; do
-            # not turn this predictive guard into another position snap.
+            # If already touching, leave resolution to the contact solver rather than snapping.
             if current_lat > other_lat:
-                proposed = max(proposed, min(car.d, other_d + clearance_d))
+                bound_lo = max(bound_lo, min(car.d, other_d + clearance_d))
             elif current_lat < other_lat:
-                proposed = min(proposed, max(car.d, other_d - clearance_d))
+                bound_hi = min(bound_hi, max(car.d, other_d - clearance_d))
+        return half_width_m, bound_lo, bound_hi
+
+    def _clamp_lane_for_alongside(self, car: CarState, desired_d: float) -> float:
+        """Keep fallback lane targets from cutting laterally across side-by-side neighbors."""
+        _, bound_lo, bound_hi = self._lateral_neighbor_bounds(car)
+        if bound_lo <= bound_hi:
+            lo = max(-0.88, bound_lo)
+            hi = min(0.88, bound_hi)
+            if lo <= hi:
+                return max(lo, min(hi, desired_d))
+        return car.d
+
+    def _move_laterally(self, car: CarState, dt: float) -> None:
+        """Steer with bounded lateral acceleration and smooth cushion near occupied lanes."""
+        if dt <= 0.0:
+            return
+        half_width_m, bound_lo, bound_hi = self._lateral_neighbor_bounds(car)
+        if car.maneuver_pass_timer > 0.0 or car.maneuver_timer > 0.0:
+            steer_rate, max_lat_v = 2.2, 4.0
+        elif car.pit_blend_active:
+            steer_rate, max_lat_v = 1.55, 2.7
+        else:
+            steer_rate, max_lat_v = 1.65, 3.8
+
+        desired_v = max(-max_lat_v, min(max_lat_v, (car.target_d - car.d) * steer_rate * half_width_m))
+        if bound_hi < 9.0 and desired_v > 0.0:
+            room_hi_m = max(0.0, (bound_hi - car.d) * half_width_m)
+            desired_v = min(desired_v, room_hi_m / 0.16)
+        if bound_lo > -9.0 and desired_v < 0.0:
+            room_lo_m = max(0.0, (car.d - bound_lo) * half_width_m)
+            desired_v = max(desired_v, -room_lo_m / 0.16)
+
+        velocity = car.lateral_velocity
+        velocity += max(-7.5 * dt, min(7.5 * dt, desired_v - velocity))
+        proposed = car.d + velocity * dt / half_width_m
+        if bound_lo <= bound_hi:
+            if bound_lo > -9.0:
+                proposed = max(proposed, bound_lo)
+            if bound_hi < 9.0:
+                proposed = min(proposed, bound_hi)
+        else:
+            proposed = car.d
         car.lateral_velocity = (proposed - car.d) * half_width_m / dt
+        prev_slv = getattr(car, "_smooth_lat_v", car.lateral_velocity)
+        car._smooth_lat_v = prev_slv + (car.lateral_velocity - prev_slv) * min(1.0, dt * 11.0)
         car.d = proposed
 
     def _roll_pit_stop_duration(self, car: CarState, event_cb) -> tuple[float, str]:
@@ -3650,9 +3733,14 @@ class RaceSession:
         """Use a tow to build a run, then let real pace complete a clear-lane pass."""
         attacker.maneuver = "SLIPSTREAM"
         attacker.maneuver_timer = .4
-        # A tow is preparation, not an already successful overtake. Keep the
-        # following/braking controller active until the driver actually pulls out.
-        attacker.target_d = defender.d
+        car_length = CAR_LEN_PX / self.track.px_per_m
+        # Only pull behind defender into the draft if not already committed laterally
+        # alongside or holding an active separation lane (prevents 20 Hz lane ping-pong).
+        lat_atk = compute_lateral_screen_px(self.track, attacker.d, attacker.s)
+        lat_def = compute_lateral_screen_px(self.track, defender.d, defender.s)
+        already_clear = abs(lat_atk - lat_def) >= CAR_WID_PX * 1.05
+        if gap > car_length * 1.65 and not already_clear and getattr(attacker, "_sep_lane_timer", 0.0) <= 0.0:
+            attacker.target_d = defender.d
         available_pace = (attacker.free_air_target_v or attacker.v) - (defender.free_air_target_v or defender.v)
         closing_speed = attacker.v - defender.v
         run = max(closing_speed, available_pace)
@@ -3666,7 +3754,6 @@ class RaceSession:
             return
         half_width_m = self.track.width_px_at(attacker.s) * .39 / self.track.px_per_m
         lane_change_time = abs(lane - attacker.d) * half_width_m / 2.8 + .45
-        car_length = CAR_LEN_PX / self.track.px_per_m
         pullout_gap = min(45.0, max(car_length * TOW_RELEASE_CAR_LENGTHS,
                                    car_length * 1.5 + run * lane_change_time))
         if gap > pullout_gap:
@@ -3693,7 +3780,7 @@ class RaceSession:
         attacker.defense_timer = 0.0
         attacker.battle_with = defender.driver_id
         defender.battle_with = attacker.driver_id
-        if defender.defense_moves == 0:
+        if defender.defense_moves == 0 and defender.maneuver_pass_timer <= 0.0 and getattr(defender, "_sep_lane_timer", 0.0) <= 0.0:
             defender.defense_moves = 1
             defender.defending_side = defender_lane
             defender.defense_timer = 4.5
@@ -3740,16 +3827,24 @@ class RaceSession:
                         tgt.defense_moves = 0
                         tgt.defense_timer = 0.0
                     else:
+                        c.battle_with = tgt.driver_id
+                        tgt.battle_with = c.driver_id
+                        lat_sep = abs(compute_lateral_screen_px(self.track, c.d,c.s) - compute_lateral_screen_px(self.track, tgt.d,tgt.s))
+                        long_gap_m = abs(c.total_dist - tgt.total_dist)
                         if c.maneuver == "SLIPSTREAM":
                             # A straight-line pass earns its result through
                             # actual speed; do not accelerate the attacker or
                             # slow the defender to manufacture a success.
                             c.maneuver_timer = max(c.maneuver_timer, .4)
-                            c.battle_with = tgt.driver_id
-                            tgt.battle_with = c.driver_id
+                            if long_gap_m < min_long_m * 1.35 and lat_sep < CAR_WID_PX * 1.18 and tgt.maneuver_pass_timer <= 0.0:
+                                tgt_room_side = 1.0 if c.d < tgt.d else -1.0
+                                safe_room = c.target_d + tgt_room_side * max(0.38, min_d_sep * 1.28)
+                                if tgt_room_side > 0.0:
+                                    tgt.target_d = min(0.86, max(tgt.target_d, safe_room))
+                                else:
+                                    tgt.target_d = max(-0.86, min(tgt.target_d, safe_room))
+                                tgt._sep_lane_timer = max(getattr(tgt, "_sep_lane_timer", 0.0), 0.35)
                             continue
-                        lat_sep = abs(compute_lateral_screen_px(self.track, c.d,c.s) - compute_lateral_screen_px(self.track, tgt.d,tgt.s))
-                        long_gap_m = abs(c.total_dist - tgt.total_dist)
                         smp_c = self.track.sample(c.s)
                         in_corner = smp_c["curv"] > 0.005
                         if in_corner and long_gap_m < min_long_m * 0.95:
@@ -3782,9 +3877,15 @@ class RaceSession:
                                 c.v = min(v_cap, c.v + 5.0 * dt)
                             if long_gap_m < min_long_m * 1.35 and tgt.v > c.v - 1.2:
                                 tgt.v = max(4.0, tgt.v - 2.6 * dt)
-                            # Defending car leaves generous racing room on opposite flank
-                            tgt_room_side = 1.0 if c.d < tgt.d else -1.0
-                            tgt.target_d = max(-0.84, min(0.84, c.target_d + tgt_room_side * max(0.82, min_d_sep * 1.30)))
+                            # Defending car leaves fair racing room without snapping across the road
+                            if tgt.maneuver_pass_timer <= 0.0:
+                                tgt_room_side = 1.0 if c.d < tgt.d else -1.0
+                                safe_room = c.target_d + tgt_room_side * max(0.42, min_d_sep * 1.32)
+                                if tgt_room_side > 0.0:
+                                    tgt.target_d = min(0.86, max(tgt.target_d, safe_room))
+                                else:
+                                    tgt.target_d = max(-0.86, min(tgt.target_d, safe_room))
+                                tgt._sep_lane_timer = max(getattr(tgt, "_sep_lane_timer", 0.0), 0.35)
 
         for i in range(1, len(active)):
             defender = active[i - 1]
@@ -3859,10 +3960,24 @@ class RaceSession:
                     for o in active
                 )
             )
+            attacker_boxed_alongside = any(
+                o is not attacker
+                and o is not defender
+                and not o.dnf
+                and not o.in_pits
+                and o.lap == attacker.lap
+                and abs(o.total_dist - attacker.total_dist) < min_long_m * 1.10
+                for o in active
+            )
             if defender_busy_in_pass or self._is_zone_already_two_wide(
                 attacker, defender, lookahead_m=max(actual_gap, min_long_m * 1.5)
             ):
-                if attacker.maneuver_pass_timer <= 0.0:
+                if (
+                    attacker.maneuver_pass_timer <= 0.0
+                    and getattr(attacker, "_sep_lane_timer", 0.0) <= 0.0
+                    and actual_gap >= min_long_m * 1.05
+                    and not attacker_boxed_alongside
+                ):
                     attacker.target_d = defender.d
                     attacker.attacking_side = 0.0
                 continue
@@ -3880,7 +3995,7 @@ class RaceSession:
             else:
                 def_line = (0.36 if defender.skills["defense"] >= 86 else 0.18) * ins
 
-            if defender.maneuver_pass_timer <= 0.0:
+            if defender.maneuver_pass_timer <= 0.0 and getattr(defender, "_sep_lane_timer", 0.0) <= 0.0:
                 if defender.defense_moves == 0:
                     # Exactly ONE defensive move: defender commits to defending line
                     defender.defense_moves = 1
@@ -3895,8 +4010,8 @@ class RaceSession:
                     defender.target_d = defender.defending_side
 
             # Subtle mirror-filling peek while setting up an imminent attack (keeps full braking protection until committed)
-            if attacker.maneuver_timer <= 0.0 and attacker.maneuver_pass_timer <= 0.0:
-                if 0.0 <= actual_gap <= max_attempt_gap and attacker.v >= defender.v - 1.5:
+            if attacker.maneuver_timer <= 0.0 and attacker.maneuver_pass_timer <= 0.0 and getattr(attacker, "_sep_lane_timer", 0.0) <= 0.0 and not attacker_boxed_alongside:
+                if min_long_m * 1.05 <= actual_gap <= max_attempt_gap and attacker.v >= defender.v - 1.5:
                     if attacker.attacking_side == 0.0:
                         attacker.attacking_side = -1.0 if defender.target_d >= 0.0 else 1.0
                     side = attacker.attacking_side
@@ -3907,7 +4022,7 @@ class RaceSession:
                         side = 1.0
                         attacker.attacking_side = 1.0
                     attacker.target_d = max(-0.86, min(0.86, defender.target_d + side * min_d_sep * 0.45))
-                else:
+                elif actual_gap >= min_long_m * 1.05:
                     attacker.target_d = defender.target_d
 
             # Aggressive slingshot attack launch window: up to 2.85x car lengths on straights / braking zones
@@ -3938,17 +4053,24 @@ class RaceSession:
                     # Initiate clean side-by-side overtaking pass!
                     attacker.maneuver_pass_timer = 4.0
                     attacker.maneuver_target_id = defender.driver_id
+                    attacker.defense_moves = 0
+                    attacker.defense_timer = 0.0
                     if attacker.overtake_active:
                         # Slingshot punch: attacker surges past defender with smooth envelope-bounded velocity
                         st_atk = self.track.sample(attacker.s)["station"]
                         if attacker.v < self.v_env[st_atk]:
                             attacker.v = min(self.v_env[st_atk], attacker.v + 1.2)
-                    # Defender respects the completed pass and leaves clear lateral room
+                    # Defender respects the ongoing pass without snapping back onto the attacker's line
                     side = 1.0 if attacker.target_d < defender.d else -1.0
-                    defender.target_d = max(-0.86, min(0.86, attacker.target_d + side * min_d_sep * 1.30))
+                    safe_def = attacker.target_d + side * max(0.42, min_d_sep * 1.32)
+                    if side > 0.0:
+                        defender.target_d = min(0.86, max(defender.target_d, safe_def))
+                    else:
+                        defender.target_d = max(-0.86, min(defender.target_d, safe_def))
                     defender.defense_moves = 0
                     defender.defense_timer = 0.0
-                    defender.battle_with = None
+                    defender.battle_with = attacker.driver_id
+                    defender._sep_lane_timer = max(getattr(defender, "_sep_lane_timer", 0.0), 1.2)
                     defender.attacking_side = 0.0
                     attacker.attacking_side = 0.0
 
@@ -3969,8 +4091,11 @@ class RaceSession:
                     if attacker.v > defender.v * 0.96:
                         attacker.v = max(defender.v * 0.96, attacker.v - 18.0 * dt)
                     attacker.maneuver_timer = 0.0
-                    # On stout defense, attacker holds clean slipstream line behind defender
-                    attacker.target_d = defender.d
+                    # On stout defense, tuck behind if trailing clearly; if alongside, hold clear lane briefly while dropping back
+                    if (actual_gap >= min_long_m * 1.05 or abs(attacker.d - defender.d) < min_d_sep * 0.90) and not attacker_boxed_alongside:
+                        attacker.target_d = defender.d
+                    else:
+                        attacker._sep_lane_timer = max(getattr(attacker, "_sep_lane_timer", 0.0), 0.55)
                     attacker.attacking_side = 0.0
 
                     if maneuver in ("DIVEBOMB", "OUTSIDE") and smp["curv"] > 0.0085:

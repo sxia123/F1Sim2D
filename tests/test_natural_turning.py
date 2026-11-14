@@ -116,6 +116,43 @@ class NaturalTurningTests(unittest.TestCase):
             self.assertNotEqual(car.steer_angle, 0.0)
             self.assertIsNotNone(car.lateral_velocity)
 
+    def test_steer_and_heading_smoothly_damp_instantaneous_lane_step(self):
+        race = RaceSession(self.track, self.teams_dict, self.drivers[:1], 0, 0, "mclaren")
+        race.lights_out = True
+        race.lights_countdown = 0.0
+        race.flag_state = "GREEN"
+        car = race.cars[0]
+        straight_s = min(range(self.track.NUM_STATIONS), key=lambda i: self.track.stations[i]["curv"]) * self.track.ds_m
+        car.s = straight_s
+        car.lap = 2
+        car.total_dist = self.track.length_m + straight_s
+        car.v = 65.0
+        car.d = 0.0
+        car.target_d = 0.0
+        car._heading_tick = -1
+        car._has_initial_heading = False
+        race._update_xy(car)
+
+        steers = []
+        dh_steps = []
+        prev_h = car.heading
+        for _ in range(10):
+            # Maintain a lane step command while stepping 50ms frames
+            car.target_d = 0.80
+            car.maneuver_pass_timer = 1.0
+            car.maneuver_target_id = "other"
+            race.step(0.05, ignore_event)
+            steers.append(abs(car.steer_angle))
+            dh = (car.heading - prev_h + math.pi) % (2.0 * math.pi) - math.pi
+            dh_steps.append(abs(dh))
+            prev_h = car.heading
+
+        # Steer angle must build progressively rather than snapping straight to peak lock
+        self.assertGreater(steers[1], steers[0])
+        self.assertGreater(max(steers), steers[0])
+        # Single-tick heading steps remain smoothly bounded through lateral turn-in
+        self.assertLessEqual(max(dh_steps), 0.22)
+
 
 if __name__ == "__main__":
     unittest.main()

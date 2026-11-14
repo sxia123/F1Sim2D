@@ -41,7 +41,7 @@ const materials = fs.readFileSync(path.join(root,'public/car-materials.js'),'utf
   .replace(/^export /gm,'');
 const renderer = fs.readFileSync(path.join(root,'public/canvas.js'),'utf8')
   .replace(/^import .*;\r?\n/gm,'').replace('export class CircuitRenderer','class CircuitRenderer');
-vm.runInContext(`"use strict";\n${materials}\n${renderer}\nglobalThis.Renderer=CircuitRenderer;globalThis.surfaces=getCarSurfaces;`,sandbox);
+vm.runInContext(`"use strict";\n${materials}\n${renderer}\nglobalThis.Renderer=CircuitRenderer;globalThis.surfaces=getCarSurfaces;globalThis.unwrapAngleNear=unwrapAngleNear;globalThis.catmullRomValue=catmullRomValue;`,sandbox);
 const geometry = Object.freeze({...JSON.parse(fs.readFileSync(path.join(root,'public/car_geometry.json'))),world_units_per_m:3.2});
 const draw = Object.create(sandbox.Renderer.prototype);
 draw.track = Object.freeze({car_geometry:geometry});
@@ -81,4 +81,20 @@ assert.notEqual(a.body,sandbox.surfaces(paint,'test',2,false,'MEDIUM',10).body);
 const small=sandbox.surfaces(paint,'test',1,false,'MEDIUM',10,2);
 assert.ok(small.body.width<a.body.width);
 assert.equal(small.body,sandbox.surfaces(paint,'test',1,false,'MEDIUM',10,2).body);
-console.log('Car visual checks passed: 12 liveries, damage, wet/worn tyres, immutable telemetry, wheel dimensions, balanced drawing state, and cached materials.');
+
+// Smooth heading unwrapping across the pi / -pi boundary and C1 Catmull-Rom spline continuity.
+const h1 = Math.PI - 0.05;
+const h0 = sandbox.unwrapAngleNear(h1 - 0.10, h1);
+const h2 = sandbox.unwrapAngleNear(-Math.PI + 0.05, h1);
+const h3 = sandbox.unwrapAngleNear(-Math.PI + 0.15, h2);
+assert.ok(Math.abs(h2 - h1 - 0.10) < 1e-6);
+assert.ok(Math.abs(h3 - h2 - 0.10) < 1e-6);
+const hMid = sandbox.unwrapAngleNear(sandbox.catmullRomValue(h0, h1, h2, h3, 0.5), 0);
+assert.ok(Math.abs(Math.abs(hMid) - Math.PI) < 1e-5);
+// C1 constant angular velocity across uniform sequence (no mid-tick smoothstep surge)
+const q1 = sandbox.catmullRomValue(h0, h1, h2, h3, 0.25);
+const q3 = sandbox.catmullRomValue(h0, h1, h2, h3, 0.75);
+assert.ok(Math.abs((q1 - h1) - 0.025) < 1e-6);
+assert.ok(Math.abs((h2 - q3) - 0.025) < 1e-6);
+
+console.log('Car visual checks passed: 12 liveries, damage, wet/worn tyres, immutable telemetry, wheel dimensions, balanced drawing state, cached materials, and smooth heading splines.');

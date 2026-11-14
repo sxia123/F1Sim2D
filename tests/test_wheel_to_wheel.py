@@ -304,6 +304,67 @@ class WheelToWheelTests(unittest.TestCase):
         self.assertEqual(defender.wing_damage, 0.0)
         self.assertFalse(any(k == "INCIDENT" for k, _ in events))
 
+    def test_stale_defense_moves_clears_after_battle_and_timer_expire(self):
+        """Once a battle ends and defense_timer expires, defense_moves must reset so the car resumes racing line."""
+        race = self.race("italy", count=2)
+        race.lights_out = True
+        race.flag_state = "GREEN"
+        car, other = race.cars
+        s = self.straight(race.track)
+        self.place(race, car, s, 0.75)
+        self.place(race, other, s + 250.0, 0.0)
+        smp_before = race.track.sample(car.s)
+        expected_line = max(-0.88, min(0.88, smp_before["racing_line_d"]))
+        car.defense_moves = 1
+        car.defending_side = 0.75
+        car.defense_timer = 0.0
+        car.battle_with = None
+
+        with patch.object(race, "_check_solo_incidents"):
+            race._step_car(car, other, other, False, 0.05, ignore_event)
+
+        self.assertEqual(car.defense_moves, 0)
+        self.assertLess(car.target_d, 0.0)
+        self.assertLess(abs(car.target_d - expected_line), 0.12)
+
+    def test_side_by_side_cars_hold_steady_lanes_without_target_pingpong(self):
+        """Side-by-side battling cars hold steady lateral lanes without ping-pong reversals or overlap."""
+        race = self.race("bahrain", count=2)
+        race.lights_out = True
+        race.flag_state = "GREEN"
+        a, b = race.cars
+        s = self.straight(race.track)
+        self.place(race, a, s + 2.0, 0.36)
+        self.place(race, b, s + 0.5, -0.36)
+        a.v = b.v = 72.0
+        a.free_air_target_v = b.free_air_target_v = 74.0
+        race.standings = [a, b]
+
+        reversals = {a.driver_id: 0, b.driver_id: 0}
+        prev_tgt = {a.driver_id: a.target_d, b.driver_id: b.target_d}
+        prev_dt = {a.driver_id: 0.0, b.driver_id: 0.0}
+        prev_h = {a.driver_id: a.heading, b.driver_id: b.heading}
+        max_dh = 0.0
+
+        with patch.object(race, "_check_solo_incidents"):
+            for _ in range(40):
+                race.step(0.05, ignore_event)
+                self.assertIsNone(_sat_obb_penetration(a, b))
+                for c in (a, b):
+                    dtgt = c.target_d - prev_tgt[c.driver_id]
+                    if abs(dtgt) > 0.20 and abs(prev_dt[c.driver_id]) > 0.20 and dtgt * prev_dt[c.driver_id] < 0.0:
+                        reversals[c.driver_id] += 1
+                    if abs(dtgt) > 0.02:
+                        prev_dt[c.driver_id] = dtgt
+                    prev_tgt[c.driver_id] = c.target_d
+                    dh = abs((c.heading - prev_h[c.driver_id] + math.pi) % (2.0 * math.pi) - math.pi)
+                    max_dh = max(max_dh, dh)
+                    prev_h[c.driver_id] = c.heading
+
+        self.assertLessEqual(reversals[a.driver_id], 1)
+        self.assertLessEqual(reversals[b.driver_id], 1)
+        self.assertLessEqual(max_dh, 0.28)
+
 
 if __name__ == "__main__":
     unittest.main()
