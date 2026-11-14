@@ -114,5 +114,146 @@ class TrackGeometryTests(unittest.TestCase):
         enforce_2d_car_separation(t,race.cars,True,race._update_xy)
         self.assertEqual((surface.s,surface.d,pit.s),before)
 
+    def test_pit_lane_is_two_cars_wide_and_clear_of_track(self):
+        from sim.car_geometry import CAR_WID_PX
+        from sim.track_geometry import WORLD_UNITS_PER_M
+        from sim.tracks import COMPILED_TRACKS
+
+        two_car_px = 2.0 * CAR_WID_PX
+        for t in COMPILED_TRACKS:
+            # 1. Pit road width and un-occluded fast-lane corridor outside stall boxes must fit >= 2 cars side-by-side
+            self.assertGreaterEqual(t.pit_width_px, two_car_px * 2.0, t.id)
+            stall_inner_edge = t.pit_apron_offset_px - 3.76
+            fast_outer_edge = -t.pit_width_px * 0.5
+            fast_clear_px = stall_inner_edge - fast_outer_edge
+            self.assertGreaterEqual(fast_clear_px, two_car_px + 4.0, f"{t.id} fast lane {fast_clear_px:.2f}px")
+
+            # 2. Working garage corridor (outside tunnels) must stay clear of main track asphalt so >= 2 cars fit visually & physically
+            glo, ghi = t.layout.get("garage_u_range", [0.275, 0.725])
+            n_st = len(t.pit_stations)
+            for idx, st in enumerate(t.pit_stations):
+                u = idx / max(1, n_st - 1)
+                if u < glo or u > ghi:
+                    continue
+                if t.pit_tunnel_u and t.pit_tunnel_u[0] <= u <= t.pit_tunnel_u[1]:
+                    continue
+                near = min(t.stations, key=lambda s: (s["x"] - st["x"]) ** 2 + (s["y"] - st["y"]) ** 2)
+                edge_gap = math.hypot(st["x"] - near["x"], st["y"] - near["y"]) - near["width_px"] * 0.5
+                unoccluded = min(t.pit_width_px, edge_gap + t.pit_width_px * 0.5)
+                self.assertGreaterEqual(
+                    unoccluded,
+                    two_car_px + 4.0,
+                    f"{t.id} working pit occluded to {unoccluded:.2f}px at u={u:.3f}",
+                )
+            self.assertGreater(t.pit_exit_blend_dist_m, 50.0 / WORLD_UNITS_PER_M, t.id)
+
+    def test_pit_exit_release_and_blend_are_smooth(self):
+        from sim.data import clone_initial_roster
+        from sim.physics import RaceSession
+        from sim.track_geometry import WORLD_UNITS_PER_M
+        from sim.tracks import COMPILED_TRACKS
+
+        teams, all_drivers = clone_initial_roster()
+        teams_by_id = {t["id"]: t for t in teams}
+        drivers = [d for d in all_drivers if d.get("team_id") in teams_by_id]
+        by_id = {t.id: t for t in COMPILED_TRACKS}
+
+        for tid in ("australia", "bahrain", "china", "hungary", "monaco", "vegas", "abudhabi"):
+            t = by_id[tid]
+            race = RaceSession(t, teams_by_id, drivers, 0.0, 0.0, "williams")
+            race.lights_out = True
+            race.lights_countdown = 0.0
+            race.flag_state = "GREEN"
+            car = race.cars[0]
+            for other in race.cars[1:]:
+                other.dnf = True
+                other.v = 0.0
+
+            box_s = race._team_pit_box_s(car)
+            L = t.length_m
+            car.s = box_s
+            car.total_dist = L + box_s
+            car.lap = 2
+            car.pit_stops = 1
+            car.in_pits = True
+            car.pit_phase = "STOPPED"
+            car.pit_timer = 0.1
+            car.pit_apron = 1.0
+            car.v = 0.0
+            car.d = 0.0
+            car.target_d = 0.0
+            race._update_xy(car)
+
+            dt = 0.05
+            prev_x, prev_y, prev_h = car.x, car.y, car.heading
+            prev_in_pits = True
+            prev_phase = "STOPPED"
+            prev_d = car.d
+            saw_release_gradual = False
+            saw_exit = False
+            exit_dh_deg = None
+            max_blend_lat_v = 0.0
+            half_u_m = t.track_width_px * 0.39 / WORLD_UNITS_PER_M
+
+            for _ in range(1200):
+                race.step(dt, lambda *a: None)
+                if prev_phase == "STOPPED" and car.pit_phase == "EXIT":
+                    # Must smoothly pull out of stall rather than snapping pit_apron 1.0 -> 0.0 immediately
+                    self.assertGreater(car.pit_apron, 0.5, f"{tid} apron snapped on release")
+                    saw_release_gradual = True
+
+                dh = abs(math.degrees((car.heading - prev_h + math.pi) % (2.0 * math.pi) - math.pi))
+                if prev_in_pits and not car.in_pits:
+                    saw_exit = True
+                    exit_dh_deg = dh
+                    step_px = math.hypot(car.x - prev_x, car.y - prev_y)
+                    self.assertLess(step_px, 6.5, f"{tid} position jump {step_px:.2f}px at exit")
+                elif saw_exit and car.pit_blend_active:
+                    lat_v = abs(car.d - prev_d) * half_u_m / dt
+                    max_blend_lat_v = max(max_blend_lat_v, lat_v)
+
+                prev_x, prev_y, prev_h = car.x, car.y, car.heading
+                prev_in_pits = car.in_pits
+                prev_phase = car.pit_phase
+                prev_d = car.d
+                if saw_exit and not car.pit_blend_active:
+                    break
+
+            self.assertTrue(saw_release_gradual, f"{tid} did not gradually leave stall")
+            self.assertTrue(saw_exit, f"{tid} did not exit pits")
+            self.assertFalse(car.pit_blend_active, f"{tid} pit blend did not complete")
+            self.assertIsNotNone(exit_dh_deg)
+            self.assertLess(exit_dh_deg, 6.0, f"{tid} heading kink {exit_dh_deg:.2f} deg at exit")
+            self.assertLessEqual(max_blend_lat_v, 3.05, f"{tid} abrupt blend lat_v {max_blend_lat_v:.2f} m/s")
+
+    def test_pit_exit_blend_yields_to_fast_on_track_traffic(self):
+        from sim.data import clone_initial_roster
+        from sim.physics import RaceSession, _pit_exit_blend_target
+        from sim.tracks import COMPILED_TRACKS
+
+        teams, all_drivers = clone_initial_roster()
+        teams_by_id = {t["id"]: t for t in teams}
+        drivers = [d for d in all_drivers if d.get("team_id") in teams_by_id]
+        t = next(tr for tr in COMPILED_TRACKS if tr.id == "australia")
+        race = RaceSession(t, teams_by_id, drivers, 0.0, 0.0, "williams")
+        exiting, traffic = race.cars[0], race.cars[1]
+        for o in race.cars[2:]:
+            o.dnf = True
+        exiting.in_pits = False
+        exiting.pit_blend_active = True
+        exiting._pit_blend_u = 0.25
+        exiting.s = (t.pit_exit_s + 30.0) % t.length_m
+        exiting.v = 32.0
+        exiting.d = 0.70 * t.pit_side
+        traffic.in_pits = False
+        traffic.dnf = False
+        traffic.s = (exiting.s - 10.0) % t.length_m
+        traffic.v = 65.0
+        traffic.d = 0.40 * t.pit_side
+
+        tgt = _pit_exit_blend_target(t, exiting, -0.66 * t.pit_side, race.cars)
+        self.assertEqual(exiting._pit_blend_u, 0.25)
+        self.assertAlmostEqual(tgt, (1.0 - (0.25 ** 2 * (3.0 - 2.0 * 0.25))) * (0.76 * t.pit_side) + (0.25 ** 2 * (3.0 - 2.0 * 0.25)) * (-0.66 * t.pit_side))
+
 
 if __name__=='__main__':unittest.main()

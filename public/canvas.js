@@ -667,22 +667,66 @@ export class CircuitRenderer {
     const n = sts.length;
     const wPx = this.track.track_width_px || 24.5;
 
-    // Reference pit route, including shortcuts, rather than an offset lap.
+    // 1. Track & Pit Outer Verge Shadows first so verges never overlap adjacent asphalt or pit joins
+    this._traceRoadRibbon(ctx, sts, 7.6);
+    ctx.fillStyle = "#060609";
+    ctx.lineJoin = "round";
+    ctx.fill();
+
     const ppts = this.track.pit_points || [];
-    const pitWidth = this.track.pit_width_px || 14;
+    const pitWidth = this.track.pit_width_px || 32;
     if (ppts.length > 1) {
       ctx.beginPath();
       ctx.moveTo(...ppts[0]);
       for (const pt of ppts.slice(1)) ctx.lineTo(...pt);
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
+      ctx.strokeStyle = "#060609";
+      ctx.lineWidth = pitWidth + 5.2;
+      ctx.stroke();
+
+      // 2. Dual-lane FIA Pit Road (white borders + dark asphalt + fast-lane/apron divider)
       ctx.strokeStyle = "rgba(255,255,255,.45)";
       ctx.lineWidth = pitWidth + 1.6;
       ctx.stroke();
       ctx.strokeStyle = "#161b26";
       ctx.lineWidth = pitWidth;
       ctx.stroke();
-      for (const u of [this.track.pit_speed_entry_u ?? .1, this.track.pit_speed_exit_u ?? .9]) {
+
+      const side = this.track.pit_side || 1;
+      const geom = this.track.car_geometry || { length_m: 5.5, width_m: 1.9, front_axle_m: 1.55, world_units_per_m: 3.2 };
+      const ppm = geom.world_units_per_m || 3.2;
+      const stallLen = (geom.length_m + 0.9) * ppm;
+      const stallWid = (geom.width_m + 0.45) * ppm;
+      const apronOff = this.track.pit_apron_offset_px ?? (3.0 * ppm);
+      const laneDividerOff = (apronOff - stallWid * 0.5 - 1.1) * side;
+
+      const uSpeedIn = this.track.pit_speed_entry_u ?? 0.1;
+      const uSpeedOut = this.track.pit_speed_exit_u ?? 0.9;
+      const iDiv0 = Math.max(0, Math.floor(uSpeedIn * (ppts.length - 1)));
+      const iDiv1 = Math.min(ppts.length - 1, Math.ceil(uSpeedOut * (ppts.length - 1)));
+      if (iDiv1 > iDiv0 + 1) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.36)";
+        ctx.lineWidth = 0.85;
+        ctx.setLineDash([4.5, 4.5]);
+        ctx.beginPath();
+        for (let k = iDiv0; k <= iDiv1; k++) {
+          const prev = ppts[Math.max(0, k - 1)];
+          const next = ppts[Math.min(ppts.length - 1, k + 1)];
+          const dx = next[0] - prev[0], dy = next[1] - prev[1];
+          const segL = Math.hypot(dx, dy) || 1;
+          const pnx = -dy / segL, pny = dx / segL;
+          const px = ppts[k][0] + pnx * laneDividerOff;
+          const py = ppts[k][1] + pny * laneDividerOff;
+          if (k === iDiv0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      for (const u of [uSpeedIn, uSpeedOut]) {
         const i = Math.min(ppts.length-2, Math.floor(u*(ppts.length-1)));
         const a=ppts[i],b=ppts[i+1],len=Math.hypot(b[0]-a[0],b[1]-a[1])||1;
         const nx=-(b[1]-a[1])/len,ny=(b[0]-a[0])/len;
@@ -692,19 +736,13 @@ export class CircuitRenderer {
         ctx.strokeStyle="#ffd700";ctx.lineWidth=1.5;ctx.stroke();
       }
       // Team Pit Stall locations with Constructor Logos & Gantry Graphics
-      const side = this.track.pit_side || 1;
-      const geom = this.track.car_geometry || { length_m: 5.4, width_m: 2.0, front_axle_m: 1.8, world_units_per_m: 3.5 };
-      const ppm = geom.world_units_per_m || 3.5;
-      const stallLen = (geom.length_m + 0.9) * ppm;
-      const stallWid = (geom.width_m + 0.45) * ppm;
-
       for (const g of this.track.pit_garages || []) {
         const teamId = GARAGE_TEAM_IDS[g.index] || "williams";
         const teamCode = GARAGE_TEAM_CODES[g.index] || "F1";
         const teamColor = TEAM_LIVERY[teamId]?.stripe || "#00d2be";
 
         const nx = -g.ty * side, ny = g.tx * side;
-        const gx = g.x + nx * 8.6, gy = g.y + ny * 8.6;
+        const gx = g.x + nx * apronOff, gy = g.y + ny * apronOff;
         const angle = Math.atan2(g.ty, g.tx);
 
         ctx.save();
@@ -749,11 +787,11 @@ export class CircuitRenderer {
           ctx.fillText(teamCode, 0, 0);
         }
 
-        // 5. Pit Wall / Garage Gantry Nameplate Tag on Apron
+        // 5. Pit Wall / Garage Gantry Nameplate Tag strictly on Outer Garage Side
         ctx.fillStyle = "rgba(12, 14, 20, 0.88)";
         const tagW = Math.max(stallLen * 0.38, 14);
         const tagH = Math.max(stallWid * 0.38, 5.5);
-        const tagY = -stallWid * 0.5 - tagH * 0.65;
+        const tagY = side >= 0 ? (stallWid * 0.5 + 0.8) : (-stallWid * 0.5 - tagH - 0.8);
         ctx.fillRect(-tagW * 0.5, tagY, tagW, tagH);
         ctx.strokeStyle = teamColor;
         ctx.lineWidth = 0.6;
@@ -768,12 +806,6 @@ export class CircuitRenderer {
         ctx.restore();
       }
     }
-
-    // 2. Track Outer Verge / Barrier Shadow (scaled to real circuit width)
-    this._traceRoadRibbon(ctx, sts, 7.6);
-    ctx.fillStyle = "#060609";
-    ctx.lineJoin = "round";
-    ctx.fill();
 
     // 3. FIA Red & White Corner Kerbs
     for (let i = 0; i < n; i++) {

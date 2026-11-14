@@ -427,6 +427,8 @@ class CompiledTrack:
             ],
             "pit_points": [[round(p["x"], 2), round(p["y"], 2)] for p in self.pit_stations],
             "pit_width_px": self.pit_width_px,
+            "pit_fast_offset_px": getattr(self, "pit_fast_offset_px", -5.12),
+            "pit_apron_offset_px": getattr(self, "pit_apron_offset_px", 9.60),
             "pit_length_m": round(self.pit_length_m, 2),
             "pit_garages": self.pit_garages,
             "pit_speed_entry_u": self.pit_speed_entry_u,

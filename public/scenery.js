@@ -244,7 +244,7 @@ export class SceneryLayer {
     }
     const pit = track.pit_points || [];
     if (pit.length > 1) {
-      ctx.lineWidth = (track.pit_width_px || 26) + padding;
+      ctx.lineWidth = (track.pit_width_px || 32) + padding;
       // Separate round capsules avoid tessellation seams on tightly curved pit routes.
       for (let i = 1; i < pit.length; i++) {
         ctx.beginPath();ctx.moveTo(...pit[i - 1]);ctx.lineTo(...pit[i]);ctx.stroke();
