@@ -4147,10 +4147,8 @@ class RaceSession:
             victim.repair_cost_m += round(victim_dmg * 0.65, 2)
             victim.tire_wear = min(0.99, victim.tire_wear + 0.02)
 
-            if culprit.wing_damage >= 0.35:
-                culprit.box_this_lap = True
-            if victim.wing_damage >= 0.35:
-                victim.box_this_lap = True
+            self._maybe_schedule_damage_pit(culprit)
+            self._maybe_schedule_damage_pit(victim)
 
             event_cb(
                 "INCIDENT",
@@ -4171,8 +4169,7 @@ class RaceSession:
             attacker.wing_damage = min(0.85, attacker.wing_damage + random.uniform(0.24, 0.45))
             attacker.wing_damage_side = "RIGHT" if attacker.d > defender.d else "LEFT"
             attacker.repair_cost_m += 0.45
-            if attacker.wing_damage >= 0.35 and not attacker.box_this_lap:
-                attacker.box_this_lap = True
+            self._maybe_schedule_damage_pit(attacker)
             victim.spin_timer = random.uniform(2.8, 4.5)
             victim.spin_omega = random.choice([-5.8, 5.8]) * random.uniform(0.85, 1.25)
             victim.spin_lateral_dir = 1.0 if victim.d >= 0.0 else -1.0
@@ -4231,8 +4228,7 @@ class RaceSession:
                 culprit.wing_damage = min(0.90, culprit.wing_damage + 0.55)
                 culprit.wing_damage_side = "BOTH" if random.random() < 0.45 else ("RIGHT" if culprit.d > victim.d else "LEFT")
                 culprit.repair_cost_m += 0.65
-                if culprit.wing_damage >= 0.35 and not culprit.box_this_lap:
-                    culprit.box_this_lap = True
+                self._maybe_schedule_damage_pit(culprit)
                 event_cb(
                     "CRASH",
                     f"HEAVY COLLISION AT TURN {turn}! {victim.code} is OUT in the gravel; {culprit.code} limps on with heavy damage!",
@@ -4250,6 +4246,16 @@ class RaceSession:
                 )
 
             self.trigger_safety_car("SC", f"Debris at Turn {turn} ({attacker.code}/{defender.code})", event_cb)
+
+    def _maybe_schedule_damage_pit(self, car: CarState) -> None:
+        """Schedule an urgent pit stop only for critical front-wing damage; moderate damage is weighed by pitwall."""
+        if not car.auto_strategy or car.in_pits or car.box_this_lap or car.wing_damage < 0.65:
+            return
+        laps_left = max(1, self.total_laps - car.laps_completed)
+        if laps_left < 2:
+            return
+        car.box_this_lap = True
+        car.next_compound = self._best_compound_for_conditions(car, laps_left)
 
     def _trigger_side_by_side_contact(self, c1: CarState, c2: CarState, turn: int, event_cb) -> None:
         """Wheel-banging contact physics during wheel-to-wheel battles."""
@@ -4293,10 +4299,8 @@ class RaceSession:
         c1.tire_temp = min(140.0, c1.tire_temp + random.uniform(4.0, 8.0))
         c2.tire_temp = min(140.0, c2.tire_temp + random.uniform(4.0, 8.0))
 
-        if c1.wing_damage >= 0.38 and not c1.box_this_lap:
-            c1.box_this_lap = True
-        if c2.wing_damage >= 0.38 and not c2.box_this_lap:
-            c2.box_this_lap = True
+        self._maybe_schedule_damage_pit(c1)
+        self._maybe_schedule_damage_pit(c2)
 
         event_cb(
             "INCIDENT",
@@ -4362,8 +4366,7 @@ class RaceSession:
             behind.wing_damage_side = "RIGHT" if behind.d > ahead.d else "LEFT"
             behind.repair_cost_m += round(rear_dmg * 0.65, 2)
             ahead.tire_wear = min(0.99, ahead.tire_wear + 0.012)
-            if behind.wing_damage >= 0.38 and not behind.box_this_lap:
-                behind.box_this_lap = True
+            self._maybe_schedule_damage_pit(behind)
 
             if delta_v > 6.8:
                 behind.smoke = max(behind.smoke, 1.5)
@@ -4378,8 +4381,7 @@ class RaceSession:
                 behind.repair_cost_m += round(random.uniform(0.18, 0.38), 2)
                 behind.tire_wear = min(0.99, behind.tire_wear + 0.018)
                 ahead.tire_wear = min(0.99, ahead.tire_wear + 0.012)
-                if behind.wing_damage >= 0.38 and not behind.box_this_lap:
-                    behind.box_this_lap = True
+                self._maybe_schedule_damage_pit(behind)
 
                 if delta_v > 9.5 and random.random() < 0.22:
                     ahead.spin_timer = random.uniform(2.8, 4.2)

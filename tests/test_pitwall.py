@@ -273,5 +273,101 @@ class RivalPitWallTests(unittest.TestCase):
         self.assertEqual(self.events, [])
 
 
+    def test_early_safety_car_does_not_pit_fresh_opening_stint_tyres(self):
+        self.race.flag_state = "SC"
+        for compound in ("MEDIUM", "HARD"):
+            self.configure(self.car, lap=3, wear=0.08, age=2, compound=compound)
+            self.car.pit_stops = 0
+            self.assertIsNone(
+                self.wall.plan(self.car),
+                f"Early lap-3 SC must not pit fresh {compound} opening tyres",
+            )
+        self.race.flag_state = "VSC"
+        self.configure(self.car, lap=4, wear=0.14, age=3, compound="SOFT")
+        self.car.pit_stops = 0
+        self.assertIsNone(self.wall.plan(self.car))
+
+    def test_second_and_third_stop_guards_prevent_short_stint_and_four_stop_spirals(self):
+        # 1) Already 2-dry-legal on 1 stop: no 3-lap SOFT->SOFT spiral even with hot tyres.
+        self.configure(self.car, lap=13, wear=0.28, age=3, compound="SOFT")
+        self.car.pit_stops = 1
+        self.car.tire_temp = 122.0
+        self.car.compounds_used = {"MEDIUM", "SOFT"}
+        self.assertIsNone(self.wall.plan(self.car))
+
+        # 2) Already 2-dry-legal late in the race (<= 4 laps remaining): manage to flag.
+        self.configure(self.car, lap=19, wear=0.72, age=8, compound="SOFT")
+        self.car.pit_stops = 1
+        self.car.compounds_used = {"MEDIUM", "SOFT"}
+        self.assertIsNone(self.wall.plan(self.car))
+
+        # 3) On a 2-stop already (pit_stops >= 2): block unforced 3rd/4th stop spirals.
+        self.configure(self.car, lap=15, wear=0.65, age=7, compound="MEDIUM")
+        self.car.pit_stops = 2
+        self.car.compounds_used = {"MEDIUM", "SOFT", "HARD"}
+        self.assertIsNone(self.wall.plan(self.car))
+
+    def test_moderate_contact_damage_does_not_force_blind_box_and_severe_does(self):
+        self.configure(self.car, lap=11, wear=0.12, age=1, compound="SOFT")
+        self.car.auto_strategy = True
+        self.car.box_this_lap = False
+        self.car.wing_damage = 0.45
+        self.race._maybe_schedule_damage_pit(self.car)
+        self.assertFalse(self.car.box_this_lap)
+
+        self.car.wing_damage = 0.70
+        self.car.next_compound = "SOFT"
+        self.race._maybe_schedule_damage_pit(self.car)
+        self.assertTrue(self.car.box_this_lap)
+        self.assertEqual(self.car.next_compound, "MEDIUM")
+
+        self.car.box_this_lap = False
+        self.car.auto_strategy = False
+        self.car.wing_damage = 0.80
+        self.race._maybe_schedule_damage_pit(self.car)
+        self.assertFalse(self.car.box_this_lap)
+
+    def test_hot_soft_tyre_thermal_carryover_avoids_soft_trap(self):
+        self.configure(self.car, lap=10, wear=0.65, age=8, compound="MEDIUM")
+        self.car.tire_temp = 100.0
+        cool_soft = self.wall.wear_per_lap(self.car, "SOFT", observed=False)
+        self.car.tire_temp = 120.0
+        hot_soft = self.wall.wear_per_lap(self.car, "SOFT", observed=False)
+        self.assertGreater(hot_soft, cool_soft)
+
+        call = self.wall.plan(self.car)
+        self.assertIsNotNone(call)
+        self.assertEqual(call.compound, "HARD")
+
+    def test_imminent_rain_and_wet_tyres_avoid_one_lap_dry_and_short_inter_stops(self):
+        self.configure(self.car, lap=10, wear=0.55, age=9, compound="MEDIUM")
+        self.race.rain_scheduled = True
+        self.race.rain_event_started = True
+        self.race.wetness = 0.06
+        self.race.rain_intensity = 0.65
+        self.assertIsNone(self.wall.plan(self.car))
+
+        # Queued dry stop switches immediately to INTER when heavy rain arrives before pit entry.
+        self.car.box_this_lap = True
+        self.car.next_compound = "HARD"
+        self.car.strategy_status = "Box: cover rival"
+        self.wall._review_queued_stop(self.car, lambda k, m: self.events.append((k, m)))
+        self.assertEqual(self.car.next_compound, "INTER")
+
+        # Gentle shower approaching crossover aborts a queued dry stop rather than doing a 1-lap dry stint.
+        self.race.wetness = 0.0
+        self.race.rain_intensity = 0.25
+        self.car.box_this_lap = True
+        self.car.next_compound = "HARD"
+        self.wall._review_queued_stop(self.car, lambda k, m: self.events.append((k, m)))
+        self.assertFalse(self.car.box_this_lap and self.car.next_compound in ("SOFT", "MEDIUM", "HARD"))
+
+        # Healthy recent INTER stint does not trigger an extra INTER->INTER pit stop.
+        self.configure(self.car, lap=13, wear=0.35, age=3, compound="INTER")
+        self.race.wetness = 0.35
+        self.race.rain_intensity = 0.65
+        self.assertIsNone(self.wall.plan(self.car))
+
+
 if __name__ == "__main__":
     unittest.main()

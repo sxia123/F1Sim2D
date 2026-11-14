@@ -56,6 +56,10 @@ class RivalPitWall:
             if car.tire_age_laps >= 2:
                 measured = max(0.0, car.tire_wear - 0.02) / car.tire_age_laps
                 rate = 0.5 * rate + 0.5 * min(rate * 2.0, max(rate * 0.75, measured))
+        elif compound in DRY and car.tire_temp > spec["opt_temp_max"]:
+            # Candidate tyres inherit part of the car/track thermal overheat above their window
+            est_temp = spec["opt_temp_max"] + 0.65 * (car.tire_temp - spec["opt_temp_max"])
+            rate *= tire_thermal_wear_mult(compound, est_temp)
         return max(0.005, rate)
 
     def projected_wetness(self, seconds):
@@ -139,8 +143,23 @@ class RivalPitWall:
         return min(7.0, penalty)
 
     def _battle_incentive(self, car, fresh_compound, wetness, loss):
-        if self.race.flag_state != "GREEN" or car.tire_age_laps < 3:
+        laps = max(1, self.race.total_laps - car.laps_completed)
+        if (self.race.flag_state != "GREEN" or wetness >= 0.14 or laps <= 5
+                or car.compound not in DRY or fresh_compound not in DRY):
             return 0.0, ""
+        if car.pit_stops >= 2:
+            return 0.0, ""
+        if car.pit_stops == 1:
+            if car.tire_age_laps < 6 or car.tire_wear < 0.48 or laps < 7:
+                return 0.0, ""
+            cand_end_wear = 0.02 + laps * self.wear_per_lap(car, fresh_compound, observed=False)
+            if cand_end_wear > TIRE_COMPOUNDS[fresh_compound]["cliff_wear"] + 0.04:
+                return 0.0, ""
+        else:
+            min_age = 8 if car.compound == "HARD" else 7 if car.compound == "MEDIUM" else 5
+            min_wear = 0.38 if car.compound == "HARD" else 0.34 if car.compound == "MEDIUM" else 0.28
+            if car.tire_age_laps < min_age or car.tire_wear < min_wear:
+                return 0.0, ""
         gain = self._lap_cost(car.compound, car.tire_wear, wetness, car.wing_damage)
         gain -= self._lap_cost(fresh_compound, 0.02, wetness)
         if gain < 0.6:
@@ -195,9 +214,31 @@ class RivalPitWall:
         legal_change = best in DRY and best not in car.compounds_used
         if need_second and laps <= 2 and legal_change:
             return PitCall(car, best, "complete the required second dry compound", 0.0, 5, True)
-        if car.tire_age_laps < 2 and car.pit_stops > 0:
-            car.strategy_status = "Build the new stint; avoid another early stop"
+        future_wet = self.projected_wetness(arrival + self.lap_s * 1.6)
+        if not weather_change and car.compound in DRY and future_wet >= 0.16 and car.tire_wear < 0.85:
+            car.strategy_status = "Hold track position for incoming rain before boxing"
             return None
+        if not weather_change and car.compound not in DRY:
+            if car.tire_wear < 0.72 or car.tire_age_laps < 5 or laps <= 5 or future_wet < 0.18:
+                car.strategy_status = "Manage wet tyres to the crossover window"
+                return None
+        if not weather_change and car.compound in DRY:
+            if car.pit_stops == 0:
+                min_sc_age = 4 if car.compound == "SOFT" else 5
+                if race.flag_state in ("SC", "VSC") and car.tire_age_laps < min_sc_age and car.tire_wear < 0.24:
+                    car.strategy_status = "Early stint; hold track position under neutralisation"
+                    return None
+            else:
+                if car.tire_age_laps < 6 and car.wing_damage < 0.65:
+                    car.strategy_status = "Build the new stint; avoid another early stop"
+                    return None
+                if not need_second:
+                    if laps <= 4 and car.wing_damage < 0.65 and car.tire_wear < 0.88:
+                        car.strategy_status = "Manage tyres to the checkered flag"
+                        return None
+                    if car.pit_stops >= 2 and (car.tire_wear < 0.88 or laps < 5) and car.wing_damage < 0.65:
+                        car.strategy_status = "Protect track position; carry current tyres to the finish"
+                        return None
         current = self._stint_costs(car, car.compound, laps, wetness)
         stay = current[-1] + (1000.0 if need_second and wetness < 0.17 else 0.0)
         best_cost, best_delay, best_compound = stay, None, best
@@ -220,7 +261,28 @@ class RivalPitWall:
                 if cost < best_cost:
                     best_cost, best_delay, best_compound = cost, delay, compound
                     battle_reason = reason if delay == 0 and incentive > traffic else ""
-        if best_delay == 0 and stay - best_cost > 1.0:
+        if car.pit_stops >= 1 and not need_second and not weather_change:
+            stay_ok = not (car.pit_stops == 1 and car.tire_wear < 0.40 and car.wing_damage < 0.35)
+            min_gain = 9.0 if car.pit_stops >= 2 else (4.5 if race.flag_state == "GREEN" else 3.0)
+        else:
+            stay_ok = True
+            min_gain = 1.0
+        if best_delay == 0 and stay_ok and stay - best_cost > min_gain:
+            if (not weather_change and best_compound in DRY
+                    and 0.02 + laps * self.wear_per_lap(car, best_compound, observed=False)
+                    > TIRE_COMPOUNDS[best_compound]["cliff_wear"] - 0.02):
+                viable_alts = [
+                    c for c in options
+                    if c in DRY and c != best_compound
+                    and 0.02 + laps * self.wear_per_lap(car, c, observed=False)
+                    <= TIRE_COMPOUNDS[c]["cliff_wear"] - 0.02
+                    and (not need_second or c not in car.compounds_used)
+                ]
+                if viable_alts:
+                    alt = min(viable_alts, key=lambda c: options[c][-1])
+                    alt_cost = current[0] + loss + options[alt][-1] + traffic
+                    if alt_cost < best_cost + 3.0 and stay - alt_cost > min_gain:
+                        best_compound = alt
             reason = battle_reason or ("take a cheaper stop under neutralisation" if race.flag_state in ("SC", "VSC")
                                        else "replace worn tyres at the optimal stint window")
             if weather_change:
@@ -347,10 +409,12 @@ class RivalPitWall:
         if car.drive_through_pending:
             return
         arrival = ((self.race.track.pit_entry_s - car.s) % self.race.track.length_m) / self.mean_speed
-        # Give the driver a stable final instruction on the pit-entry approach.
-        if arrival < 4.0:
+        # Give the driver a stable final instruction right at pit-entry commit point.
+        if arrival < 2.0:
             return
         if car.strategy_status.startswith("Box: switch tyres for changing track conditions"):
+            if arrival < 4.0:
+                return
             previous_status = car.strategy_status
             revised = self.plan(car)
             if revised is None:
@@ -372,6 +436,7 @@ class RivalPitWall:
         else:
             laps = max(1, self.race.total_laps - car.laps_completed)
             wetness = 0.35 * self.race.wetness + 0.65 * self.projected_wetness(arrival + 25.0)
+            future_wet = self.projected_wetness(arrival + self.lap_s * 1.6)
             options = self._fresh_options(car, laps, wetness)
             if not options:
                 return
@@ -379,7 +444,17 @@ class RivalPitWall:
             queued = car.next_compound
             weather_change = (best in DRY) != (queued in DRY)
             gain = self._lap_cost(queued, 0.02, wetness) - self._lap_cost(best, 0.02, wetness)
-            if queued not in options or (weather_change and gain > 1.5):
+            if (queued in DRY and future_wet >= 0.16 and best in DRY
+                    and car.tire_wear < 0.85 and car.wing_damage < 0.65
+                    and not (self._needs_second_dry(car) and laps <= 2)):
+                car.box_this_lap = False
+                car.radio_box_announced = False
+                car.inlap_push_announced = False
+                event_cb("STRATEGY", f"PIT WALL ({car.team_short} / {car.code}): Stay out; rain arriving shortly before pit entry.")
+                return
+            if arrival < 4.0 and not (weather_change and best not in DRY):
+                return
+            if queued not in options or (weather_change and (gain > 1.5 or best not in DRY)):
                 car.next_compound = best
                 event_cb("STRATEGY", f"PIT WALL ({car.team_short} / {car.code}): Revised pit tyre order to {best.lower()} for the latest conditions.")
 
