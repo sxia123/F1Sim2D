@@ -1899,3 +1899,241 @@ select, input[type="range"] {
   gap: 16px;
   margin-bottom: 24px;
 }
+.finance-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.finance-metrics > div {
+  padding: 12px;
+  border: 1px solid #303044;
+  border-radius: 6px;
+  background: #171722;
+}
+.finance-metrics span { display: block; color: #8f90a6; font-size: 10px; margin-bottom: 6px; }
+.finance-metrics strong { font-size: 18px; color: #00d26a; }
+#finance-summary .muted-note a { color: #a7c5ff; }
+.tel-strategy { margin-top: 8px; padding: 8px; background: #1b1b29; border-left: 2px solid #00d2be; color: #d4d4e0; font-size: 11px; line-height: 1.4; }
+.tel-strategy span { display: block; color: #8f90a6; font-size: 9px; font-weight: 700; margin-bottom: 3px; }
+
+/* Timing Tower VS Compare Button & Head-to-Head Telemetry */
+.t-vs-btn {
+  margin-left: auto;
+  padding: 1px 4px;
+  font-size: 8.5px;
+  font-weight: 800;
+  border-radius: 2px;
+  border: 1px solid #35374c;
+  background: #171722;
+  color: #8f90a6;
+  cursor: pointer;
+}
+.t-vs-btn:hover { border-color: #00d2be; color: #ffffff; }
+.t-vs-btn.active { background: #00d2be; border-color: #00d2be; color: #0b0c12; }
+
+.h2h-card {
+  margin-top: 10px;
+  padding: 8px;
+  background: #141522;
+  border: 1px solid #2b2d42;
+  border-left: 2px solid #00d2be;
+  border-radius: 3px;
+}
+.h2h-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #ffffff;
+  margin-bottom: 6px;
+}
+.h2h-clear {
+  background: none;
+  border: 1px solid #3c3e55;
+  color: #b4b5c8;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.h2h-clear:hover { color: #ffffff; border-color: #ffffff; }
+.h2h-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 10.5px;
+}
+.h2h-row span { color: #8f90a6; font-size: 9.5px; font-weight: 700; text-align: center; }
+.h2h-row strong:last-child { text-align: right; }
+
+/* Pit Wall Advice, Rejoin & Setup Strips */
+.pw-advice {
+  margin-top: 5px;
+  padding: 4px 7px;
+  background: #171928;
+  border-left: 2px solid #00d2be;
+  font-size: 10px;
+  color: #d4d4e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pw-rejoin-pill {
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 9.5px;
+  font-weight: 800;
+  background: #202336;
+}
+.pw-btn.lc-on { background: #00d2be; border-color: #00d2be; color: #090b10; }
+.pw-btn.scrub-on { background: #ffd000; border-color: #ffd000; color: #090b10; }
+
+/* R&D Circuit DNA, Downforce Setup & Power Unit Pool */
+.circuit-dna-card {
+  background: #141521;
+  border: 1px solid #2b2d42;
+  border-left: 3px solid #00d2be;
+  padding: 12px 14px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 14px;
+}
+.dna-weights {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.dna-pill {
+  padding: 3px 7px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 800;
+  background: #1d1f30;
+  color: #c8c9d8;
+}
+.dna-pill.high { color: #00d26a; border: 1px solid rgba(0, 210, 106, 0.35); }
+.dna-pill.low { color: #8f90a6; }
+
+.setup-driver-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.setup-btns { display: flex; gap: 4px; flex-wrap: wrap; }
+.setup-btn {
+  padding: 4px 7px;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 3px;
+  border: 1px solid #35374c;
+  background: #191b2a;
+  color: #c8c9d8;
+  cursor: pointer;
+}
+.setup-btn.active { background: #e10600; border-color: #e10600; color: #ffffff; }
+.setup-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.pu-driver-card {
+  background: #141521;
+  border: 1px solid #2b2d42;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.pu-driver-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 800;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+.pu-comp-row {
+  display: grid;
+  grid-template-columns: 74px 1fr 44px 48px auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+  padding: 4px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.pu-bar {
+  height: 6px;
+  background: #232436;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.pu-bar > span { display: block; height: 100%; border-radius: 3px; }
+
+.neg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+/* Race Strategy & Position Analytics Modal */
+.analytics-modal-box {
+  width: min(980px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.analytics-chart-wrap {
+  background: #10111a;
+  border: 1px solid #26283b;
+  border-radius: 4px;
+  padding: 8px;
+  overflow-x: auto;
+}
+.analytics-stints-wrap {
+  background: #10111a;
+  border: 1px solid #26283b;
+  border-radius: 4px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.stint-driver-row {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 10.5px;
+}
+.stint-track {
+  position: relative;
+  height: 16px;
+  background: #181a28;
+  border-radius: 2px;
+  display: flex;
+  overflow: hidden;
+}
+.stint-seg {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 900;
+  color: #090b10;
+  border-right: 1px solid #090b10;
+  white-space: nowrap;
+  overflow: hidden;
+}
+@media (max-width: 900px) {
+  .circuit-dna-card { grid-template-columns: 1fr; }
+}

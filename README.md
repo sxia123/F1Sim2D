@@ -63,12 +63,20 @@ The server immediately starts broadcasting live 20 Hz telemetry and physics. No 
   McLaren, Ferrari, Mercedes, Red Bull, Aston Martin, Williams, Alpine, Racing Bulls, Haas, Audi, or Cadillac.
 - **Factory R&D Upgrades**:
   Invest budget across 6 departments (`2026 Hybrid PU & MGU-K`, `Active Aero`, `Chassis`, `Suspension`, `Reliability`, and `Pit Crew Robotics`) while rival AI teams develop their machinery in parallel.
+  Each team can deploy at most **3 department-level upgrades per Grand Prix weekend**, shared across Sprint and Grand Prix sessions and retained across server restarts or team changes. Winter development uses the next season's opening weekend allowance. Upgrade prices are **10% higher** across all departments and levels.
 - **Driver Market & Rival Trades**:
   Negotiate driver swaps + cash packages with rival Team Principals, sign free agents, or promote rookies.
 - **Finances & Sponsors**:
   Sign commercial partners with performance milestone bonuses, collect FIA Constructors' Championship prize money, manage driver salaries, and cover carbon-fibre crash repair invoices.
+  Opening team cash now averages **$400M** (individual game allocations: $330M-$460M). This rounds the **$401.6M mean operating-spend estimate**, calculated as revenue minus operating profit across the ten teams in [Forbes' 2025 valuations](https://www.forbes.com.au/news/sport/ranked-most-valuable-formula-1-teams-2025/), which report 2024 F1 operations. These are game-balanced funding envelopes, not claims about each team's confidential 2026 budget or the FIA cost cap.
+  Active drivers start with [RacingNews365's reported 2026 annual base salaries](https://racingnews365.com/f1-drivers-salaries-2026), excluding bonuses and endorsements; reported $0.5M-$1M ranges use a $0.75M midpoint. Free-agent and legend demands remain simulated, and career salaries evolve with performance.
+  Payroll and fixed running costs settle over the actual season's Grand Prix count. Factory/logistics costs use a game estimate of 60% of each annual envelope. AI reserves cover remaining costs after guaranteed sponsor income plus a repair buffer. Annual core funding supplements sponsors and championship distributions, with cash carried forward. The existing additional $100M grant remains for the fictional 2028 regulation reset.
+  Older saves receive the budget increase once, retaining prior cash spending and development differences. The original save is backed up as `data/championship_state.before-balance-v1.json` before migration.
+- **Closer Opening Performance**:
+  The 2026 car index range is **79.0-85.8**, reduced from 73.4-88.0 while retaining team department strengths and the starting hierarchy. The fictional 2028 regulation reset also uses a closer 5-7 department range, instead of 2-8.
 - **Live Pit Wall Console**:
   Issue tactical orders in real time: Pace Mode (`PUSH`, `BALANCED`, `CONSERVE`), ERS Mode (`OVERTAKE`, `BALANCED`, `HARVEST`), Team Orders, Box This Lap, and Tyre Selection. An autonomous AI Race Engineer manages strategy whenever you are away.
+  Rival pit walls review both cars every two seconds. They estimate stint life from tyre wear, abrasion, heat and driver management; compare the cost of stopping now with extending; consider available compounds, the second-dry-compound requirement, pit-lane time, neutralisations, rejoin traffic and nearby undercuts. Teammates share a garage schedule, with urgent weather or repair stops taking precedence over avoiding a stack. Pace and battery management respond to traffic, overheating and race distance, with temporary team orders for a clearly faster teammate. Selected-car telemetry explains the current plan. Decisions use the visible rain and track state, without access to the simulation's hidden rain schedule, and leave the player's pit-wall settings under player control.
 
 ### Hall of Fame & Multi-Season Archive
 

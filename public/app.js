@@ -58,11 +58,31 @@ function fmtMoney(m) {
   return `${sign}$${Math.abs(m).toFixed(2)}M`;
 }
 
+const SETUP_LABELS = {
+  "-2": "MONZA LOW DF",
+  "-1": "LOW-MED DF",
+  "0": "BALANCED DF",
+  "1": "MED-HIGH DF",
+  "2": "MAX DOWNFORCE",
+};
+
+function fmtAdvice(advice) {
+  if (!advice) return "";
+  if (typeof advice === "string") return advice;
+  const act = advice.action === "BOX"
+    ? `${advice.mode || "BOX"} -> ${advice.compound || ""}${advice.gain_s ? ` (${advice.gain_s > 0 ? "+" : ""}${Number(advice.gain_s).toFixed(1)}s)` : ""}`
+    : `${advice.mode || "STAY OUT"}`;
+  const rsn = advice.reason ? ` · ${advice.reason}` : "";
+  return `${act}${rsn}`;
+}
+
 class F1App {
   constructor() {
     this.fullState = null;
     this.liveTick = null;
     this.selectedDriverId = null;
+    this.compareDriverId = null;
+    this._negBound = false;
     this.activeTab = "circuit";
     this.lastRoundKey = "";
     this.lastEventId = -1;
@@ -150,6 +170,14 @@ class F1App {
     }
   }
 
+  toggleCompareDriver(driverId) {
+    this.compareDriverId = this.compareDriverId === driverId ? null : driverId;
+    if (this.liveTick) {
+      this.renderTelemetry(this.liveTick);
+      this.renderTimingTower(this.liveTick);
+    }
+  }
+
   showToast(msg) {
     const el = document.getElementById("toast");
     el.textContent = msg;
@@ -201,6 +229,12 @@ class F1App {
     });
 
     document.getElementById("timing-list").addEventListener("pointerdown", (e) => {
+      const vsBtn = e.target.closest("button[data-vs-id]");
+      if (vsBtn) {
+        e.stopPropagation();
+        this.toggleCompareDriver(vsBtn.dataset.vsId);
+        return;
+      }
       const row = e.target.closest(".t-row");
       if (row && row.dataset.id) {
         this.selectDriver(row.dataset.id);
@@ -215,8 +249,19 @@ class F1App {
       const val = btn.dataset.val;
       const payload = { driver_id: driverId };
 
+      if (cmd === "setup_df") {
+        const res = await this.apiPost("/api/set_setup", { driver_id: driverId, setup_df: Number(val) });
+        if (res.ok) {
+          this.showToast(`SETUP CONFIRMED: #${driverId.toUpperCase()} -> ${res.setup_label}`);
+          this.fetchFullState();
+          this.lastDomSyncMs = 0;
+        }
+        return;
+      }
       if (cmd === "auto") payload.auto_strategy = val === "true";
       else if (cmd === "box") payload.box_this_lap = val === "true";
+      else if (cmd === "lift_coast") payload.lift_coast = val === "true";
+      else if (cmd === "prefer_fresh") payload.prefer_fresh = val === "true";
       else if (cmd === "start_comp") {
         const res = await this.apiPost("/api/set_starting_compound", { driver_id: driverId, compound: val });
         if (res.ok) {
@@ -397,10 +442,36 @@ class F1App {
       });
     }
 
-    // Hall of Fame expandable Top 10 classifications
+    const analyticsModal = document.getElementById("analytics-modal");
+    const closeAnalyticsBtn = document.getElementById("btn-close-analytics");
+    if (analyticsModal && closeAnalyticsBtn) {
+      closeAnalyticsBtn.addEventListener("click", () => analyticsModal.classList.add("hidden"));
+      analyticsModal.addEventListener("click", (e) => {
+        if (e.target === analyticsModal) analyticsModal.classList.add("hidden");
+      });
+    }
+
+    const phaseOv = document.getElementById("phase-overlay");
+    if (phaseOv) {
+      phaseOv.addEventListener("click", (e) => {
+        if (e.target.closest("button[data-open-podium-analytics]") && this.liveTick?.podium) {
+          this.openAnalyticsModal(this.liveTick.podium);
+        }
+      });
+    }
+
+    // Hall of Fame expandable Top 10 classifications & Analytics Modal
     const racesGrid = document.getElementById("hof-races-grid");
     if (racesGrid) {
       racesGrid.addEventListener("click", (e) => {
+        const analyticsBtn = e.target.closest("button[data-analytics-round]");
+        if (analyticsBtn) {
+          const rNum = Number(analyticsBtn.dataset.analyticsRound);
+          const archive = this.fullState?.season_archives?.seasons?.[String(this.selectedHofSeason)];
+          const raceObj = archive?.races?.find((item) => item.round === rNum);
+          if (raceObj) this.openAnalyticsModal(raceObj);
+          return;
+        }
         const btn = e.target.closest(".hof-card-btn");
         if (!btn) return;
         const roundNum = btn.dataset.round;
@@ -579,6 +650,7 @@ class F1App {
           <div><span style="color:#8f90a6;font-weight:900">P3</span> <strong>${r.p3_code}</strong></div>
           <div style="color:#a855f7;font-weight:700">FASTEST LAP: <strong>${r.fastest_lap_code}</strong></div>
           ${sprInfo}
+          ${(tick.podium.lap_chart?.length || tick.podium.stints) ? `<button class="btn-outline btn-sm" data-open-podium-analytics style="margin-left:auto">POSITION CHART &amp; STINTS</button>` : ""}
         </div>
       `;
     } else if (tick.phase === "OFF_SEASON") {
@@ -641,6 +713,9 @@ class F1App {
         let badges = "";
         if (isQuali && c.elim) {
           badges += `<span class="badge b-elim">OUT ${c.estg}</span>`;
+        } else if (isQuali && c.quali_phase && c.quali_phase !== "PUSH") {
+          const qpMap = { GARAGE: "GAR", EXIT: "EXIT", OUTLAP: "OUT", INLAP: "IN" };
+          badges += `<span class="badge" style="background:#212334;color:#9ea2bd">${qpMap[c.quali_phase] || c.quali_phase}</span>`;
         } else if (c.in_pit) {
           badges += `<span class="badge b-pit">PIT</span>`;
         } else if (c.man && manShort[c.man] && !isQuali) {
@@ -711,6 +786,7 @@ class F1App {
               <span class="t-code">${c.code}</span>
               <span class="t-num ${c.num === 1 ? "champ-1" : ""}">${c.num}</span>
               ${isFL ? `<span class="t-fl-bar" title="Fastest Lap"></span>` : ""}
+              <button class="t-vs-btn ${this.compareDriverId === c.id ? "active" : ""}" data-vs-id="${c.id}" title="Compare Head-to-Head in Telemetry">VS</button>
             </div>
             <div class="t-modes">${badges}</div>
             <div class="t-tyre">
@@ -740,6 +816,45 @@ class F1App {
 
     const myCars = tick.cars.filter((c) => c.tid === tick.player_team_id);
     if (myCars.length === 0) {
+      if (tick.phase === "PRE_WEEKEND" && this.fullState) {
+        const myDrivers = (this.fullState.drivers || []).filter((d) => d.team_id === this.fullState.player_team_id);
+        const setups = this.fullState.driver_setups || {};
+        const locked = Boolean(tick.parc_ferme);
+        const prof = tick.track_profile || this.fullState.track_profile || {};
+        wrap.innerHTML = myDrivers
+          .map((d) => {
+            const curDf = setups[d.id] != null ? setups[d.id] : (prof.recommended_df || 0);
+            return `
+              <div class="pw-card" style="border-top-color:${d.team_color || "#00d2be"}">
+                <div class="pw-top">
+                  <div class="pw-driver">
+                    ${teamLogoSVG(d.team_id, 16)}
+                    <span>#${d.number} ${d.name}</span>
+                    <span class="badge" style="background:#1c2030;color:#00d2be">OVR ${d.overall}</span>
+                  </div>
+                  <div class="pw-metrics">
+                    <span>TRACK <strong>${prof.label || "BALANCED"}</strong></span>
+                    <span>REC WING <strong>${prof.recommended_df != null ? (prof.recommended_df >= 0 ? `+${prof.recommended_df}` : prof.recommended_df) : "0"}</strong></span>
+                    <span style="color:${locked ? "#ff3b30" : "#00d26a"}"><strong>${locked ? "PARC FERME LOCKED" : "GARAGE SETUP OPEN"}</strong></span>
+                  </div>
+                </div>
+                <div class="pw-controls">
+                  <div class="pw-group" title="Pre-Weekend Wing Downforce (-2 Low Drag Speed .. +2 High Cornering Grip)">
+                    <span class="pw-lbl">WING SETUP</span>
+                    ${[-2, -1, 0, 1, 2]
+                      .map((lvl) => {
+                        const lbl = lvl === 0 ? "0 BAL" : lvl > 0 ? `+${lvl} DF` : `${lvl} SPD`;
+                        return `<button class="pw-btn ${curDf === lvl ? "active" : ""}" ${locked ? "disabled" : ""} data-pw-cmd="setup_df" data-drv="${d.id}" data-val="${lvl}">${lbl}</button>`;
+                      })
+                      .join("")}
+                  </div>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+        return;
+      }
       wrap.innerHTML = `<div style="color:#8f90a6;font-size:11.5px;padding:6px 0">TELEMETRY STANDBY — AWAITING TRACK SESSION (${tick.phase})</div>`;
       return;
     }
@@ -760,6 +875,13 @@ class F1App {
         const aeroColor = (c.aero === "DRS" || c.drs) ? "#00d26a" : (c.aero === "STRAIGHT" ? "#00d2be" : "#ffffff");
         const tCol = getTempColor(c.comp, c.ttemp);
         const tStat = getTempStatus(c.comp, c.ttemp);
+        const fuelMargin = c.fuel_margin != null ? c.fuel_margin : 0.0;
+        const fuelCol = fuelMargin < -0.15 ? "#ff3b30" : fuelMargin < 0.25 ? "#ffd000" : "#00d26a";
+        const trafS = c.rejoin_traffic_s != null ? c.rejoin_traffic_s : null;
+        const rejoinCol = trafS != null && trafS < 1.2 ? "#ff3b30" : trafS != null && trafS < 2.2 ? "#ffd000" : "#00d2be";
+        const rejoinBadge = (isRace && c.rejoin_pos != null && !c.in_pit)
+          ? `<span class="pw-rejoin-pill" style="color:${rejoinCol}">REJOIN P${c.rejoin_pos} (${trafS != null && trafS < 2.2 ? `+${trafS.toFixed(1)}s` : "CLEAR"})</span>`
+          : "";
         return `
           <div class="pw-card" style="border-top-color:${c.tcol}">
             <div class="pw-top">
@@ -771,12 +893,14 @@ class F1App {
                 ${c.elim ? `<span class="badge b-elim">OUT ${c.estg}</span>` : ""}
                 ${c.pen > 0 ? `<span class="badge b-pen">+${c.pen}S PEN</span>` : ""}
                 ${c.dmg > 15 ? `<span class="badge b-pen">FW DMG (${c.dmg_side || "FW"} -${c.dmg}%)</span>` : ""}
+                ${c.scrubbed ? `<span class="badge" style="background:#2b2714;color:#ffd000">SCRUB</span>` : ""}
               </div>
               <div class="pw-metrics">
                 <span><strong>${c.kph}</strong> KPH</span>
                 <span>LAT <strong>${c.g_lat != null ? Math.abs(c.g_lat).toFixed(1) : "0.0"}G</strong></span>
                 <span>AERO <strong style="color:${aeroColor}">${aeroLabel}</strong></span>
                 <span>${ersLabel} <strong>${Math.min(100, Math.max(0, c.bat))}%</strong></span>
+                <span>FUEL <strong style="color:${fuelCol}">${c.fuel_pct != null ? c.fuel_pct : 100}% (${fuelMargin >= 0 ? "+" : ""}${fuelMargin.toFixed(1)}L)</strong></span>
                 <span><span class="pirelli-badge" style="border-color:${tm.color};width:14px;height:14px;font-size:8.5px">${tm.code}</span> ${100 - c.wear}% (${c.tage}L) · <strong style="color:${tCol}" title="Tyre Temperature: ${c.ttemp}°C (${tStat})">${c.ttemp}°C</strong></span>
               </div>
             </div>
@@ -789,6 +913,9 @@ class F1App {
                 <button class="pw-btn ${c.box ? "box-active" : ""}" ${dis} data-pw-cmd="box" data-drv="${c.id}" data-val="${!c.box}">
                   ${c.in_pit ? "IN PIT LANE" : c.box ? "BOX CONFIRMED" : "BOX THIS LAP"}
                 </button>
+                <button class="pw-btn ${c.lift_coast ? "lc-on" : ""}" ${isRace ? "" : "disabled"} data-pw-cmd="lift_coast" data-drv="${c.id}" data-val="${!c.lift_coast}" title="Lift-and-Coast saves fuel (~20%) and cools tyres/PU">
+                  ${c.lift_coast ? "L&C: ON" : "L&C"}
+                </button>
               </div>
 
               ${isPreRace ? `
@@ -797,15 +924,20 @@ class F1App {
                 ${["SOFT", "MEDIUM", "HARD", "INTER", "WET"]
                   .map((k) => {
                     const setsLeft = (c.tsets && c.tsets[k] != null) ? c.tsets[k] : 0;
+                    const det = c.tsets_detail?.[k];
+                    const fTag = det ? ` (${det.fresh}F+${det.scrubbed}S)` : "";
                     const isActive = c.comp === k;
                     const canSelect = isActive || setsLeft > 0;
                     const btnDis = canSelect ? "" : "disabled";
                     const btnStyle = isActive
                       ? ""
                       : `color:${TIRE_META[k].color};${setsLeft <= 0 ? "opacity:0.35;cursor:not-allowed;" : ""}`;
-                    return `<button class="pw-btn ${isActive ? "active" : ""}" ${btnDis} data-pw-cmd="start_comp" data-drv="${c.id}" data-val="${k}" style="${btnStyle}" title="${k}: ${setsLeft} set${setsLeft === 1 ? '' : 's'} remaining">${TIRE_META[k].code} (${setsLeft})</button>`;
+                    return `<button class="pw-btn ${isActive ? "active" : ""}" ${btnDis} data-pw-cmd="start_comp" data-drv="${c.id}" data-val="${k}" style="${btnStyle}" title="${k}: ${setsLeft} set${setsLeft === 1 ? '' : 's'} remaining${fTag}">${TIRE_META[k].code} (${setsLeft})</button>`;
                   })
                   .join("")}
+                <button class="pw-btn ${c.prefer_fresh === false ? "scrub-on" : ""}" data-pw-cmd="prefer_fresh" data-drv="${c.id}" data-val="${c.prefer_fresh === false}" title="Prefer Fresh or Scrubbed Qualifying sets when available">
+                  ${c.prefer_fresh === false ? "USE SCRUB" : "USE FRESH"}
+                </button>
               </div>
               ` : `
               <div class="pw-group" title="Next Pit-Stop Tyre Compound (Allocations Remaining)">
@@ -813,22 +945,27 @@ class F1App {
                 ${["SOFT", "MEDIUM", "HARD", "INTER", "WET"]
                   .map((k) => {
                     const setsLeft = (c.tsets && c.tsets[k] != null) ? c.tsets[k] : 0;
+                    const det = c.tsets_detail?.[k];
+                    const fTag = det ? ` (${det.fresh}F+${det.scrubbed}S)` : "";
                     const isActive = c.ncomp === k;
                     const canSelect = isRace && (isActive || setsLeft > 0);
                     const btnDis = canSelect ? "" : "disabled";
                     const btnStyle = isActive
                       ? ""
                       : `color:${TIRE_META[k].color};${setsLeft <= 0 ? "opacity:0.35;cursor:not-allowed;" : ""}`;
-                    return `<button class="pw-btn ${isActive ? "active" : ""}" ${btnDis} data-pw-cmd="ncomp" data-drv="${c.id}" data-val="${k}" style="${btnStyle}" title="${k}: ${setsLeft} set${setsLeft === 1 ? '' : 's'} remaining">${TIRE_META[k].code} (${setsLeft})</button>`;
+                    return `<button class="pw-btn ${isActive ? "active" : ""}" ${btnDis} data-pw-cmd="ncomp" data-drv="${c.id}" data-val="${k}" style="${btnStyle}" title="${k}: ${setsLeft} set${setsLeft === 1 ? '' : 's'} remaining${fTag}">${TIRE_META[k].code} (${setsLeft})</button>`;
                   })
                   .join("")}
+                <button class="pw-btn ${c.prefer_fresh === false ? "scrub-on" : ""}" ${isRace ? "" : "disabled"} data-pw-cmd="prefer_fresh" data-drv="${c.id}" data-val="${c.prefer_fresh === false}" title="Prefer Fresh or Scrubbed Qualifying sets on next stop">
+                  ${c.prefer_fresh === false ? "SCRUB" : "FRESH"}
+                </button>
               </div>
               `}
 
               <div class="pw-group" title="Target Pace Mode">
                 <span class="pw-lbl">PACE</span>
                 ${[
-                  ["CONSERVE", "LIFT"],
+                  ["CONSERVE", "CON"],
                   ["BALANCED", "STD"],
                   ["PUSH", "PUSH"],
                   ["ATTACK", "MAX"],
@@ -868,6 +1005,11 @@ class F1App {
                   .join("")}
               </div>
             </div>
+            ${(rejoinBadge || c.advice || c.strategy) ? `
+            <div class="pw-advice">
+              <span>${fmtAdvice(c.advice) || c.strategy || ""}</span>
+              ${rejoinBadge}
+            </div>` : ""}
           </div>
         `;
       })
@@ -898,6 +1040,41 @@ class F1App {
       DEFEND: "DEFENDING APEX",
     }[car.man] || (car.battle ? "WHEEL-TO-WHEEL" : "RACING LINE");
     const pitStr = car.lpit > 0 ? `${car.pits} (${car.lpit.toFixed(2)}s)` : `${car.pits} ${car.in_pit ? "(PIT)" : ""}`;
+    const setupName = SETUP_LABELS[String(car.setup_df ?? 0)] || "BALANCED DF";
+    const fMargin = car.fuel_margin != null ? car.fuel_margin : 0;
+    const fStr = `${car.fuel_kg != null ? car.fuel_kg.toFixed(1) : "--"} KG (${fMargin >= 0 ? "+" : ""}${fMargin.toFixed(1)}L)`;
+    const cmp = (this.compareDriverId && this.compareDriverId !== car.id)
+      ? tick.cars.find((c) => c.id === this.compareDriverId)
+      : null;
+
+    let h2hHtml = "";
+    if (cmp) {
+      const spdDiff = car.kph - cmp.kph;
+      const batDiff = car.bat - cmp.bat;
+      const lifeA = 100 - car.wear;
+      const lifeB = 100 - cmp.wear;
+      const bestDiff = (car.best > 0 && cmp.best > 0) ? (car.best - cmp.best) : null;
+      const lastDiff = (car.last > 0 && cmp.last > 0) ? (car.last - cmp.last) : null;
+      const fmtDelta = (v, unit = "s", invertGood = false) => {
+        if (v == null || !Number.isFinite(v)) return "—";
+        const good = invertGood ? v < 0 : v > 0;
+        const col = Math.abs(v) < 0.001 ? "#d4d4e0" : good ? "#00d26a" : "#ff4d4f";
+        return `<span style="color:${col}">${v > 0 ? "+" : ""}${unit === "s" ? v.toFixed(3) : Math.round(v)}${unit}</span>`;
+      };
+      h2hHtml = `
+        <div class="h2h-card">
+          <div class="h2h-hdr">
+            <span>H2H: ${car.code} (P${car.pos}) vs ${cmp.code} (P${cmp.pos})</span>
+            <button class="h2h-clear" id="btn-clear-h2h">CLEAR</button>
+          </div>
+          <div class="h2h-row"><strong>${car.kph} KPH</strong><span>SPEED ${fmtDelta(spdDiff, " km/h")}</span><strong>${cmp.kph} KPH</strong></div>
+          <div class="h2h-row"><strong>${car.bat}%</strong><span>MGU-K ${fmtDelta(batDiff, "%")}</span><strong>${cmp.bat}%</strong></div>
+          <div class="h2h-row"><strong>${car.comp[0]} ${lifeA}%</strong><span>TYRE LIFE ${fmtDelta(lifeA - lifeB, "%")}</span><strong>${cmp.comp[0]} ${lifeB}%</strong></div>
+          <div class="h2h-row"><strong>${fmtLap(car.last)}</strong><span>LAST ${fmtDelta(lastDiff, "s", true)}</span><strong>${fmtLap(cmp.last)}</strong></div>
+          <div class="h2h-row"><strong>${fmtLap(car.best)}</strong><span>BEST ${fmtDelta(bestDiff, "s", true)}</span><strong>${fmtLap(cmp.best)}</strong></div>
+        </div>
+      `;
+    }
 
     body.innerHTML = `
       <div class="tel-speed-row">
@@ -923,8 +1100,10 @@ class F1App {
       <div class="bar-meter"><span style="width:${Math.min(100, Math.max(0, car.bat))}%;background:${car.rech ? "#ffd000" : "#00d2be"}"></span></div>
 
       <div class="tel-grid">
-        <div class="tel-kv"><span>Compound</span><strong>${car.comp} (${100 - car.wear}%)</strong></div>
+        <div class="tel-kv"><span>Compound</span><strong>${car.comp}${car.scrubbed ? " (SCRUB)" : ""} (${100 - car.wear}%)</strong></div>
         <div class="tel-kv"><span>Tyre Temp</span><strong style="color:${tCol}">${car.ttemp}°C (${tStat})</strong></div>
+        <div class="tel-kv"><span>Fuel Load</span><strong style="color:${fMargin < 0 ? "#ff4d4f" : "#00d26a"}">${fStr}${car.lift_coast ? " [L&amp;C]" : ""}</strong></div>
+        <div class="tel-kv"><span>Wing Setup</span><strong>${setupName} (${car.setup_df >= 0 ? "+" : ""}${car.setup_df ?? 0})</strong></div>
         <div class="tel-kv"><span>Tyre Sets Left</span><strong style="color:#00d2be;font-size:10.5px">${car.tsets ? `S:${car.tsets.SOFT ?? 0} M:${car.tsets.MEDIUM ?? 0} H:${car.tsets.HARD ?? 0} I:${car.tsets.INTER ?? 0} W:${car.tsets.WET ?? 0}` : "—"}</strong></div>
         <div class="tel-kv"><span>Maneuver</span><strong style="color:${car.man ? "#ffb366" : "#d4d4e0"}">${manDisplay}</strong></div>
         <div class="tel-kv"><span>Last Lap</span><strong>${fmtLap(car.last)}</strong></div>
@@ -932,7 +1111,13 @@ class F1App {
         <div class="tel-kv"><span>Pit Stops</span><strong>${pitStr}</strong></div>
         <div class="tel-kv"><span>Track Limits</span><strong>${car.tl}/4 ${car.pen > 0 ? `(+${car.pen}S)` : ""}</strong></div>
       </div>
+      ${car.advice ? `<div class="tel-strategy"><span>CHIEF STRATEGIST</span>${fmtAdvice(car.advice)}</div>` : car.strategy ? `<div class="tel-strategy"><span>PIT WALL PLAN</span>${car.strategy}</div>` : ""}
+      ${h2hHtml}
     `;
+    const clrBtn = document.getElementById("btn-clear-h2h");
+    if (clrBtn) {
+      clrBtn.addEventListener("click", () => this.toggleCompareDriver(this.compareDriverId));
+    }
   }
 
   isOfficialEvent(ev) {
@@ -944,7 +1129,7 @@ class F1App {
   }
 
   isRadioEvent(ev) {
-    if (ev.kind === "RADIO" || ev.kind === "PIT_RADIO") return true;
+    if (["RADIO", "PIT_RADIO", "STRATEGY", "TEAM_ORDER"].includes(ev.kind)) return true;
     const msg = (ev.msg || "").toUpperCase();
     return msg.includes("RADIO") || msg.includes("TEAM ORDERS") || msg.includes("BOX, BOX") || msg.includes("ENGINEER");
   }
@@ -1112,7 +1297,7 @@ class F1App {
           <td>${d.consistency}</td>
           <td>${d.tire_mgmt}</td>
           <td>${d.wet_skill}</td>
-          <td>$${d.salary_m.toFixed(1)}M</td>
+          <td>$${d.salary_m.toFixed(2)}M/yr</td>
           <td>$${d.value_m.toFixed(1)}M</td>
         </tr>
       `
@@ -1124,39 +1309,103 @@ class F1App {
     if (!this.fullState) return;
     const st = this.fullState;
     const pt = st.player_team;
+    const upgradeAllowance = st.upgrade_allowance || { limit: 3, used: 0, remaining: 3 };
 
     // 1. Technical R&D Tab
+    const prof = st.track_profile || { category: "BALANCED", label: "Balanced Circuit Profile", recommended_df: 0, weights: {} };
+    const deptShort = { power_unit: "PU", active_aero: "AERO", chassis: "CHASSIS", suspension: "SUSP", reliability: "REL", pit_crew: "PIT" };
     document.getElementById("rd-header").innerHTML = `
       <div style="display:flex;align-items:center;gap:12px">
         ${teamLogoSVG(pt.id, 36)}
         <div>
           <div style="font-size:10px;color:#8f90a6;font-weight:700;letter-spacing:0.9px">ENGINEERING HEADQUARTERS | ${st.season} FIA TECHNICAL REGULATIONS</div>
-          <div style="font-size:18px;font-weight:900;font-style:italic;text-transform:uppercase">${pt.name} <span style="color:#e10600;margin-left:8px">INDEX ${pt.car_rating.toFixed(1)}</span></div>
+          <div style="font-size:18px;font-weight:900;font-style:italic;text-transform:uppercase">${pt.name}
+            <span style="color:#e10600;margin-left:8px">INDEX ${pt.car_rating.toFixed(1)}</span>
+            ${pt.circuit_rating != null ? `<span style="color:#00d2be;margin-left:8px;font-size:14px">CIRCUIT ${pt.circuit_rating.toFixed(1)}</span>` : ""}
+          </div>
         </div>
       </div>
       <div style="text-align:right">
-        <div style="font-size:10px;color:#8f90a6;font-weight:700;letter-spacing:0.8px">COST CAP OPERATING BALANCE</div>
+        <div style="font-size:10px;color:#8f90a6;font-weight:700;letter-spacing:0.8px">AVAILABLE TEAM CASH</div>
         <div style="font-size:21px;font-weight:900;color:#00d26a">$${pt.budget_m.toFixed(2)}M</div>
+        <div style="font-size:11px;color:#c8c9d8;margin-top:4px">${upgradeAllowance.used}/${upgradeAllowance.limit} UPGRADES THIS GRAND PRIX</div>
       </div>
     `;
+
+    const myDriversList = st.drivers.filter((d) => d.team_id === st.player_team_id);
+    const setupPanel = document.getElementById("setup-circuit-panel");
+    if (setupPanel) {
+      const weightsHtml = Object.entries(prof.weights || {})
+        .map(([k, w]) => {
+          const cls = w >= 1.12 ? "high" : w <= 0.88 ? "low" : "";
+          return `<span class="dna-pill ${cls}">${deptShort[k] || k.toUpperCase()} ${Number(w).toFixed(2)}x</span>`;
+        })
+        .join("");
+      const setupsMap = st.driver_setups || {};
+      const locked = Boolean(st.parc_ferme);
+      setupPanel.innerHTML = `
+        <div class="circuit-dna-card">
+          <div>
+            <div style="font-size:10px;color:#8f90a6;font-weight:800;letter-spacing:0.6px">${(st.track?.circuit || "CIRCUIT").toUpperCase()} — CIRCUIT DNA</div>
+            <div style="font-size:14px;font-weight:900;color:#ffffff;margin-top:2px">${prof.label.toUpperCase()} · REC WING ${prof.recommended_df >= 0 ? `+${prof.recommended_df}` : prof.recommended_df}</div>
+            <div class="dna-weights">${weightsHtml}</div>
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span style="font-size:10px;color:#8f90a6;font-weight:800">PRE-WEEKEND DOWNFORCE SETUP</span>
+              <span style="font-size:10px;font-weight:900;color:${locked ? "#ff4d4f" : "#00d26a"}">${locked ? "PARC FERME LOCKED" : "GARAGE OPEN"}</span>
+            </div>
+            ${myDriversList
+              .map((d) => {
+                const cur = setupsMap[d.id] != null ? setupsMap[d.id] : prof.recommended_df || 0;
+                return `
+                  <div class="setup-driver-row">
+                    <strong style="font-size:11.5px;color:#ffffff">#${d.number} ${d.code}</strong>
+                    <div class="setup-btns">
+                      ${[-2, -1, 0, 1, 2]
+                        .map((lvl) => `<button class="setup-btn ${cur === lvl ? "active" : ""}" data-setup-drv="${d.id}" data-setup-val="${lvl}" ${locked ? "disabled" : ""}>${lvl >= 0 ? `+${lvl}` : lvl}</button>`)
+                        .join("")}
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+        </div>
+      `;
+      setupPanel.querySelectorAll("button[data-setup-drv]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const res = await this.apiPost("/api/set_setup", {
+            driver_id: btn.dataset.setupDrv,
+            setup_df: Number(btn.dataset.setupVal),
+          });
+          if (res.ok) {
+            this.showToast(`WING SETUP: #${btn.dataset.setupDrv.toUpperCase()} -> ${res.setup_label}`);
+            this.fetchFullState();
+          }
+        });
+      });
+    }
 
     document.getElementById("upgrade-cards").innerHTML = st.upgrades
       .map((u) => {
         const maxed = u.level >= u.max_level;
-        const canAfford = pt.budget_m >= u.cost_m && !maxed;
+        const canAfford = pt.budget_m >= u.cost_m && !maxed && upgradeAllowance.remaining > 0;
         const pips = Array.from({ length: u.max_level }, (_, i) => `<span class="pip ${i < u.level ? "filled" : ""}"></span>`).join("");
+        const w = u.track_weight != null ? Number(u.track_weight) : 1.0;
+        const wColor = w >= 1.12 ? "#00d26a" : w <= 0.88 ? "#8f90a6" : "#d4d4e0";
         return `
           <div class="upg-card">
             <div>
               <div class="upg-head">
                 <div><span class="upg-code">${u.code}</span><span class="upg-title">${u.name}</span></div>
-                <strong style="color:#ffffff;font-size:12px">SPEC ${u.level}/${u.max_level}</strong>
+                <strong style="color:#ffffff;font-size:12px">SPEC ${u.level}/${u.max_level} <small style="color:${wColor};margin-left:4px">${w.toFixed(2)}x</small></strong>
               </div>
               <p class="upg-desc" style="margin-top:6px">${u.desc}</p>
             </div>
             <div class="lvl-pips">${pips}</div>
             <button class="btn-primary btn-sm" data-upg="${u.key}" ${canAfford ? "" : "disabled"}>
-              ${maxed ? "MAXIMUM FIA HOMOLOGATION" : `COMMISSION SPEC ${u.level + 1} ($${u.cost_m.toFixed(2)}M)`}
+              ${maxed ? "MAXIMUM FIA HOMOLOGATION" : upgradeAllowance.remaining === 0 ? "WEEKEND LIMIT REACHED" : `COMMISSION SPEC ${u.level + 1} ($${u.cost_m.toFixed(2)}M)`}
             </button>
           </div>
         `;
@@ -1168,8 +1417,8 @@ class F1App {
         const res = await this.apiPost("/api/upgrade", { dept: btn.dataset.upg });
         if (res.ok) {
           this.showToast(`R&D HOMOLOGATED: ${btn.dataset.upg.toUpperCase()} upgraded to Spec ${res.level}`);
-          this.fetchFullState();
         }
+        this.fetchFullState();
       });
     });
 
@@ -1181,11 +1430,65 @@ class F1App {
           ${teamLogoSVG(t.id, 18)}
           <span style="font-weight:900;text-transform:uppercase;color:${t.id === st.player_team_id ? "#ffffff" : "#d4d4e0"}">${t.short}</span>
           <div class="bar-meter"><span style="width:${((t.car_rating - 65) / 30) * 100}%;background:${t.color}"></span></div>
-          <strong style="text-align:right">${t.car_rating.toFixed(1)}</strong>
+          <strong style="text-align:right">${t.car_rating.toFixed(1)}${t.circuit_rating != null ? ` <small style="color:#00d2be">(${t.circuit_rating.toFixed(1)})</small>` : ""}</strong>
         </div>
       `
       )
       .join("");
+
+    const puPanel = document.getElementById("pu-pool-panel");
+    if (puPanel && st.pu_pools && st.pu_specs) {
+      const puKeys = Object.keys(st.pu_specs);
+      puPanel.innerHTML = myDriversList
+        .map((d) => {
+          const pool = st.pu_pools[d.id] || {};
+          const pend = pool.pending_penalty || 0;
+          const rowsHtml = puKeys
+            .map((ck) => {
+              const spec = st.pu_specs[ck];
+              const el = pool[ck] || { used: 1, wear: 0 };
+              const wearPct = Math.round((el.wear || 0) * 100);
+              const barCol = wearPct >= 75 ? "#ff3b30" : wearPct >= 50 ? "#ffd000" : "#00d26a";
+              const overNext = el.used >= spec.limit;
+              const nextPen = el.used === spec.limit ? spec.first_penalty : spec.extra_penalty;
+              const btnLabel = overNext ? `+${nextPen}P SWAP` : "FRESH SWAP";
+              return `
+                <div class="pu-comp-row">
+                  <strong style="color:#d4d4e0">${spec.short}</strong>
+                  <div class="pu-bar"><span style="width:${wearPct}%;background:${barCol}"></span></div>
+                  <span style="color:${barCol};font-weight:800">${wearPct}%</span>
+                  <span style="color:#8f90a6">${el.used}/${spec.limit}</span>
+                  <button class="btn-outline btn-sm" data-pu-drv="${d.id}" data-pu-comp="${ck}" style="padding:2px 6px;font-size:9px">${btnLabel}</button>
+                </div>
+              `;
+            })
+            .join("");
+          return `
+            <div class="pu-driver-card">
+              <div class="pu-driver-hdr">
+                <span>#${d.number} ${d.name.toUpperCase()}</span>
+                ${pend > 0 ? `<span class="badge b-pen">+${pend}P QUEUED NEXT GP</span>` : `<span style="color:#00d26a;font-size:10px">NO PENALTY QUEUED</span>`}
+              </div>
+              ${rowsHtml}
+            </div>
+          `;
+        })
+        .join("");
+
+      puPanel.querySelectorAll("button[data-pu-comp]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const res = await this.apiPost("/api/replace_pu_component", {
+            driver_id: btn.dataset.puDrv,
+            component: btn.dataset.puComp,
+          });
+          if (res.ok) {
+            const penNote = res.penalty_added > 0 ? ` (+${res.penalty_added}P FIA Grid Drop)` : " (Within Seasonal Quota)";
+            this.showToast(`PU ALLOCATION: Fresh ${btn.dataset.puComp.toUpperCase()} fitted${penNote}`);
+            this.fetchFullState();
+          }
+        });
+      });
+    }
 
     // 2. Driver Contracts & Trades Tab
     const windowOpen = st.transfer_window_open !== false;
@@ -1259,8 +1562,27 @@ class F1App {
     this.renderDriverDatabase();
 
     this.previewTradeValuation();
+    this.renderContractNegotiator();
 
-    // 3. Commercial & Cost Cap Tab
+    // 3. Commercial & Finances Tab
+    const finances = st.finances;
+    const financeSummary = document.getElementById("finance-summary");
+    if (finances && financeSummary) {
+      financeSummary.innerHTML = `
+        <h3 class="sec-title">SEASON FUNDING &amp; PAYROLL</h3>
+        <div class="finance-metrics">
+          <div><span>ANNUAL FUNDING</span><strong>$${finances.annual_budget_m.toFixed(1)}M</strong></div>
+          <div><span>DRIVER PAYROLL / YEAR</span><strong>$${finances.annual_payroll_m.toFixed(2)}M</strong></div>
+          <div><span>FACTORY &amp; LOGISTICS / YEAR</span><strong>$${finances.annual_operations_m.toFixed(1)}M</strong></div>
+          <div><span>FIXED COSTS / GRAND PRIX</span><strong>$${(finances.payroll_per_race_m + finances.operations_per_race_m).toFixed(2)}M</strong></div>
+        </div>
+        <p class="muted-note">Payroll and running costs settle across ${finances.race_count} Grands Prix.
+          <a href="${finances.salary_source}" target="_blank" rel="noopener noreferrer">Opening 2026 salaries</a> are reported base-pay estimates, excluding bonuses; career contracts evolve.
+          Team funding uses game-balanced allocations around a
+          <a href="${finances.budget_source}" target="_blank" rel="noopener noreferrer">$400M real-world spending benchmark</a>.
+          Available cash carries over each season.</p>
+      `;
+    }
     document.getElementById("sponsor-list").innerHTML = st.sponsors
       .map((sp) => {
         const active = pt.sponsor_id === sp.id;
@@ -1680,6 +2002,7 @@ class F1App {
             </div>
 
             <button class="hof-card-btn" data-round="${r.round}">VIEW TOP 10 CLASSIFICATION</button>
+            ${(r.lap_chart?.length || r.stints) ? `<button class="hof-card-btn" data-analytics-round="${r.round}" style="margin-top:4px;border-color:#00d2be;color:#00d2be">STRATEGY &amp; POSITION CHART</button>` : ""}
 
             <!-- COLLAPSIBLE TOP 10 DRAWER -->
             <div class="hof-top10-collapse hidden" id="hof-top10-${r.round}">
@@ -1741,6 +2064,218 @@ class F1App {
         </tr>
       `).join("");
     }
+  }
+
+  renderContractNegotiator() {
+    if (!this.fullState) return;
+    const st = this.fullState;
+    const drvSel = document.getElementById("neg-driver");
+    const relSel = document.getElementById("neg-release-driver");
+    const relWrap = document.getElementById("neg-release-wrap");
+    const yearsSel = document.getElementById("neg-years");
+    const salSlider = document.getElementById("neg-salary-slider");
+    const execBtn = document.getElementById("btn-exec-neg");
+    if (!drvSel || !relSel || !yearsSel || !salSlider || !execBtn) return;
+
+    const myDrivers = st.drivers.filter((d) => d.team_id === st.player_team_id);
+    const otherDrivers = st.drivers.filter((d) => d.team_id !== st.player_team_id);
+    const prevDrv = drvSel.value;
+    drvSel.innerHTML = [
+      ...myDrivers.map((d) => `<option value="${d.id}">[RENEW] #${d.number} ${d.name} (${d.contract_years}Y | $${d.salary_m}M/yr | OVR ${d.overall})</option>`),
+      ...otherDrivers.map((d) => `<option value="${d.id}">[${d.team_id ? d.team_short.toUpperCase() : "FREE AGENT"}] #${d.number} ${d.name} (OVR ${d.overall} | $${d.salary_m}M/yr)</option>`),
+    ].join("");
+    if ([...myDrivers, ...otherDrivers].some((d) => d.id === prevDrv)) drvSel.value = prevDrv;
+
+    const prevRel = relSel.value;
+    relSel.innerHTML = myDrivers.map((d) => `<option value="${d.id}">#${d.number} ${d.name} (OVR ${d.overall})</option>`).join("");
+    if (myDrivers.some((d) => d.id === prevRel)) relSel.value = prevRel;
+
+    const syncVisibilityAndDefault = () => {
+      const target = st.drivers.find((d) => d.id === drvSel.value);
+      const isOwn = target && target.team_id === st.player_team_id;
+      if (relWrap) relWrap.style.opacity = isOwn ? "0.4" : "1.0";
+      relSel.disabled = Boolean(isOwn);
+    };
+    syncVisibilityAndDefault();
+
+    if (!this._negBound) {
+      this._negBound = true;
+      drvSel.addEventListener("change", () => {
+        const target = this.fullState?.drivers.find((d) => d.id === drvSel.value);
+        if (target) {
+          salSlider.value = String(Math.min(60, Math.max(1, target.salary_m)));
+        }
+        syncVisibilityAndDefault();
+        this.previewContractNegotiation();
+      });
+      relSel.addEventListener("change", () => this.previewContractNegotiation());
+      yearsSel.addEventListener("change", () => this.previewContractNegotiation());
+      salSlider.addEventListener("input", () => {
+        const lbl = document.getElementById("neg-salary-label");
+        if (lbl) lbl.textContent = `$${Number(salSlider.value || 5).toFixed(1)}M/YR`;
+        clearTimeout(this._negTimer);
+        this._negTimer = setTimeout(() => this.previewContractNegotiation(), 100);
+      });
+      execBtn.addEventListener("click", async () => {
+        const res = await this.apiPost("/api/negotiate_contract", {
+          driver_id: drvSel.value,
+          salary_m: Number(salSlider.value),
+          years: Number(yearsSel.value),
+          release_driver_id: relSel.value,
+        });
+        if (res.ok) {
+          this.showToast(`CONTRACT SIGNED: ${res.message}`);
+          this.fetchFullState();
+        }
+      });
+    }
+
+    const curTarget = st.drivers.find((d) => d.id === drvSel.value);
+    if (curTarget && !prevDrv) {
+      salSlider.value = String(Math.min(60, Math.max(1, curTarget.salary_m)));
+    }
+    this.previewContractNegotiation();
+  }
+
+  async previewContractNegotiation() {
+    const drvSel = document.getElementById("neg-driver");
+    const relSel = document.getElementById("neg-release-driver");
+    const yearsSel = document.getElementById("neg-years");
+    const salSlider = document.getElementById("neg-salary-slider");
+    const salLabel = document.getElementById("neg-salary-label");
+    const evalBox = document.getElementById("neg-eval-box");
+    const execBtn = document.getElementById("btn-exec-neg");
+    if (!drvSel || !salSlider || !evalBox) return;
+
+    const sal = Number(salSlider.value || 5);
+    if (salLabel) salLabel.textContent = `$${sal.toFixed(1)}M/YR`;
+
+    const res = await this.apiPost("/api/negotiate_contract", {
+      action: "evaluate",
+      driver_id: drvSel.value,
+      salary_m: sal,
+      years: Number(yearsSel?.value || 2),
+      release_driver_id: relSel?.value,
+    });
+    if (!res.ok) {
+      evalBox.innerHTML = `<span style="color:#ff4d4f">${res.error || "Unable to evaluate contract."}</span>`;
+      if (execBtn) execBtn.disabled = true;
+      return;
+    }
+    const costStr = res.total_upfront_m > 0
+      ? ` · Upfront Buyout/Signing: <strong>$${res.total_upfront_m.toFixed(1)}M</strong>`
+      : " · No transfer fee (Renewal)";
+    const badge = res.accepted
+      ? `<span style="color:#00d26a;font-weight:900">ACCEPTED</span>`
+      : `<span style="color:#ffd000;font-weight:900">DECLINED</span>`;
+    evalBox.innerHTML = `${badge} — ${res.reason} <span style="color:#8f90a6">(Demand: $${res.asked_salary_m.toFixed(1)}M/yr${costStr})</span>`;
+    if (execBtn) execBtn.disabled = !res.accepted;
+  }
+
+  openAnalyticsModal(raceObj) {
+    const modal = document.getElementById("analytics-modal");
+    const titleEl = document.getElementById("analytics-modal-title");
+    const posWrap = document.getElementById("analytics-pos-chart");
+    const stintsWrap = document.getElementById("analytics-stints-chart");
+    if (!modal || !posWrap || !stintsWrap) return;
+
+    const rec = raceObj.round_rec || raceObj;
+    const gpName = rec.gp || "Grand Prix";
+    const lapChart = raceObj.lap_chart || rec.lap_chart || [];
+    const stintsMap = raceObj.stints || rec.stints || {};
+    const top10 = raceObj.top10 || rec.top10 || [];
+    const dMeta = raceObj.driver_meta || rec.driver_meta || {};
+
+    if (titleEl) titleEl.textContent = `${gpName.toUpperCase()} — STRATEGY & POSITION CHART`;
+
+    const metaLookup = (did) => {
+      if (dMeta[did]) return dMeta[did];
+      const tRow = top10.find((r) => r.id === did || r.driver_id === did);
+      if (tRow) return { code: tRow.code, team_color: tRow.team_color || "#888888", name: tRow.name };
+      const stDrv = this.fullState?.drivers?.find((d) => d.id === did);
+      return stDrv ? { code: stDrv.code, team_color: stDrv.team_color || "#888888", name: stDrv.name } : { code: did.slice(0, 3).toUpperCase(), team_color: "#888888", name: did };
+    };
+
+    // 1. Render SVG Lap-by-Lap Position Trace
+    if (lapChart.length >= 2) {
+      const laps = lapChart.map((l) => l.lap);
+      const minLap = laps[0];
+      const maxLap = laps[laps.length - 1];
+      const driverIds = Object.keys(lapChart[lapChart.length - 1].positions || {});
+      const maxPos = Math.max(10, ...driverIds.map((id) => lapChart[lapChart.length - 1].positions[id] || 10));
+      const focusIds = driverIds.filter((id) => (lapChart[lapChart.length - 1].positions[id] || 99) <= 12);
+      const W = 860;
+      const H = 290;
+      const padL = 36;
+      const padR = 54;
+      const padT = 18;
+      const padB = 26;
+      const xOf = (lap) => padL + ((lap - minLap) / Math.max(1, maxLap - minLap)) * (W - padL - padR);
+      const yOf = (pos) => padT + ((pos - 1) / Math.max(1, maxPos - 1)) * (H - padT - padB);
+
+      const gridLines = [];
+      for (let p = 1; p <= maxPos; p += maxPos > 14 ? 3 : 2) {
+        const y = yOf(p);
+        gridLines.push(`<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1" />`);
+        gridLines.push(`<text x="${padL - 6}" y="${y + 3}" fill="#8f90a6" font-size="9" text-anchor="end" font-weight="700">P${p}</text>`);
+      }
+      const stepLap = Math.max(1, Math.ceil(laps.length / 8));
+      for (let i = 0; i < laps.length; i += stepLap) {
+        const x = xOf(laps[i]);
+        gridLines.push(`<text x="${x}" y="${H - 7}" fill="#8f90a6" font-size="9" text-anchor="middle" font-weight="700">L${laps[i]}</text>`);
+      }
+
+      const paths = focusIds.map((did) => {
+        const m = metaLookup(did);
+        const pts = lapChart
+          .map((l) => {
+            const p = l.positions[did];
+            return p != null ? `${xOf(l.lap).toFixed(1)},${yOf(p).toFixed(1)}` : null;
+          })
+          .filter(Boolean)
+          .join(" ");
+        const lastPos = lapChart[lapChart.length - 1].positions[did] || 1;
+        return `
+          <polyline fill="none" stroke="${m.team_color}" stroke-width="2.1" stroke-linejoin="round" opacity="0.92" points="${pts}" />
+          <text x="${W - padR + 6}" y="${(yOf(lastPos) + 3).toFixed(1)}" fill="${m.team_color}" font-size="9.5" font-weight="800">${m.code} P${lastPos}</text>
+        `;
+      }).join("");
+
+      posWrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${gridLines.join("")}${paths}</svg>`;
+    } else {
+      posWrap.innerHTML = `<div style="padding:14px;color:#8f90a6;font-size:11px">Lap-by-lap trace available once at least 2 laps are completed.</div>`;
+    }
+
+    // 2. Render Compound-Colored Tyre Stint Timeline
+    const stKeys = Object.keys(stintsMap);
+    const totalLaps = Math.max(1, rec.laps || (lapChart.length ? lapChart[lapChart.length - 1].lap : 20));
+    if (stKeys.length > 0) {
+      const orderIds = top10.map((r) => r.id || r.driver_id).filter((id) => stintsMap[id]);
+      for (const id of stKeys) {
+        if (!orderIds.includes(id)) orderIds.push(id);
+      }
+      stintsWrap.innerHTML = orderIds.slice(0, 14).map((did) => {
+        const m = metaLookup(did);
+        const list = stintsMap[did] || [];
+        const bars = list.map((s) => {
+          const span = Math.max(1, (s.end_lap || s.start_lap) - s.start_lap + 1);
+          const pct = Math.max(4, Math.min(100, (span / totalLaps) * 100));
+          const meta = TIRE_META[s.compound] || TIRE_META.MEDIUM;
+          const lbl = `${meta.code} ${span}L${s.scrubbed ? " S" : ""}`;
+          return `<div class="stint-seg" style="width:${pct.toFixed(1)}%;background:${meta.color}" title="${s.compound} (L${s.start_lap}-L${s.end_lap}${s.scrubbed ? ', Scrubbed' : ''})">${span >= 2 ? lbl : meta.code}</div>`;
+        }).join("");
+        return `
+          <div class="stint-driver-row">
+            <strong style="color:${m.team_color};white-space:nowrap">${m.code}</strong>
+            <div class="stint-track">${bars}</div>
+          </div>
+        `;
+      }).join("");
+    } else {
+      stintsWrap.innerHTML = `<div style="padding:10px;color:#8f90a6;font-size:11px">No tyre stint history recorded for this round.</div>`;
+    }
+
+    modal.classList.remove("hidden");
   }
 }
 

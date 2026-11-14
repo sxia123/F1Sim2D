@@ -162,6 +162,66 @@ MIDFIELD_CANDIDATES = [
 ]
 
 
+def _generate_synthetic_stints_and_chart(
+    top10: list[dict[str, Any]],
+    total_laps: int,
+    round_num: int,
+) -> tuple[list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+    """Build deterministic lap-by-lap positions and tyre stints for archive visualizations."""
+    n_laps = max(6, int(total_laps or 20))
+    ids = [r["id"] for r in top10]
+    n = len(ids)
+    if n == 0:
+        return [], {}
+
+    # Initial grid permutation with deterministic variance around finishing order
+    grid = list(ids)
+    for k in range(min(4, max(0, n - 1))):
+        a = (round_num + k * 2) % n
+        b = (a + 1) % n
+        grid[a], grid[b] = grid[b], grid[a]
+
+    lap_chart: list[dict[str, Any]] = []
+    cur = list(grid)
+    for lap in range(1, n_laps + 1):
+        if lap == n_laps:
+            cur = list(ids)
+        elif lap % 2 == 0:
+            # Gradually converge toward final order
+            for i in range(n):
+                if cur[i] != ids[i]:
+                    target_idx = cur.index(ids[i])
+                    if target_idx > i:
+                        cur[target_idx], cur[target_idx - 1] = cur[target_idx - 1], cur[target_idx]
+                        break
+        lap_chart.append({
+            "lap": lap,
+            "positions": {did: pos for pos, did in enumerate(cur, 1)},
+        })
+
+    stints: dict[str, list[dict[str, Any]]] = {}
+    pit_start_base = max(4, n_laps // 3)
+    for idx, did in enumerate(ids):
+        two_stop = (idx + round_num) % 4 == 0 and n_laps >= 18
+        if two_stop:
+            p1 = max(3, min(n_laps - 8, pit_start_base - 1 + (idx % 3)))
+            p2 = max(p1 + 4, min(n_laps - 3, (n_laps * 2) // 3 + (idx % 2)))
+            stints[did] = [
+                {"compound": "SOFT", "start_lap": 1, "end_lap": p1, "scrubbed": False, "start_wear": 0.0, "wear_end": 46.0},
+                {"compound": "MEDIUM", "start_lap": p1 + 1, "end_lap": p2, "scrubbed": False, "start_wear": 0.0, "wear_end": 48.0},
+                {"compound": "SOFT", "start_lap": p2 + 1, "end_lap": n_laps, "scrubbed": True, "start_wear": 4.5, "wear_end": 39.0},
+            ]
+        else:
+            p1 = max(4, min(n_laps - 4, n_laps // 2 + ((idx + round_num) % 5) - 2))
+            c1 = "MEDIUM" if idx % 2 == 0 else "SOFT"
+            c2 = "HARD" if c1 == "MEDIUM" else "HARD"
+            stints[did] = [
+                {"compound": c1, "start_lap": 1, "end_lap": p1, "scrubbed": False, "start_wear": 0.0, "wear_end": 54.0},
+                {"compound": c2, "start_lap": p1 + 1, "end_lap": n_laps, "scrubbed": False, "start_wear": 0.0, "wear_end": 42.0},
+            ]
+    return lap_chart, stints
+
+
 def _build_synthetic_race(
     round_num: int,
     track: Any,
@@ -261,6 +321,8 @@ def _build_synthetic_race(
             "fastest_lap": did == fl_id,
         })
 
+    lap_chart, stints = _generate_synthetic_stints_and_chart(top10, track.race_laps, round_num)
+
     return {
         "round": track.round,
         "track_id": track.id,
@@ -293,6 +355,8 @@ def _build_synthetic_race(
         "sprint_winner_code": sprint_winner_code,
         "sprint_winner_name": sprint_winner_name,
         "top10": top10,
+        "lap_chart": lap_chart,
+        "stints": stints,
     }
 
 
@@ -444,6 +508,18 @@ def record_live_race_to_archive(
             "fastest_lap": car.get("fastest_lap", False),
         })
 
+    driver_meta = {}
+    for car in classification:
+        did = car.get("driver_id", car.get("id", ""))
+        if did:
+            driver_meta[did] = {
+                "code": car.get("code", "F1"),
+                "name": car.get("name", did),
+                "team_id": car.get("team_id", ""),
+                "team": car.get("team_short", car.get("team", "")),
+                "team_color": car.get("team_color", "#888888"),
+            }
+
     live_record = {
         "round": target_round,
         "track_id": getattr(current_track, "id", f"r{target_round}"),
@@ -476,6 +552,9 @@ def record_live_race_to_archive(
         "sprint_winner_code": round_rec.get("sprint_winner_code"),
         "sprint_winner_name": round_rec.get("sprint_winner_code"),
         "top10": formatted_top10,
+        "driver_meta": driver_meta,
+        "lap_chart": round_rec.get("lap_chart", []),
+        "stints": round_rec.get("stints", {}),
     }
 
     if race_entry is not None:

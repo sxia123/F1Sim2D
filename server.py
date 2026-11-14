@@ -106,8 +106,10 @@ class F1RequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        # Geographic scenery makes the initial state substantially larger than
-        # a live tick. Bound each socket write so it drains in manageable blocks.
+        self._write_response_body(body)
+
+    def _write_response_body(self, body: bytes) -> None:
+        # Large state payloads and browser modules need bounded socket writes.
         for offset in range(0, len(body), 32768):
             self.wfile.write(body[offset:offset + 32768])
 
@@ -156,7 +158,7 @@ class F1RequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-cache")
         self.end_headers()
-        self.wfile.write(data)
+        self._write_response_body(data)
 
     def _handle_sse(self) -> None:
         self.send_response(HTTPStatus.OK)
@@ -223,6 +225,25 @@ class F1RequestHandler(BaseHTTPRequestHandler):
         elif path == "/api/pit_wall":
             driver_id = str(body.get("driver_id", ""))
             res = self.world.pit_wall_command(driver_id, body)
+        elif path == "/api/set_setup":
+            res = self.world.set_driver_setup(
+                str(body.get("driver_id", "")),
+                int(body.get("setup_df", 0)),
+            )
+        elif path == "/api/replace_pu_component":
+            res = self.world.replace_pu_component(
+                str(body.get("driver_id", "")),
+                str(body.get("component", "")),
+            )
+        elif path == "/api/negotiate_contract":
+            did = str(body.get("driver_id", ""))
+            sal = float(body.get("salary_m", body.get("offered_salary_m", 5.0)))
+            yrs = int(body.get("years", body.get("offered_years", 2)))
+            rel = body.get("release_driver_id")
+            if body.get("action") == "evaluate" or body.get("preview"):
+                res = self.world.evaluate_contract_negotiation(did, sal, yrs, str(rel) if rel else None)
+            else:
+                res = self.world.execute_contract_negotiation(did, sal, yrs, str(rel) if rel else None)
         elif path == "/api/speed":
             res = self.world.set_sim_speed(float(body.get("speed", 1.0)))
         elif path == "/api/skip":

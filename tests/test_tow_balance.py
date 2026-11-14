@@ -213,8 +213,13 @@ class TowBalanceTests(unittest.TestCase):
         self.assertEqual(self.attacker.maneuver_pass_timer, 0)
         self.assertIsNone(self.attacker.maneuver_target_id)
 
-    def test_following_controller_does_not_trap_a_stock_faster_car_in_tow_preparation(self):
+    def test_following_controller_preserves_an_ers_advantage_in_tow_preparation(self):
         self.place(self.defender, self.start + 26, 0, 80, 89)
+        # The closer opening specifications provide only ~0.55 m/s of raw
+        # straight-line advantage here. Give the attacker usable electrical
+        # energy while the defender harvests, so this tests a real passing run.
+        self.attacker.ers_mode = "BALANCED"
+        self.attacker.battery_mj = self.attacker.max_battery_mj
         gathered = committed = False
         for _ in range(180):
             self.race.step(.05, ignore_event)

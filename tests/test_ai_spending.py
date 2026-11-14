@@ -1,5 +1,8 @@
 import random
 import unittest
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 from sim.data import INITIAL_TEAMS, UPGRADE_DEPARTMENTS, upgrade_cost_m, team_car_rating
 from sim.championship import ChampionshipWorld
 
@@ -9,13 +12,16 @@ class TestAISpending(unittest.TestCase):
         state = random.getstate()
         self.addCleanup(random.setstate, state)
         random.seed(42)
-        self.world = ChampionshipWorld()
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        with patch.object(ChampionshipWorld, "_begin_weekend"):
+            self.world = ChampionshipWorld(Path(tmp.name) / "career.json")
 
     def test_ai_teams_spend_surplus_budget(self):
         """AI rival teams with surplus budget invest in R&D upgrades."""
         # Find an AI team and give it substantial surplus budget
         ai_team = next(t for t in self.world.teams if t["id"] != self.world.player_team_id)
-        ai_team["budget_m"] = 150.0
+        ai_team["budget_m"] = 400.0
         # Set a few departments low so upgrades are available
         for dept in UPGRADE_DEPARTMENTS:
             ai_team["upgrades"][dept] = 3
@@ -26,7 +32,7 @@ class TestAISpending(unittest.TestCase):
         # Trigger AI R&D upgrades
         self.world._run_ai_rd_upgrades()
 
-        self.assertLess(ai_team["budget_m"], prev_budget, "AI team with $150M surplus must spend money")
+        self.assertLess(ai_team["budget_m"], prev_budget, "AI team with surplus beyond committed costs must spend money")
         self.assertGreater(team_car_rating(ai_team), prev_rating, "Upgrades must improve team car rating")
 
     def test_player_team_budget_and_upgrades_untouched(self):
@@ -42,20 +48,21 @@ class TestAISpending(unittest.TestCase):
         self.assertEqual(p_team["upgrades"], orig_upgrades, "Player team upgrades must remain untouched")
 
     def test_operating_reserve_respected(self):
-        """AI teams must never spend into or below their operating reserve ($22.0M)."""
+        """AI teams must protect future running costs, payroll, and a repair buffer."""
         ai_team = next(t for t in self.world.teams if t["id"] != self.world.player_team_id)
         # Give team a budget right around the operating reserve
-        ai_team["budget_m"] = 23.0
-        ai_team["upgrades"]["pit_crew"] = 1  # Lv 1 pit crew costs ~$4.8M which would breach the 22M reserve
+        reserve = self.world._team_finances(ai_team)["operating_reserve_m"]
+        ai_team["budget_m"] = reserve + 1.0
+        ai_team["upgrades"]["pit_crew"] = 1
 
         self.world._run_ai_rd_upgrades()
 
-        self.assertGreaterEqual(ai_team["budget_m"], 22.0, "Budget must not drop below operating reserve")
+        self.assertGreaterEqual(ai_team["budget_m"], reserve, "Budget must not drop below operating reserve")
 
     def test_winter_offseason_development(self):
         """Off-season winter development invests surplus funds into pre-season car upgrades."""
         ai_team = next(t for t in self.world.teams if t["id"] != self.world.player_team_id)
-        ai_team["budget_m"] = 90.0
+        ai_team["budget_m"] = 400.0
         for dept in UPGRADE_DEPARTMENTS:
             ai_team["upgrades"][dept] = 4
 
@@ -66,7 +73,8 @@ class TestAISpending(unittest.TestCase):
 
         self.assertLess(ai_team["budget_m"], prev_budget, "Winter R&D must deduct budget")
         self.assertGreater(team_car_rating(ai_team), prev_rating, "Winter R&D must boost car rating")
-        self.assertGreaterEqual(ai_team["budget_m"], 25.0, "Winter R&D must respect operating reserve")
+        reserve = self.world._team_finances(ai_team, full_season=True)["operating_reserve_m"]
+        self.assertGreaterEqual(ai_team["budget_m"], reserve, "Winter R&D must respect operating reserve")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,8 @@ import copy
 
 RACE_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1]
 SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1]
+MAX_UPGRADES_PER_RACE = 3
+UPGRADE_PRICE_MULTIPLIER = 1.10
 
 # 2026 FIA Constructor Prize Pool at end of season ($ Millions)
 WCC_PRIZE_POOL_M = [162.0, 148.0, 136.0, 125.0, 115.0, 106.0, 97.0, 89.0, 82.0, 75.0, 69.0]
@@ -94,6 +96,165 @@ DEFAULT_WEEKEND_TIRE_SETS = {
     "HARD": 2,
     "INTER": 4,
     "WET": 3,
+}
+
+# 2026 FIA Power Unit & Gearbox Seasonal Allocation Limits
+PU_COMPONENT_SPECS = {
+    "ice": {
+        "name": "Internal Combustion Engine (ICE)",
+        "short": "ICE",
+        "limit": 4,
+        "wear_per_gp": 0.088,
+        "first_penalty": 10,
+        "extra_penalty": 5,
+    },
+    "turbo": {
+        "name": "Turbocharger (TC)",
+        "short": "TC",
+        "limit": 4,
+        "wear_per_gp": 0.082,
+        "first_penalty": 10,
+        "extra_penalty": 5,
+    },
+    "mgu_k": {
+        "name": "MGU-K Hybrid (350 kW)",
+        "short": "MGU-K",
+        "limit": 3,
+        "wear_per_gp": 0.072,
+        "first_penalty": 10,
+        "extra_penalty": 5,
+    },
+    "gearbox": {
+        "name": "Gearbox Cassette (GBX)",
+        "short": "GBX",
+        "limit": 4,
+        "wear_per_gp": 0.085,
+        "first_penalty": 5,
+        "extra_penalty": 5,
+    },
+}
+
+# Pre-Weekend Aero Setup Presets (-2 = Monza Low Drag ... +2 = Monaco Max Downforce)
+SETUP_LEVELS = {
+    -2: {"label": "MIN DRAG", "short": "-2 LD", "corner_grip": -0.017, "straight_spd": 0.014, "wear_mult": 1.07, "fuel_mult": 0.97},
+    -1: {"label": "LOW DF", "short": "-1 DF", "corner_grip": -0.0085, "straight_spd": 0.007, "wear_mult": 1.035, "fuel_mult": 0.985},
+    0: {"label": "BALANCED", "short": "0 BAL", "corner_grip": 0.0, "straight_spd": 0.0, "wear_mult": 1.0, "fuel_mult": 1.0},
+    1: {"label": "HIGH DF", "short": "+1 DF", "corner_grip": 0.0085, "straight_spd": -0.007, "wear_mult": 0.965, "fuel_mult": 1.015},
+    2: {"label": "MAX DF", "short": "+2 HD", "corner_grip": 0.017, "straight_spd": -0.014, "wear_mult": 0.93, "fuel_mult": 1.03},
+}
+
+# Circuit DNA Upgrade Weighting Profiles
+# Weights scale each department's performance impact relative to baseline (1.00 = nominal).
+CIRCUIT_UPGRADE_PROFILES = {
+    "italy": {
+        "category": "POWER",
+        "label": "Temple of Speed (Low Drag / Top Power)",
+        "recommended_df": -2,
+        "weights": {"power_unit": 1.50, "active_aero": 1.20, "chassis": 0.72, "suspension": 0.65, "reliability": 1.15, "pit_crew": 1.0},
+    },
+    "vegas": {
+        "category": "POWER",
+        "label": "High-Speed Night Street (Power & Braking)",
+        "recommended_df": -2,
+        "weights": {"power_unit": 1.42, "active_aero": 1.18, "chassis": 0.78, "suspension": 0.72, "reliability": 1.05, "pit_crew": 1.0},
+    },
+    "belgium": {
+        "category": "POWER",
+        "label": "High-Speed Power & Compression",
+        "recommended_df": -1,
+        "weights": {"power_unit": 1.32, "active_aero": 1.24, "chassis": 0.86, "suspension": 0.78, "reliability": 1.05, "pit_crew": 1.0},
+    },
+    "azerbaijan": {
+        "category": "POWER",
+        "label": "Long Straight & 90-Deg Braking Street",
+        "recommended_df": -1,
+        "weights": {"power_unit": 1.34, "active_aero": 1.12, "chassis": 0.84, "suspension": 0.86, "reliability": 1.05, "pit_crew": 1.05},
+    },
+    "saudi": {
+        "category": "POWER",
+        "label": "Flat-Out High-Speed Walls",
+        "recommended_df": -1,
+        "weights": {"power_unit": 1.28, "active_aero": 1.22, "chassis": 0.88, "suspension": 0.82, "reliability": 1.0, "pit_crew": 1.0},
+    },
+    "austria": {
+        "category": "POWER",
+        "label": "Short High-Altitude Power Sprint",
+        "recommended_df": -1,
+        "weights": {"power_unit": 1.30, "active_aero": 1.12, "chassis": 0.86, "suspension": 0.86, "reliability": 1.10, "pit_crew": 1.0},
+    },
+    "mexico": {
+        "category": "POWER",
+        "label": "High Altitude Thin-Air Power & Cooling",
+        "recommended_df": 0,
+        "weights": {"power_unit": 1.26, "active_aero": 1.08, "chassis": 0.90, "suspension": 0.86, "reliability": 1.25, "pit_crew": 1.0},
+    },
+    "canada": {
+        "category": "POWER",
+        "label": "Stop-Go Chicanes & Kerbs",
+        "recommended_df": -1,
+        "weights": {"power_unit": 1.22, "active_aero": 1.02, "chassis": 0.92, "suspension": 1.04, "reliability": 1.05, "pit_crew": 1.0},
+    },
+    "bahrain": {
+        "category": "POWER",
+        "label": "Traction, Rear Wear & Power",
+        "recommended_df": 0,
+        "weights": {"power_unit": 1.20, "active_aero": 1.04, "chassis": 0.94, "suspension": 0.96, "reliability": 1.05, "pit_crew": 1.05},
+    },
+    "monaco": {
+        "category": "STREET",
+        "label": "Tight Street Labyrinth (Mechanical & Max DF)",
+        "recommended_df": 2,
+        "weights": {"power_unit": 0.56, "active_aero": 1.15, "chassis": 1.42, "suspension": 1.48, "reliability": 0.90, "pit_crew": 1.15},
+    },
+    "singapore": {
+        "category": "STREET",
+        "label": "Bumpy Technical Street & Cooling",
+        "recommended_df": 2,
+        "weights": {"power_unit": 0.72, "active_aero": 1.18, "chassis": 1.32, "suspension": 1.38, "reliability": 1.18, "pit_crew": 1.10},
+    },
+    "hungary": {
+        "category": "DOWNFORCE",
+        "label": "Twisty High-Downforce Technical",
+        "recommended_df": 2,
+        "weights": {"power_unit": 0.74, "active_aero": 1.28, "chassis": 1.30, "suspension": 1.28, "reliability": 0.95, "pit_crew": 1.05},
+    },
+    "netherlands": {
+        "category": "DOWNFORCE",
+        "label": "Banked Corners & High Downforce",
+        "recommended_df": 2,
+        "weights": {"power_unit": 0.78, "active_aero": 1.26, "chassis": 1.26, "suspension": 1.26, "reliability": 0.95, "pit_crew": 1.10},
+    },
+    "madrid": {
+        "category": "DOWNFORCE",
+        "label": "Technical Multi-Apex Hybrid Street",
+        "recommended_df": 1,
+        "weights": {"power_unit": 0.84, "active_aero": 1.20, "chassis": 1.20, "suspension": 1.22, "reliability": 1.0, "pit_crew": 1.0},
+    },
+    "japan": {
+        "category": "DOWNFORCE",
+        "label": "High-Speed Sweeping Aero Test",
+        "recommended_df": 1,
+        "weights": {"power_unit": 0.92, "active_aero": 1.36, "chassis": 1.22, "suspension": 1.10, "reliability": 1.0, "pit_crew": 1.0},
+    },
+    "qatar": {
+        "category": "DOWNFORCE",
+        "label": "Sustained High-G Aero & Tyre Load",
+        "recommended_df": 1,
+        "weights": {"power_unit": 0.95, "active_aero": 1.34, "chassis": 1.20, "suspension": 1.12, "reliability": 1.0, "pit_crew": 1.05},
+    },
+    "brazil": {
+        "category": "BALANCED",
+        "label": "Elevation Changes & Infield Flow",
+        "recommended_df": 1,
+        "weights": {"power_unit": 1.04, "active_aero": 1.10, "chassis": 1.06, "suspension": 1.08, "reliability": 1.0, "pit_crew": 1.05},
+    },
+}
+
+DEFAULT_CIRCUIT_PROFILE = {
+    "category": "BALANCED",
+    "label": "All-Round Grand Prix Circuit",
+    "recommended_df": 0,
+    "weights": {"power_unit": 1.00, "active_aero": 1.04, "chassis": 1.00, "suspension": 0.98, "reliability": 1.00, "pit_crew": 1.00},
 }
 
 UPGRADE_DEPARTMENTS = {
@@ -210,10 +371,9 @@ SPONSORS = [
     },
 ]
 
-# Starting Performance Hierarchy:
-# Tier 1 (Front, close): Mercedes (88.0), Ferrari (87.6), Red Bull (87.3), McLaren (87.0)
-# Tier 2 (Midfield, similar): Racing Bulls (79.8), Alpine (79.3), Audi (79.0)
-# Tier 3 (Back, similar): Haas (74.5), Williams (74.1), Aston Martin (73.8), Cadillac (73.4)
+# Close opening field: approximately 79-86, with distinct department strengths.
+# Opening cash averages $400M; individual envelopes are gameplay estimates.
+# See sim/economy.py and README for the real-world benchmark and sources.
 INITIAL_TEAMS = [
     {
         "id": "mercedes",
@@ -223,14 +383,15 @@ INITIAL_TEAMS = [
         "engine": "Mercedes",
         "color": "#00d2be",
         "secondary": "#c8d0d8",
-        "budget_m": 138.0,
+        "budget_m": 460.0,
+        "annual_budget_m": 460.0,
         "sponsor_id": "veloce_energy",
         "upgrades": {
-            "power_unit": 8,
+            "power_unit": 7,
             "active_aero": 7,
             "chassis": 7,
-            "suspension": 7,
-            "reliability": 8,
+            "suspension": 6,
+            "reliability": 7,
             "pit_crew": 7,
         },
     },
@@ -242,14 +403,15 @@ INITIAL_TEAMS = [
         "engine": "Ferrari",
         "color": "#e8002d",
         "secondary": "#ffffff",
-        "budget_m": 138.0,
+        "budget_m": 460.0,
+        "annual_budget_m": 460.0,
         "sponsor_id": "chronos_swiss",
         "upgrades": {
-            "power_unit": 8,
+            "power_unit": 7,
             "active_aero": 7,
-            "chassis": 7,
+            "chassis": 6,
             "suspension": 7,
-            "reliability": 7,
+            "reliability": 6,
             "pit_crew": 7,
         },
     },
@@ -261,13 +423,14 @@ INITIAL_TEAMS = [
         "engine": "Red Bull Ford",
         "color": "#3671c6",
         "secondary": "#ff1e42",
-        "budget_m": 135.0,
+        "budget_m": 450.0,
+        "annual_budget_m": 450.0,
         "sponsor_id": "apex_cloud",
         "upgrades": {
-            "power_unit": 7,
-            "active_aero": 8,
+            "power_unit": 6,
+            "active_aero": 7,
             "chassis": 7,
-            "suspension": 7,
+            "suspension": 6,
             "reliability": 6,
             "pit_crew": 7,
         },
@@ -280,12 +443,13 @@ INITIAL_TEAMS = [
         "engine": "Mercedes",
         "color": "#ff8000",
         "secondary": "#181c24",
-        "budget_m": 134.0,
+        "budget_m": 440.0,
+        "annual_budget_m": 440.0,
         "sponsor_id": "apex_cloud",
         "upgrades": {
-            "power_unit": 7,
-            "active_aero": 7,
-            "chassis": 8,
+            "power_unit": 6,
+            "active_aero": 6,
+            "chassis": 7,
             "suspension": 7,
             "reliability": 6,
             "pit_crew": 7,
@@ -299,15 +463,16 @@ INITIAL_TEAMS = [
         "engine": "Red Bull Ford",
         "color": "#6692ff",
         "secondary": "#ffffff",
-        "budget_m": 104.0,
+        "budget_m": 360.0,
+        "annual_budget_m": 360.0,
         "sponsor_id": "nova_fintech",
         "upgrades": {
             "power_unit": 6,
             "active_aero": 6,
-            "chassis": 5,
-            "suspension": 5,
-            "reliability": 5,
-            "pit_crew": 5,
+            "chassis": 6,
+            "suspension": 6,
+            "reliability": 6,
+            "pit_crew": 6,
         },
     },
     {
@@ -318,15 +483,16 @@ INITIAL_TEAMS = [
         "engine": "Mercedes",
         "color": "#0093cc",
         "secondary": "#ff87bc",
-        "budget_m": 105.0,
+        "budget_m": 370.0,
+        "annual_budget_m": 370.0,
         "sponsor_id": "nova_fintech",
         "upgrades": {
             "power_unit": 6,
-            "active_aero": 5,
-            "chassis": 5,
+            "active_aero": 6,
+            "chassis": 6,
             "suspension": 6,
             "reliability": 5,
-            "pit_crew": 5,
+            "pit_crew": 6,
         },
     },
     {
@@ -337,15 +503,16 @@ INITIAL_TEAMS = [
         "engine": "Audi",
         "color": "#f50537",
         "secondary": "#b8c0c8",
-        "budget_m": 112.0,
+        "budget_m": 390.0,
+        "annual_budget_m": 390.0,
         "sponsor_id": "hyperion_ai",
         "upgrades": {
-            "power_unit": 5,
+            "power_unit": 6,
             "active_aero": 6,
-            "chassis": 5,
+            "chassis": 6,
             "suspension": 5,
             "reliability": 6,
-            "pit_crew": 5,
+            "pit_crew": 6,
         },
     },
     {
@@ -356,15 +523,16 @@ INITIAL_TEAMS = [
         "engine": "Ferrari",
         "color": "#b6babd",
         "secondary": "#e6002b",
-        "budget_m": 94.0,
+        "budget_m": 330.0,
+        "annual_budget_m": 330.0,
         "sponsor_id": "titan_logistics",
         "upgrades": {
-            "power_unit": 5,
-            "active_aero": 4,
-            "chassis": 4,
-            "suspension": 4,
-            "reliability": 5,
-            "pit_crew": 4,
+            "power_unit": 6,
+            "active_aero": 5,
+            "chassis": 6,
+            "suspension": 5,
+            "reliability": 6,
+            "pit_crew": 6,
         },
     },
     {
@@ -375,15 +543,16 @@ INITIAL_TEAMS = [
         "engine": "Mercedes",
         "color": "#1868db",
         "secondary": "#64c4ff",
-        "budget_m": 102.0,
+        "budget_m": 350.0,
+        "annual_budget_m": 350.0,
         "sponsor_id": "hyperion_ai",
         "upgrades": {
-            "power_unit": 5,
-            "active_aero": 4,
-            "chassis": 4,
-            "suspension": 4,
-            "reliability": 4,
-            "pit_crew": 4,
+            "power_unit": 6,
+            "active_aero": 5,
+            "chassis": 5,
+            "suspension": 6,
+            "reliability": 6,
+            "pit_crew": 6,
         },
     },
     {
@@ -394,15 +563,16 @@ INITIAL_TEAMS = [
         "engine": "Honda",
         "color": "#229971",
         "secondary": "#cedc00",
-        "budget_m": 114.0,
+        "budget_m": 430.0,
+        "annual_budget_m": 430.0,
         "sponsor_id": "titan_logistics",
         "upgrades": {
-            "power_unit": 4,
-            "active_aero": 5,
-            "chassis": 4,
-            "suspension": 4,
-            "reliability": 3,
-            "pit_crew": 4,
+            "power_unit": 5,
+            "active_aero": 6,
+            "chassis": 5,
+            "suspension": 6,
+            "reliability": 5,
+            "pit_crew": 6,
         },
     },
     {
@@ -413,19 +583,23 @@ INITIAL_TEAMS = [
         "engine": "Ferrari",
         "color": "#d4af37",
         "secondary": "#1e3f8f",
-        "budget_m": 108.0,
+        "budget_m": 360.0,
+        "annual_budget_m": 360.0,
         "sponsor_id": "titan_logistics",
         "upgrades": {
-            "power_unit": 5,
-            "active_aero": 3,
-            "chassis": 4,
-            "suspension": 4,
-            "reliability": 5,
-            "pit_crew": 4,
+            "power_unit": 6,
+            "active_aero": 5,
+            "chassis": 5,
+            "suspension": 5,
+            "reliability": 6,
+            "pit_crew": 5,
         },
     },
 ]
 
+# Reported 2026 USD base retainers, excluding bonuses and endorsements.
+# RN365 (4 Feb 2026); $0.5-1M ranges use their $0.75M midpoint.
+# Free agents and legends retain simulated contract demands.
 INITIAL_DRIVERS = [
     # Mercedes
     {
@@ -442,7 +616,7 @@ INITIAL_DRIVERS = [
         "consistency": 93,
         "tire_mgmt": 91,
         "wet_skill": 92,
-        "salary_m": 22.0,
+        "salary_m": 34.0,
         "value_m": 46.0,
         "contract_years": 2,
         "helmet": "#00d2ff",
@@ -461,7 +635,7 @@ INITIAL_DRIVERS = [
         "consistency": 85,
         "tire_mgmt": 86,
         "wet_skill": 90,
-        "salary_m": 7.5,
+        "salary_m": 2.0,
         "value_m": 36.0,
         "contract_years": 3,
         "helmet": "#00a86b",
@@ -481,7 +655,7 @@ INITIAL_DRIVERS = [
         "consistency": 91,
         "tire_mgmt": 91,
         "wet_skill": 90,
-        "salary_m": 27.0,
+        "salary_m": 34.0,
         "value_m": 50.0,
         "contract_years": 3,
         "helmet": "#ffffff",
@@ -500,7 +674,7 @@ INITIAL_DRIVERS = [
         "consistency": 93,
         "tire_mgmt": 96,
         "wet_skill": 97,
-        "salary_m": 32.0,
+        "salary_m": 60.0,
         "value_m": 38.0,
         "contract_years": 2,
         "helmet": "#ffd000",
@@ -520,7 +694,7 @@ INITIAL_DRIVERS = [
         "consistency": 96,
         "tire_mgmt": 95,
         "wet_skill": 98,
-        "salary_m": 36.0,
+        "salary_m": 70.0,
         "value_m": 60.0,
         "contract_years": 3,
         "helmet": "#ff7300",
@@ -539,7 +713,7 @@ INITIAL_DRIVERS = [
         "consistency": 83,
         "tire_mgmt": 84,
         "wet_skill": 85,
-        "salary_m": 5.5,
+        "salary_m": 5.0,
         "value_m": 22.0,
         "contract_years": 2,
         "helmet": "#f4d03f",
@@ -559,7 +733,7 @@ INITIAL_DRIVERS = [
         "consistency": 92,
         "tire_mgmt": 93,
         "wet_skill": 93,
-        "salary_m": 24.0,
+        "salary_m": 30.0,
         "value_m": 48.0,
         "contract_years": 3,
         "helmet": "#ccff00",
@@ -578,7 +752,7 @@ INITIAL_DRIVERS = [
         "consistency": 93,
         "tire_mgmt": 90,
         "wet_skill": 89,
-        "salary_m": 19.0,
+        "salary_m": 13.0,
         "value_m": 44.0,
         "contract_years": 3,
         "helmet": "#ff6b35",
@@ -598,7 +772,7 @@ INITIAL_DRIVERS = [
         "consistency": 86,
         "tire_mgmt": 86,
         "wet_skill": 87,
-        "salary_m": 5.0,
+        "salary_m": 1.0,
         "value_m": 19.0,
         "contract_years": 2,
         "helmet": "#ff4d6d",
@@ -617,7 +791,7 @@ INITIAL_DRIVERS = [
         "consistency": 80,
         "tire_mgmt": 81,
         "wet_skill": 85,
-        "salary_m": 2.8,
+        "salary_m": 0.75,
         "value_m": 21.0,
         "contract_years": 3,
         "helmet": "#ffee32",
@@ -637,7 +811,7 @@ INITIAL_DRIVERS = [
         "consistency": 89,
         "tire_mgmt": 88,
         "wet_skill": 90,
-        "salary_m": 10.0,
+        "salary_m": 12.0,
         "value_m": 24.0,
         "contract_years": 2,
         "helmet": "#3a86ff",
@@ -656,7 +830,7 @@ INITIAL_DRIVERS = [
         "consistency": 82,
         "tire_mgmt": 84,
         "wet_skill": 85,
-        "salary_m": 4.5,
+        "salary_m": 0.75,
         "value_m": 19.0,
         "contract_years": 2,
         "helmet": "#74c0fc",
@@ -676,7 +850,7 @@ INITIAL_DRIVERS = [
         "consistency": 91,
         "tire_mgmt": 88,
         "wet_skill": 90,
-        "salary_m": 9.5,
+        "salary_m": 7.0,
         "value_m": 16.0,
         "contract_years": 2,
         "helmet": "#9ef01a",
@@ -695,7 +869,7 @@ INITIAL_DRIVERS = [
         "consistency": 86,
         "tire_mgmt": 86,
         "wet_skill": 86,
-        "salary_m": 4.0,
+        "salary_m": 2.0,
         "value_m": 22.0,
         "contract_years": 3,
         "helmet": "#00f5d4",
@@ -715,7 +889,7 @@ INITIAL_DRIVERS = [
         "consistency": 87,
         "tire_mgmt": 87,
         "wet_skill": 91,
-        "salary_m": 8.0,
+        "salary_m": 7.0,
         "value_m": 19.0,
         "contract_years": 2,
         "helmet": "#ef233c",
@@ -734,7 +908,7 @@ INITIAL_DRIVERS = [
         "consistency": 84,
         "tire_mgmt": 84,
         "wet_skill": 86,
-        "salary_m": 4.2,
+        "salary_m": 1.0,
         "value_m": 23.0,
         "contract_years": 3,
         "helmet": "#4cc9f0",
@@ -754,7 +928,7 @@ INITIAL_DRIVERS = [
         "consistency": 93,
         "tire_mgmt": 92,
         "wet_skill": 91,
-        "salary_m": 14.0,
+        "salary_m": 13.0,
         "value_m": 32.0,
         "contract_years": 2,
         "helmet": "#ff2a2a",
@@ -773,7 +947,7 @@ INITIAL_DRIVERS = [
         "consistency": 89,
         "tire_mgmt": 90,
         "wet_skill": 88,
-        "salary_m": 9.0,
+        "salary_m": 12.0,
         "value_m": 25.0,
         "contract_years": 2,
         "helmet": "#ff758f",
@@ -793,7 +967,7 @@ INITIAL_DRIVERS = [
         "consistency": 93,
         "tire_mgmt": 93,
         "wet_skill": 94,
-        "salary_m": 18.0,
+        "salary_m": 20.0,
         "value_m": 24.0,
         "contract_years": 1,
         "helmet": "#00b4d8",
@@ -812,7 +986,7 @@ INITIAL_DRIVERS = [
         "consistency": 79,
         "tire_mgmt": 83,
         "wet_skill": 88,
-        "salary_m": 6.0,
+        "salary_m": 12.0,
         "value_m": 11.0,
         "contract_years": 2,
         "helmet": "#1b4332",
@@ -832,7 +1006,7 @@ INITIAL_DRIVERS = [
         "consistency": 84,
         "tire_mgmt": 93,
         "wet_skill": 85,
-        "salary_m": 11.0,
+        "salary_m": 8.0,
         "value_m": 16.0,
         "contract_years": 2,
         "helmet": "#b5e48c",
@@ -851,7 +1025,7 @@ INITIAL_DRIVERS = [
         "consistency": 91,
         "tire_mgmt": 89,
         "wet_skill": 87,
-        "salary_m": 8.5,
+        "salary_m": 5.0,
         "value_m": 15.0,
         "contract_years": 2,
         "helmet": "#48cae4",
@@ -1249,7 +1423,7 @@ def upgrade_cost_m(dept_key: str, current_level: int) -> float:
     spec = UPGRADE_DEPARTMENTS[dept_key]
     if current_level >= spec["max_level"]:
         return 0.0
-    return round(spec["base_cost_m"] * (spec["cost_scale"] ** (current_level - 1)), 2)
+    return round(spec["base_cost_m"] * (spec["cost_scale"] ** (current_level - 1)) * UPGRADE_PRICE_MULTIPLIER, 2)
 
 
 def team_car_rating(team: dict) -> float:
@@ -1330,4 +1504,107 @@ def tire_temp_status(compound: str, temp_c: float) -> str:
         return "WARMING"
     else:
         return "OPTIMAL"
+
+
+def track_upgrade_profile(track_or_id) -> dict:
+    """Return circuit DNA upgrade weights and recommended downforce setup."""
+    track_id = track_or_id if isinstance(track_or_id, str) else getattr(track_or_id, "id", "")
+    if track_id in CIRCUIT_UPGRADE_PROFILES:
+        return copy.deepcopy(CIRCUIT_UPGRADE_PROFILES[track_id])
+
+    # Geometric fallback for custom/unknown circuits using straight-mode ratio
+    if track_or_id is not None and not isinstance(track_or_id, str) and getattr(track_or_id, "stations", None):
+        stations = track_or_id.stations
+        straight_frac = sum(1 for st in stations if st.get("straight_mode")) / max(1, len(stations))
+        if straight_frac >= 0.44:
+            return {
+                "category": "POWER",
+                "label": "High-Speed Power Bias",
+                "recommended_df": -1,
+                "weights": {"power_unit": 1.32, "active_aero": 1.15, "chassis": 0.85, "suspension": 0.80, "reliability": 1.05, "pit_crew": 1.0},
+            }
+        if straight_frac <= 0.22:
+            return {
+                "category": "DOWNFORCE",
+                "label": "High-Downforce Technical Bias",
+                "recommended_df": 1,
+                "weights": {"power_unit": 0.76, "active_aero": 1.24, "chassis": 1.28, "suspension": 1.28, "reliability": 1.0, "pit_crew": 1.05},
+            }
+    return copy.deepcopy(DEFAULT_CIRCUIT_PROFILE)
+
+
+def effective_track_upgrades(upgrades: dict, track_or_id) -> dict[str, float]:
+    """Scale upgrade levels relative to baseline 5.0 by circuit-specific department weights."""
+    src = upgrades.get("upgrades") if isinstance(upgrades.get("upgrades"), dict) else upgrades
+    profile = track_upgrade_profile(track_or_id)
+    weights = profile["weights"]
+    scaled: dict[str, float] = {}
+    for k, raw_val in src.items():
+        w = weights.get(k, 1.0)
+        scaled[k] = round(max(0.5, 5.0 + (float(raw_val) - 5.0) * w), 3)
+    return scaled
+
+
+def circuit_car_rating(team: dict, track_or_id) -> float:
+    """Circuit-adjusted performance index (0-100) emphasizing track-relevant departments."""
+    eff = effective_track_upgrades(team["upgrades"], track_or_id)
+    weighted = (
+        eff["power_unit"] * 0.25
+        + eff["active_aero"] * 0.25
+        + eff["chassis"] * 0.20
+        + eff["suspension"] * 0.15
+        + eff["reliability"] * 0.08
+        + eff["pit_crew"] * 0.07
+    )
+    return round(55.0 + weighted * 4.5, 1)
+
+
+def create_pu_pool() -> dict:
+    """Create a fresh seasonal Power Unit & Gearbox component allocation pool for one driver."""
+    return {
+        comp: {
+            "wear": 0.0,
+            "used": 1,
+            "limit": spec["limit"],
+            "active_idx": 1,
+            "pending_penalty": 0,
+        }
+        for comp, spec in PU_COMPONENT_SPECS.items()
+    }
+
+
+def create_weekend_tire_sets(alloc_counts: dict | None = None) -> dict[str, list[dict]]:
+    """Build per-set weekend tyre inventory tracking Fresh vs. Scrubbed state and residual wear."""
+    counts = alloc_counts or DEFAULT_WEEKEND_TIRE_SETS
+    sets: dict[str, list[dict]] = {}
+    for comp, count in counts.items():
+        prefix = TIRE_COMPOUNDS.get(comp, {}).get("code", comp[:1])
+        sets[comp] = [
+            {
+                "id": f"{prefix}{i + 1}",
+                "wear": 0.0,
+                "age_laps": 0,
+                "scrubbed": False,
+                "in_use": False,
+            }
+            for i in range(max(0, int(count)))
+        ]
+    return sets
+
+
+def summarize_tire_sets(driver_sets: dict[str, list[dict]]) -> dict[str, dict]:
+    """Return {compound: {'total': int, 'fresh': int, 'scrubbed': int, 'min_scrub_wear': float}}."""
+    out: dict[str, dict] = {}
+    for comp in TIRE_COMPOUNDS:
+        items = [s for s in driver_sets.get(comp, []) if not s.get("in_use")]
+        fresh = sum(1 for s in items if not s.get("scrubbed"))
+        scrub_items = [s for s in items if s.get("scrubbed")]
+        min_w = round(min((s.get("wear", 0.0) for s in scrub_items), default=0.0) * 100.0, 1)
+        out[comp] = {
+            "total": len(items),
+            "fresh": fresh,
+            "scrubbed": len(scrub_items),
+            "min_scrub_wear": min_w,
+        }
+    return out
 

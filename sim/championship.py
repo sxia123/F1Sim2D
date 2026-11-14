@@ -12,19 +12,32 @@ from typing import Any
 
 from sim.data import (
     INITIAL_DRIVERS,
+    MAX_UPGRADES_PER_RACE,
+    PU_COMPONENT_SPECS,
     RACE_POINTS,
+    SETUP_LEVELS,
     SPONSORS,
     SPRINT_POINTS,
     TIRE_COMPOUNDS,
     DEFAULT_WEEKEND_TIRE_SETS,
     UPGRADE_DEPARTMENTS,
     WCC_PRIZE_POOL_M,
+    circuit_car_rating,
     clone_initial_roster,
+    create_pu_pool,
+    create_weekend_tire_sets,
     driver_overall,
+    effective_track_upgrades,
+    summarize_tire_sets,
     team_car_rating,
+    track_upgrade_profile,
     upgrade_cost_m,
 )
 from sim.physics import QualifyingSession, RaceSession
+from sim.economy import (
+    BALANCE_VERSION, SALARY_SOURCE, BUDGET_SOURCE, migrate_legacy_balance,
+    team_finances, season_allocation_m,
+)
 from sim.tracks import get_season_tracks, calendar_status
 from sim.track_geometry import in_pit_tunnel
 from sim.hall_of_fame import (
@@ -126,6 +139,9 @@ class ChampionshipWorld:
 
         # Core persistent state
         self.season_year: int = 2026
+        self.balance_version: int = BALANCE_VERSION
+        self.upgrade_round_key: str | None = None
+        self.upgrades_this_round: dict[str, int] = {}
         self._legacy_calendar: bool = False
         self.current_round: int = 1
         self.player_team_id: str = "williams"
@@ -162,6 +178,9 @@ class ChampionshipWorld:
         self.temp_ban_subs: list[tuple[str, str, str]] = []
         self.starting_compounds: dict[str, str] = {}
         self.tire_allocations: dict[str, dict[str, int]] = {}
+        self.tire_sets: dict[str, dict[str, list[dict]]] = {}
+        self.pu_pools: dict[str, dict] = {}
+        self.driver_setups: dict[str, int] = {}
 
         if not self._load_state():
             self._init_fresh_career("williams")
@@ -170,18 +189,53 @@ class ChampionshipWorld:
     # -------------------------------------------------------------------------
     # Initialization & Persistence
     # -------------------------------------------------------------------------
+    def _ensure_component_pools(self) -> None:
+        """Ensure every active driver has a valid PU/gearbox pool, tire sets, and weekend setup."""
+        rec_df = track_upgrade_profile(self.current_track)["recommended_df"]
+        for d in self.drivers:
+            if not d.get("team_id"):
+                continue
+            did = d["id"]
+            if did not in self.tire_allocations:
+                self.tire_allocations[did] = dict(DEFAULT_WEEKEND_TIRE_SETS)
+            if did not in self.tire_sets:
+                self.tire_sets[did] = create_weekend_tire_sets()
+            if did not in self.pu_pools or not isinstance(self.pu_pools[did], dict):
+                self.pu_pools[did] = create_pu_pool()
+            else:
+                for ck in PU_COMPONENT_SPECS:
+                    if ck not in self.pu_pools[did]:
+                        self.pu_pools[did][ck] = {"used": 1, "wear": 0.0}
+                self.pu_pools[did].setdefault("pending_penalty", 0)
+            if did not in self.driver_setups:
+                self.driver_setups[did] = rec_df
+
     def _init_fresh_career(self, player_team_id: str = "williams", start_year: int = 2026) -> None:
         self._legacy_calendar = False
         self.season_year = 2028 if int(start_year) == 2028 else 2026
         self.current_round = 1
         self.player_team_id = player_team_id
         self.teams, self.drivers = clone_initial_roster()
+        self.balance_version = BALANCE_VERSION
+        self.upgrade_round_key = None
+        self.upgrades_this_round = {}
         self.starting_compounds.clear()
         self.tire_allocations = {
             d["id"]: dict(DEFAULT_WEEKEND_TIRE_SETS)
             for d in self.drivers
             if d.get("team_id")
         }
+        self.tire_sets = {
+            d["id"]: create_weekend_tire_sets()
+            for d in self.drivers
+            if d.get("team_id")
+        }
+        self.pu_pools = {
+            d["id"]: create_pu_pool()
+            for d in self.drivers
+            if d.get("team_id")
+        }
+        self.driver_setups = {}
 
         if self.season_year == 2028:
             # Age drivers by 2 years from 2026 baseline
@@ -200,25 +254,25 @@ class ChampionshipWorld:
                 nor["career_number"] = 4
                 nor["number"] = 4
 
-            # 2028 New Regulations: Top 4 teams start off better (levels 5-8), others randomized (levels 2-5)
+            # A close regulation reset: leaders 6-7, challengers 5-6.
             # All teams receive +$100.0M new regulations R&D injection
             for t in self.teams:
                 tid = t["id"]
                 if tid == "mclaren":
                     for dept in UPGRADE_DEPARTMENTS:
-                        t["upgrades"][dept] = random.choice([7, 8])
+                        t["upgrades"][dept] = random.choice([6, 7])
                 elif tid == "redbull":
                     for dept in UPGRADE_DEPARTMENTS:
-                        t["upgrades"][dept] = random.choice([6, 7, 8])
+                        t["upgrades"][dept] = random.choice([6, 7])
                 elif tid == "ferrari":
                     for dept in UPGRADE_DEPARTMENTS:
                         t["upgrades"][dept] = random.choice([6, 7])
                 elif tid == "mercedes":
                     for dept in UPGRADE_DEPARTMENTS:
-                        t["upgrades"][dept] = random.choice([5, 6, 7])
+                        t["upgrades"][dept] = random.choice([6, 7])
                 else:
                     for dept in UPGRADE_DEPARTMENTS:
-                        t["upgrades"][dept] = random.randint(2, 5)
+                        t["upgrades"][dept] = random.randint(5, 6)
                 t["budget_m"] = round(t["budget_m"] + 100.0, 2)
 
             self.hall_of_fame = [
@@ -293,6 +347,9 @@ class ChampionshipWorld:
         try:
             payload = {
                 "season_year": self.season_year,
+                "balance_version": self.balance_version,
+                "upgrade_round_key": self.upgrade_round_key,
+                "upgrades_this_round": self.upgrades_this_round,
                 "calendar_version": 1,
                 "legacy_calendar": self._legacy_calendar,
                 "current_round": self.current_round,
@@ -310,6 +367,9 @@ class ChampionshipWorld:
                 "season_archives": self.season_archives,
                 "reigning_wdc_id": getattr(self, "reigning_wdc_id", ""),
                 "tire_allocations": getattr(self, "tire_allocations", {}),
+                "tire_sets": getattr(self, "tire_sets", {}),
+                "pu_pools": getattr(self, "pu_pools", {}),
+                "driver_setups": getattr(self, "driver_setups", {}),
                 "hall_of_fame": self.hall_of_fame[-25:],
                 "ledger": self.ledger[-60:],
                 "event_feed": self.event_feed[-80:],
@@ -392,15 +452,33 @@ class ChampionshipWorld:
             self.ledger = data.get("ledger", [])
             self.event_feed = data.get("event_feed", [])
             self._event_seq = int(data.get("event_seq", len(self.event_feed)))
+            self.upgrade_round_key = data.get("upgrade_round_key")
+            self.upgrades_this_round = data.get("upgrades_this_round", {})
+            self.balance_version = int(data.get("balance_version", 0))
+            migrated = self.balance_version < BALANCE_VERSION
+            if migrated:
+                backup = self.save_path.with_name(f"{self.save_path.stem}.before-balance-v{BALANCE_VERSION}.json")
+                if not backup.exists():
+                    backup.write_text(json.dumps(data, indent=2), encoding="utf-8")
+                before = self._teams_by_id()[self.player_team_id]["budget_m"]
+                migrate_legacy_balance(self.teams, self.drivers, self.season_year,
+                                       self.current_round == 1 and not self.calendar_results)
+                self.balance_version = BALANCE_VERSION
+                grant = self._teams_by_id()[self.player_team_id]["budget_m"] - before
+                self._log_ledger("FUNDS", "Team budget scale adjustment", grant)
+                self._push_event("NEWS", "Team finances updated to real-world scale; opening car specifications brought closer together.")
             self.tire_allocations = data.get("tire_allocations", {})
-            for d in self.drivers:
-                if d.get("team_id") and d["id"] not in self.tire_allocations:
-                    self.tire_allocations[d["id"]] = dict(DEFAULT_WEEKEND_TIRE_SETS)
+            self.tire_sets = data.get("tire_sets", {})
+            self.pu_pools = data.get("pu_pools", {})
+            self.driver_setups = data.get("driver_setups", {})
+            self._ensure_component_pools()
             self._begin_weekend()
             self._push_event(
                 "SERVER",
                 f"Persistent Championship resumed at {self.season_year} Round {self.current_round} ({self.current_track.name}).",
             )
+            if migrated:
+                self._save_state()
             return True
         except Exception:
             return False
@@ -577,6 +655,7 @@ class ChampionshipWorld:
 
     def _begin_weekend(self) -> None:
         trk = self.current_track
+        self._sync_upgrade_allowance()
         self.phase = "PRE_WEEKEND"
         self.phase_timer = 7.0
         self.quali_session = None
@@ -590,6 +669,22 @@ class ChampionshipWorld:
             for d in self.drivers
             if d.get("team_id")
         }
+        self.tire_sets = {
+            d["id"]: create_weekend_tire_sets()
+            for d in self.drivers
+            if d.get("team_id")
+        }
+        rec_df = track_upgrade_profile(trk)["recommended_df"]
+        self.driver_setups = {
+            d["id"]: (
+                rec_df
+                if d.get("team_id") == self.player_team_id
+                else max(-2, min(2, rec_df + random.choice([-1, 0, 0, 0, 1])))
+            )
+            for d in self.drivers
+            if d.get("team_id")
+        }
+        self._ensure_component_pools()
 
         self.weekend_rain_forecast = trk.rain_chance
         if random.random() < trk.rain_chance:
@@ -600,7 +695,9 @@ class ChampionshipWorld:
         self._apply_race_bans_if_any()
 
         # AI rival teams invest surplus budget into R&D upgrades
-        self._run_ai_rd_upgrades()
+        # Opening specifications (and winter development) are already funded.
+        if self.current_round > 1 or self.calendar_results:
+            self._run_ai_rd_upgrades()
 
         cond = "WET / RAIN" if self.weekend_wetness > 0.15 else "DRY"
         fmt_tag = " [SPRINT WEEKEND]" if trk.is_sprint else ""
@@ -608,6 +705,8 @@ class ChampionshipWorld:
             "WEEKEND",
             f"ROUND {self.current_round}/24{fmt_tag}: Welcome to {trk.city} for the {self.season_year} {trk.name} ({cond}, {int(trk.rain_chance*100)}% rain risk)!",
         )
+        # A resumed weekend must retain AI deliveries and its shared allowance.
+        self._save_state()
 
     def _apply_race_bans_if_any(self) -> None:
         self.temp_ban_subs = []
@@ -641,13 +740,37 @@ class ChampionshipWorld:
                 reg["team_id"] = team_id
         self.temp_ban_subs = []
 
+    def _sync_upgrade_allowance(self) -> None:
+        key = f"{self.season_year}:{self.current_round}"
+        if self.upgrade_round_key != key:
+            self.upgrade_round_key = key
+            self.upgrades_this_round = {}
+
+    def _upgrade_allowance(self, team_id: str) -> dict:
+        self._sync_upgrade_allowance()
+        used = self.upgrades_this_round.get(team_id, 0)
+        return {"limit": MAX_UPGRADES_PER_RACE, "used": used,
+                "remaining": max(0, MAX_UPGRADES_PER_RACE - used)}
+
+    def _record_upgrade(self, team_id: str) -> None:
+        self._sync_upgrade_allowance()
+        self.upgrades_this_round[team_id] = self.upgrades_this_round.get(team_id, 0) + 1
+
+    def _team_finances(self, team: dict, full_season: bool = False) -> dict:
+        remaining = len(self.calendar) if full_season else len(self.calendar) - self.current_round + 1
+        return team_finances(team, self.drivers, len(self.calendar), remaining)
+
     def _run_ai_rd_upgrades(self) -> None:
         """AI rival teams strategically invest surplus budget into department upgrades."""
-        OPERATING_RESERVE_M = 22.0  # Safe reserve for race weekend salaries and crash repairs
-
         for team in self.teams:
             if team["id"] == self.player_team_id:
                 continue
+
+            allowance = self._upgrade_allowance(team["id"])["remaining"]
+            if allowance == 0:
+                continue
+
+            OPERATING_RESERVE_M = self._team_finances(team)["operating_reserve_m"]
 
             budget = team["budget_m"]
             surplus = budget - OPERATING_RESERVE_M
@@ -678,7 +801,7 @@ class ChampionshipWorld:
             upgrades_bought = []
             total_spent = 0.0
 
-            for _ in range(max_upgrades):
+            for _ in range(min(max_upgrades, allowance)):
                 curr_budget = team["budget_m"]
                 available_to_spend = curr_budget - OPERATING_RESERVE_M
                 if available_to_spend <= 2.0:
@@ -726,6 +849,7 @@ class ChampionshipWorld:
 
                 team["budget_m"] = round(team["budget_m"] - cost, 2)
                 team["upgrades"][dept] = lvl + 1
+                self._record_upgrade(team_id)
                 total_spent += cost
                 upgrades_bought.append((dept, lvl + 1, cost))
 
@@ -752,10 +876,15 @@ class ChampionshipWorld:
 
     def _run_ai_offseason_development(self) -> None:
         """AI teams invest winter R&D capital into developing their new season challenger."""
-        OPERATING_RESERVE_M = 25.0
         for team in self.teams:
             if team["id"] == self.player_team_id:
                 continue
+
+            allowance = self._upgrade_allowance(team["id"])["remaining"]
+            if allowance == 0:
+                continue
+
+            OPERATING_RESERVE_M = max(25.0, self._team_finances(team, full_season=True)["operating_reserve_m"])
 
             surplus = team["budget_m"] - OPERATING_RESERVE_M
             if surplus < 12.0:
@@ -766,8 +895,8 @@ class ChampionshipWorld:
             spent = 0.0
             upgrades_bought = []
 
-            # Perform up to 4 pre-season department upgrades
-            for _ in range(4):
+            # Winter deliveries use the opening Grand Prix's three slots.
+            for _ in range(allowance):
                 remaining_winter = winter_budget - spent
                 if remaining_winter <= 2.0 or team["budget_m"] - OPERATING_RESERVE_M <= 2.0:
                     break
@@ -788,6 +917,7 @@ class ChampionshipWorld:
 
                 team["budget_m"] = round(team["budget_m"] - cost, 2)
                 team["upgrades"][dept] = lvl + 1
+                self._record_upgrade(team["id"])
                 spent = round(spent + cost, 2)
                 upgrades_bought.append((dept, lvl + 1))
 
@@ -800,6 +930,7 @@ class ChampionshipWorld:
 
     def _start_sprint_qualifying(self) -> None:
         trk = self.current_track
+        self._ensure_component_pools()
         self.race_session = None
         self.quali_session = QualifyingSession(
             trk,
@@ -809,6 +940,9 @@ class ChampionshipWorld:
             is_sprint_quali=True,
             regulations=self.regulations,
             tire_allocations=self.tire_allocations,
+            setups=self.driver_setups,
+            pu_pools=self.pu_pools,
+            tire_sets=self.tire_sets,
         )
         self.phase = "SPRINT_QUALIFYING"
         self._push_event(
@@ -843,6 +977,7 @@ class ChampionshipWorld:
         else:
             sprint_wet = 0.0
 
+        self._ensure_component_pools()
         self.quali_session = None
         self.race_session = RaceSession(
             trk,
@@ -856,6 +991,9 @@ class ChampionshipWorld:
             starting_compounds=self.starting_compounds,
             rain_scheduled=will_rain,
             tire_allocations=self.tire_allocations,
+            setups=self.driver_setups,
+            pu_pools=self.pu_pools,
+            tire_sets=self.tire_sets,
         )
         self.phase = "SPRINT_RACE"
         self._push_event(
@@ -908,6 +1046,7 @@ class ChampionshipWorld:
 
     def _start_qualifying(self) -> None:
         trk = self.current_track
+        self._ensure_component_pools()
         self.race_session = None
         self.quali_session = QualifyingSession(
             trk,
@@ -917,6 +1056,9 @@ class ChampionshipWorld:
             is_sprint_quali=False,
             regulations=self.regulations,
             tire_allocations=self.tire_allocations,
+            setups=self.driver_setups,
+            pu_pools=self.pu_pools,
+            tire_sets=self.tire_sets,
         )
         self.phase = "QUALIFYING"
         self._push_event(
@@ -941,7 +1083,30 @@ class ChampionshipWorld:
     def _prepare_race_grid(self) -> None:
         """Place the qualifying order once; grid walk and lights share these cars."""
         trk = self.current_track
+        self._ensure_component_pools()
         grid_drivers = self._ordered_grid_drivers(self.grid_order_ids)
+
+        # Apply any pending FIA Power Unit / Gearbox grid penalties cleanly
+        penalized: list[tuple[dict, int]] = []
+        scored_grid: list[tuple[float, int, dict]] = []
+        for idx, d in enumerate(grid_drivers):
+            pool = self.pu_pools.get(d["id"], {})
+            pen = int(pool.get("pending_penalty", 0) or 0)
+            if pen > 0:
+                penalized.append((d, pen))
+                pool["pending_penalty"] = 0
+            # Tiny index tiebreaker keeps exact relative qualifying order among ties
+            scored_grid.append((idx + pen + idx * 0.001, idx, d))
+        if penalized:
+            scored_grid.sort(key=lambda row: row[0])
+            grid_drivers = [row[2] for row in scored_grid]
+            self.grid_order_ids = [d["id"] for d in grid_drivers]
+            for d, pen in penalized:
+                new_pos = self.grid_order_ids.index(d["id"]) + 1
+                self._push_event(
+                    "STEWARDS",
+                    f"FIA GRID PENALTY: #{d.get('number', 0)} {d.get('code', d['id'])} drops +{pen} grid places (Power Unit allocation) -> starts P{new_pos}.",
+                )
 
         # Single rain event per race: probability of rain equals track rain_chance
         will_rain = random.random() < trk.rain_chance
@@ -967,6 +1132,9 @@ class ChampionshipWorld:
             starting_compounds=self.starting_compounds,
             rain_scheduled=will_rain,
             tire_allocations=self.tire_allocations,
+            setups=self.driver_setups,
+            pu_pools=self.pu_pools,
+            tire_sets=self.tire_sets,
         )
 
     def _start_race(self) -> None:
@@ -1036,10 +1204,10 @@ class ChampionshipWorld:
                 income += sp["bonus_payout_m"]
             pts_bonus = team_pts_earned[tid] * 0.14
 
-            team_drivers = [d for d in self.drivers if d["team_id"] == tid]
-            salaries_per_race = sum(d["salary_m"] / 24.0 for d in team_drivers)
+            finances = self._team_finances(team)
+            salaries_per_race = finances["payroll_per_race_m"]
             repairs = team_repairs[tid]
-            factory_ops = round(0.55 + 0.05 * (sum(team["upgrades"].values()) / 6.0), 2)
+            factory_ops = finances["operations_per_race_m"]
 
             net = income + pts_bonus - salaries_per_race - repairs - factory_ops
             team["budget_m"] = round(max(1.5, team["budget_m"] + net), 2)
@@ -1055,10 +1223,49 @@ class ChampionshipWorld:
                 if repairs > 0.01:
                     self._log_ledger("REPAIR", f"R{self.current_round} Carbon-Fibre Crash Damage Repairs", -repairs)
 
+        tmap = self._teams_by_id()
+        trk = self.current_track
+        lap_scale = max(0.65, trk.race_laps / 24.0)
+        self._ensure_component_pools()
+        for car in rs.standings:
+            pool = self.pu_pools.get(car.driver_id)
+            tm = tmap.get(car.team_id)
+            if not pool or not tm:
+                continue
+            rel_lvl = tm["upgrades"].get("reliability", 5)
+            rel_wear_scale = max(0.55, 1.25 - rel_lvl * 0.065)
+            dnf_scale = 0.45 if car.dnf else 1.0
+            for comp_key, spec in PU_COMPONENT_SPECS.items():
+                comp = pool[comp_key]
+                comp["wear"] = round(min(1.0, comp["wear"] + spec["wear_per_gp"] * rel_wear_scale * lap_scale * dnf_scale), 3)
+                if car.team_id == self.player_team_id and comp["wear"] >= 0.78:
+                    self._push_event(
+                        "UPGRADE",
+                        f"RELIABILITY ALERT (#{car.number} {car.code}): {spec['name']} wear at {int(comp['wear']*100)}% — consider fitting fresh element before next GP.",
+                    )
+                elif car.team_id != self.player_team_id and comp["wear"] >= 0.88:
+                    comp["used"] += 1
+                    comp["wear"] = 0.0
+                    if comp["used"] > spec["limit"]:
+                        pen_val = spec["first_penalty"] if comp["used"] == spec["limit"] + 1 else spec["extra_penalty"]
+                        pool["pending_penalty"] = int(pool.get("pending_penalty", 0)) + pen_val
+
         winner = classification[0]
         p2 = classification[1]
         p3 = classification[2]
         pole_code = dmap[self.grid_order_ids[0]]["code"] if self.grid_order_ids and self.grid_order_ids[0] in dmap else winner["code"]
+        lap_chart = rs.build_lap_chart()
+        stints_summary = rs.build_stints_summary()
+        driver_meta = {
+            c.driver_id: {
+                "code": c.code,
+                "name": c.name,
+                "team_id": c.team_id,
+                "team": c.team_short,
+                "team_color": c.team_color,
+            }
+            for c in rs.standings
+        }
 
         round_rec = {
             "round": self.current_round,
@@ -1079,6 +1286,9 @@ class ChampionshipWorld:
             "pole_code": pole_code,
             "fastest_lap_code": rs.fastest_lap_code or winner["code"],
             "top10": classification[:10],
+            "driver_meta": driver_meta,
+            "lap_chart": lap_chart,
+            "stints": stints_summary,
         }
         self.calendar_results.append(round_rec)
         record_live_race_to_archive(self.season_archives, self.season_year, round_rec, classification, self.current_track)
@@ -1094,6 +1304,9 @@ class ChampionshipWorld:
         self.last_podium_summary = {
             "round_rec": round_rec,
             "top10": classification[:10],
+            "driver_meta": driver_meta,
+            "lap_chart": lap_chart,
+            "stints": stints_summary,
         }
 
         self._restore_race_bans()
@@ -1276,7 +1489,7 @@ class ChampionshipWorld:
                 d["tire_mgmt"] = min(max_stat, d["tire_mgmt"] + 2)
                 d["defense"] = min(max_stat, d["defense"] + 1)
                 d["value_m"] = round(min(65.0, d["value_m"] + 5.5), 1)
-                d["salary_m"] = round(min(45.0, d["salary_m"] + 2.5), 1)
+                d["salary_m"] = round(min(max(45.0, d["salary_m"]), d["salary_m"] + 2.5), 2)
             elif perf >= 1.1:
                 # A-Tier Performance (+2 OVR)
                 d["pace"] = min(max_stat, d["pace"] + 2)
@@ -1284,13 +1497,13 @@ class ChampionshipWorld:
                 d["consistency"] = min(max_stat, d["consistency"] + 1)
                 d["tire_mgmt"] = min(max_stat, d["tire_mgmt"] + 1)
                 d["value_m"] = round(min(60.0, d["value_m"] + 3.5), 1)
-                d["salary_m"] = round(min(40.0, d["salary_m"] + 1.5), 1)
+                d["salary_m"] = round(min(max(40.0, d["salary_m"]), d["salary_m"] + 1.5), 2)
             elif perf >= 0.35:
                 # B-Tier Performance (+1 OVR)
                 d["pace"] = min(max_stat, d["pace"] + 1)
                 d["racecraft"] = min(max_stat, d["racecraft"] + 1)
                 d["value_m"] = round(min(55.0, d["value_m"] + 2.0), 1)
-                d["salary_m"] = round(min(35.0, d["salary_m"] + 0.8), 1)
+                d["salary_m"] = round(min(max(35.0, d["salary_m"]), d["salary_m"] + 0.8), 2)
             elif perf <= -1.4:
                 # Significant Underperformance (-2 OVR)
                 d["pace"] = max(min_stat, d["pace"] - 2)
@@ -1298,13 +1511,13 @@ class ChampionshipWorld:
                 d["consistency"] = max(min_stat, d["consistency"] - 2)
                 d["defense"] = max(min_stat, d["defense"] - 1)
                 d["value_m"] = round(max(5.0, d["value_m"] - 4.5), 1)
-                d["salary_m"] = round(max(1.5, d["salary_m"] - 1.8), 1)
+                d["salary_m"] = round(max(0.5, d["salary_m"] - 1.8), 2)
             elif perf <= -0.4:
                 # Moderate Underperformance (-1 OVR)
                 d["pace"] = max(min_stat, d["pace"] - 1)
                 d["consistency"] = max(min_stat, d["consistency"] - 1)
                 d["value_m"] = round(max(5.0, d["value_m"] - 2.0), 1)
-                d["salary_m"] = round(max(1.5, d["salary_m"] - 0.8), 1)
+                d["salary_m"] = round(max(0.5, d["salary_m"] - 0.8), 2)
 
             new_ovr = driver_overall(d)
             diff = round(new_ovr - old_ovr, 1)
@@ -1420,8 +1633,33 @@ class ChampionshipWorld:
                         f"PADDOCK BLOCKBUSTER: {t['short']} spends ${total_deal:.1f}M to sign #{best_fa['number']} {best_fa['name']} on a 2-year deal, replacing {weakest['name']}!",
                     )
 
+        # Cross-team AI silly season seat swaps (expiring or ambitious midfield moves)
+        ai_swap_pool = [
+            d for d in self._active_drivers()
+            if d["team_id"] != self.player_team_id and d["contract_years"] <= 0
+        ]
+        if len(ai_swap_pool) >= 2 and random.random() < 0.65:
+            ai_swap_pool.sort(key=driver_overall, reverse=True)
+            d_a, d_b = ai_swap_pool[0], ai_swap_pool[-1]
+            if d_a["team_id"] != d_b["team_id"]:
+                tmap = self._teams_by_id()
+                ta, tb = tmap[d_a["team_id"]], tmap[d_b["team_id"]]
+                if team_car_rating(tb) > team_car_rating(ta) and driver_overall(d_a) > driver_overall(d_b) + 1.5:
+                    d_a["team_id"], d_b["team_id"] = tb["id"], ta["id"]
+                    d_a["contract_years"] = 2
+                    d_b["contract_years"] = 2
+                    self._push_event(
+                        "TRANSFER",
+                        f"SILLY SEASON SWITCH: {d_a['name']} jumps from {ta['short']} to {tb['short']} on a 2-year deal; {d_b['name']} moves to {ta['short']}!",
+                    )
+
         for d in self._active_drivers():
             if d["contract_years"] <= 0:
+                if d["team_id"] == self.player_team_id:
+                    self._push_event(
+                        "TRANSFER",
+                        f"CONTRACT NOTICE: #{d['number']} {d['name']} enters final option year — open Drivers HQ to negotiate a multi-year renewal.",
+                    )
                 d["contract_years"] = 1
 
         prev_year = self.season_year
@@ -1467,22 +1705,16 @@ class ChampionshipWorld:
 
         if next_year == 2028:
             # 2028 NEW REGULATIONS: 2.4L V8 Naturally Aspirated + Classic DRS!
-            # Top 4 teams start off better (levels 5-8), everyone else randomized (levels 2-5)
+            # Keep the new-era opening field close, with a small lead for the top four.
             wcc = self.get_wcc_table()
             tmap = self._teams_by_id()
             for rank_idx, row in enumerate(wcc):
                 team = tmap[row["id"]]
                 for dept in UPGRADE_DEPARTMENTS:
-                    if rank_idx == 0:
-                        team["upgrades"][dept] = random.choice([7, 8])
-                    elif rank_idx == 1:
-                        team["upgrades"][dept] = random.choice([6, 7, 8])
-                    elif rank_idx == 2:
+                    if rank_idx < 4:
                         team["upgrades"][dept] = random.choice([6, 7])
-                    elif rank_idx == 3:
-                        team["upgrades"][dept] = random.choice([5, 6, 7])
                     else:
-                        team["upgrades"][dept] = random.randint(2, 5)
+                        team["upgrades"][dept] = random.randint(5, 6)
             self._push_event(
                 "NEWS",
                 "FIA 2028 NEW REGULATIONS: Screaming 20,000 RPM 2.4L V8 engines & classic DRS introduced! Top 4 teams lead early development while rival grids are randomized.",
@@ -1491,9 +1723,15 @@ class ChampionshipWorld:
             # Normal seasons: keep 100% of car improvements from previous season!
             pass
 
-        # 3. Funds Carry Over & Season Start Injections (+50M normal, +100M in new regs)
-        funds_bonus_m = 100.0 if is_new_regs else 50.0
+        # Carry cash over; core funding plus guaranteed sponsors and the prior
+        # championship distribution complete each team's annual funding envelope.
+        prize_by_id = {row["id"]: WCC_PRIZE_POOL_M[min(i, len(WCC_PRIZE_POOL_M) - 1)] * 0.42
+                       for i, row in enumerate(wcc_table)}
         for team in self.teams:
+            funds_bonus_m = season_allocation_m(team, len(get_season_tracks(next_year)),
+                                                prize_by_id.get(team["id"], 0.0))
+            if is_new_regs:
+                funds_bonus_m += 100.0
             team["budget_m"] = round(team["budget_m"] + funds_bonus_m, 2)
             if team["id"] == self.player_team_id:
                 ledger_label = (
@@ -1506,16 +1744,20 @@ class ChampionshipWorld:
         funds_announcement = (
             f"NEW REGULATIONS R&D BOOST: +$100.0M injected into all team budgets for {next_year} ({get_season_regulations(next_year)['short_name']})! Prior season funds fully carried over."
             if is_new_regs
-            else f"SEASON START FUNDS: +$50.0M allocated to all team budgets for {next_year}! Prior season funds fully carried over."
+            else f"SEASON START FUNDS: {next_year} annual team funding renewed, adjusted for sponsorship and championship distributions. Prior funds carried over."
         )
         self._push_event("UPGRADE", funds_announcement)
 
         # Winter Pre-Season Development: Rival teams invest capital into their new season car
-        self._run_ai_offseason_development()
-
         self.season_year = next_year
         self.current_round = 1
+        self._run_ai_offseason_development()
         self.starting_compounds.clear()
+        self.pu_pools = {
+            d["id"]: create_pu_pool()
+            for d in self.drivers
+            if d.get("team_id")
+        }
         self._reset_season_tallies()
         reg = self.regulations
         self._push_event("NEWS", f"NEW SEASON {self.season_year} UNDERWAY ({reg['short_name']})! Cars unveiled for Round 1 in Melbourne.")
@@ -1540,6 +1782,8 @@ class ChampionshipWorld:
             if team_id not in tmap:
                 return {"ok": False, "error": "Unknown team."}
             self.player_team_id = team_id
+            if self.race_session:
+                self.race_session.player_team_id = team_id
             team = tmap[team_id]
             self._log_ledger("TEAM", f"Took command as Team Principal of {team['name']}", 0.0)
             self._push_event("NEWS", f"TEAM PRINCIPAL APPOINTED: New leadership takes charge on the {team['short']} Pit Wall!")
@@ -1555,6 +1799,8 @@ class ChampionshipWorld:
             spec = UPGRADE_DEPARTMENTS[dept_key]
             if cur_lvl >= spec["max_level"]:
                 return {"ok": False, "error": f"{spec['short']} is already at maximum FIA development level ({spec['max_level']})."}
+            if self._upgrade_allowance(team["id"])["remaining"] == 0:
+                return {"ok": False, "error": f"Race weekend upgrade limit reached ({MAX_UPGRADES_PER_RACE}/{MAX_UPGRADES_PER_RACE}). Your next allowance opens at the next Grand Prix."}
             cost = upgrade_cost_m(dept_key, cur_lvl)
             if team["budget_m"] < cost:
                 return {"ok": False, "error": f"Insufficient budget: need ${cost:.2f}M (available ${team['budget_m']:.2f}M)."}
@@ -1562,23 +1808,240 @@ class ChampionshipWorld:
             team["budget_m"] = round(team["budget_m"] - cost, 2)
             new_lvl = cur_lvl + 1
             team["upgrades"][dept_key] = new_lvl
-            new_perf = team_car_rating(team)
+            self._record_upgrade(team["id"])
+            eff_upgrades = effective_track_upgrades(team["upgrades"], self.current_track)
+            new_perf = circuit_car_rating(team, self.current_track)
 
             if self.race_session:
                 for c in self.race_session.cars:
                     if c.team_id == self.player_team_id:
-                        c.upgrades[dept_key] = new_lvl
+                        c.upgrades = dict(eff_upgrades)
                         c.car_perf_index = new_perf
             if self.quali_session:
                 for c in self.quali_session.cars:
                     if c.team_id == self.player_team_id:
-                        c.upgrades[dept_key] = new_lvl
+                        c.upgrades = dict(eff_upgrades)
                         c.car_perf_index = new_perf
 
             self._log_ledger("R&D UPGRADE", f"Upgraded {spec['name']} to Lv.{new_lvl}", -cost)
             self._push_event("UPGRADE", f"FACTORY UPGRADE: {team['short']} deploys {spec['short']} Lv.{new_lvl} (-${cost:.1f}M)!")
             self._save_state()
-            return {"ok": True, "dept": dept_key, "level": new_lvl, "budget_m": team["budget_m"]}
+            return {"ok": True, "dept": dept_key, "level": new_lvl, "budget_m": team["budget_m"],
+                    "upgrade_allowance": self._upgrade_allowance(team["id"])}
+
+    def is_parc_ferme_locked(self) -> bool:
+        """Parc Ferme locks car downforce setup once Qualifying or Sprint Shootout starts."""
+        return self.phase in ("SPRINT_QUALIFYING", "SPRINT_RACE", "QUALIFYING", "GRID_WALK", "RACE")
+
+    def set_driver_setup(self, driver_id: str, setup_df: int) -> dict:
+        with self.lock:
+            if self.is_parc_ferme_locked():
+                return {"ok": False, "error": "Parc Ferme is ACTIVE: aerodynamic wing setup is locked until next race weekend."}
+            try:
+                lvl = int(setup_df)
+            except (TypeError, ValueError):
+                return {"ok": False, "error": "Invalid setup level."}
+            if lvl not in SETUP_LEVELS:
+                return {"ok": False, "error": "Setup downforce level must be between -2 and +2."}
+            dmap = self._drivers_by_id()
+            drv = dmap.get(driver_id)
+            if not drv or drv.get("team_id") != self.player_team_id:
+                return {"ok": False, "error": "Driver is not on your active team."}
+            self._ensure_component_pools()
+            self.driver_setups[driver_id] = lvl
+            spec = SETUP_LEVELS[lvl]
+            self._push_event(
+                "RACE_CONTROL",
+                f"GARAGE SETUP (#{drv.get('number', 0)} {drv['code']}): Aero wing balanced to {spec['label']} ({lvl:+d}).",
+            )
+            self._save_state()
+            return {"ok": True, "driver_id": driver_id, "setup_df": lvl, "setup_label": spec["label"]}
+
+    def replace_pu_component(self, driver_id: str, component: str) -> dict:
+        with self.lock:
+            if self.phase in ("SPRINT_QUALIFYING", "SPRINT_RACE", "QUALIFYING", "RACE"):
+                return {"ok": False, "error": "Cannot swap Power Unit / Gearbox elements while an on-track session is running."}
+            if component not in PU_COMPONENT_SPECS:
+                return {"ok": False, "error": f"Unknown component '{component}'."}
+            dmap = self._drivers_by_id()
+            drv = dmap.get(driver_id)
+            if not drv or drv.get("team_id") != self.player_team_id:
+                return {"ok": False, "error": "Driver is not on your active team."}
+            self._ensure_component_pools()
+            pool = self.pu_pools[driver_id]
+            spec = PU_COMPONENT_SPECS[component]
+            entry = pool[component]
+            entry["used"] = int(entry.get("used", 1)) + 1
+            entry["wear"] = 0.0
+            penalty_added = 0
+            if entry["used"] > spec["limit"]:
+                penalty_added = int(spec["first_penalty"] if entry["used"] == spec["limit"] + 1 else spec["extra_penalty"])
+                pool["pending_penalty"] = int(pool.get("pending_penalty", 0)) + penalty_added
+            if self.race_session and driver_id in self.race_session.cars_by_id:
+                self.race_session.cars_by_id[driver_id].pu_pool = copy.deepcopy(pool)
+            msg = (
+                f"GARAGE PU ALLOCATION (#{drv.get('number', 0)} {drv['code']}): Fresh {spec['name']} fitted "
+                f"({entry['used']}/{spec['limit']} seasonal quota"
+                + (f" — +{penalty_added} FIA grid drop triggered!)." if penalty_added else ", penalty-free).")
+            )
+            self._push_event("STEWARDS" if penalty_added else "UPGRADE", msg)
+            self._save_state()
+            return {
+                "ok": True,
+                "driver_id": driver_id,
+                "component": component,
+                "used": entry["used"],
+                "limit": spec["limit"],
+                "penalty_added": penalty_added,
+                "pending_penalty": pool["pending_penalty"],
+                "pu_pool": copy.deepcopy(pool),
+            }
+
+    def evaluate_contract_negotiation(
+        self,
+        driver_id: str,
+        offered_salary_m: float,
+        offered_years: int,
+        release_driver_id: str | None = None,
+    ) -> dict:
+        with self.lock:
+            dmap = self._drivers_by_id()
+            tmap = self._teams_by_id()
+            drv = dmap.get(driver_id)
+            if not drv:
+                return {"ok": False, "error": "Driver not found."}
+            my_team = tmap[self.player_team_id]
+            try:
+                years = max(1, min(4, int(offered_years)))
+                sal = max(0.5, round(float(offered_salary_m), 2))
+            except (TypeError, ValueError):
+                return {"ok": False, "error": "Invalid salary or contract length."}
+
+            ovr = driver_overall(drv)
+            is_own = drv.get("team_id") == self.player_team_id
+            years_mult = 1.06 if years >= 4 else (1.03 if years == 1 else 0.98)
+            champ_mult = 1.08 if getattr(self, "reigning_wdc_id", "") == driver_id else 1.0
+            base_ask = max(drv["salary_m"], round((ovr - 66.0) * 0.85, 2))
+            ask_salary = round(base_ask * years_mult * champ_mult, 2)
+
+            if is_own:
+                upfront_m = 0.0
+                buyout_m = 0.0
+                signing_fee_m = 0.0
+                window_ok = True
+                can_afford = True
+                accepted = sal >= round(ask_salary * 0.96, 2)
+                reason = (
+                    f"{drv['name']} accepts {years}-year renewal at ${sal:.1f}M/yr!"
+                    if accepted
+                    else f"{drv['name']} seeks around ${ask_salary:.1f}M/yr for a {years}-year commitment."
+                )
+            else:
+                window_ok = self.is_transfer_window_open()
+                my_drivers = [d for d in self._active_drivers() if d["team_id"] == self.player_team_id]
+                rel = dmap.get(release_driver_id) if release_driver_id else (min(my_drivers, key=driver_overall) if my_drivers else None)
+                if not rel or rel.get("team_id") != self.player_team_id:
+                    return {"ok": False, "error": "Select one of your active drivers to make room on the roster."}
+                release_driver_id = rel["id"]
+                rel_buyout = round(rel["salary_m"] * max(1, rel["contract_years"]) * 0.25, 2)
+                if drv.get("team_id") is None:
+                    buyout_m = rel_buyout
+                    signing_fee_m = round(drv["value_m"] * 0.28, 2)
+                else:
+                    rival = tmap[drv["team_id"]]
+                    poach_fee = round(drv["salary_m"] * max(1, drv["contract_years"]) * 0.35 + drv["value_m"] * 0.28, 2)
+                    buyout_m = round(rel_buyout + poach_fee, 2)
+                    signing_fee_m = round(drv["value_m"] * 0.15, 2)
+                    if team_car_rating(my_team) < team_car_rating(rival) - 4.0:
+                        ask_salary = round(ask_salary * 1.14, 2)
+                upfront_m = round(buyout_m + signing_fee_m, 2)
+                can_afford = my_team["budget_m"] >= upfront_m
+                accepted = window_ok and can_afford and (sal >= round(ask_salary * 0.96, 2))
+                if not window_ok:
+                    reason = "Transfer window locked until Off-Season / Round 1 Pre-Weekend."
+                elif not can_afford:
+                    reason = f"Budget insufficient: needs ${upfront_m:.1f}M upfront buyout & signing bonus."
+                elif accepted:
+                    reason = f"{drv['name']} agrees to {years} yrs at ${sal:.1f}M/yr (${upfront_m:.1f}M buyout/bonus)!"
+                else:
+                    reason = f"{drv['name']} asks >= ${ask_salary:.1f}M/yr for a {years}-yr seat switch."
+
+            return {
+                "ok": True,
+                "is_own": is_own,
+                "accepted": accepted,
+                "window_open": window_ok,
+                "can_afford": can_afford,
+                "driver_id": driver_id,
+                "driver_name": drv["name"],
+                "release_driver_id": release_driver_id,
+                "offered_salary_m": sal,
+                "offered_years": years,
+                "asked_salary_m": ask_salary,
+                "buyout_m": buyout_m,
+                "signing_fee_m": signing_fee_m,
+                "total_upfront_m": upfront_m,
+                "reason": reason,
+            }
+
+    def execute_contract_negotiation(
+        self,
+        driver_id: str,
+        offered_salary_m: float,
+        offered_years: int,
+        release_driver_id: str | None = None,
+    ) -> dict:
+        with self.lock:
+            ev = self.evaluate_contract_negotiation(driver_id, offered_salary_m, offered_years, release_driver_id)
+            if not ev.get("ok"):
+                return ev
+            if not ev["accepted"]:
+                return {"ok": False, "error": ev["reason"], "evaluation": ev}
+
+            dmap = self._drivers_by_id()
+            tmap = self._teams_by_id()
+            drv = dmap[driver_id]
+            my_team = tmap[self.player_team_id]
+            sal = ev["offered_salary_m"]
+            years = ev["offered_years"]
+
+            if ev["is_own"]:
+                drv["salary_m"] = sal
+                drv["contract_years"] = years
+                self._push_event(
+                    "TRANSFER",
+                    f"CONTRACT RENEWAL: {my_team['short']} extends #{drv.get('number', 0)} {drv['name']} on a {years}-year deal (${sal:.1f}M/yr).",
+                )
+                self._save_state()
+                return {"ok": True, "message": ev["reason"], "evaluation": ev}
+
+            rel = dmap[ev["release_driver_id"]]
+            prev_team_id = drv.get("team_id")
+            upfront = ev["total_upfront_m"]
+            my_team["budget_m"] = round(my_team["budget_m"] - upfront, 2)
+            if prev_team_id and prev_team_id in tmap:
+                poach_credit = round(ev["buyout_m"] * 0.65, 2)
+                tmap[prev_team_id]["budget_m"] = round(tmap[prev_team_id]["budget_m"] + poach_credit, 2)
+
+            rel["team_id"] = None
+            rel["contract_years"] = 0
+            drv["team_id"] = self.player_team_id
+            drv["salary_m"] = sal
+            drv["contract_years"] = years
+            self.driver_points.setdefault(drv["id"], 0)
+            self.driver_wins.setdefault(drv["id"], 0)
+            self.driver_podiums.setdefault(drv["id"], 0)
+            self.driver_poles.setdefault(drv["id"], 0)
+            self.driver_dnfs.setdefault(drv["id"], 0)
+            self._ensure_component_pools()
+
+            self._log_ledger("SIGNING", f"Signed {drv['name']} ({years}yr, released {rel['code']})", -upfront)
+            self._push_event(
+                "TRANSFER",
+                f"CONTRACT SIGNED: {my_team['short']} signs #{drv.get('number', 0)} {drv['name']} ({years} yrs @ ${sal:.1f}M/yr), releasing {rel['name']}!",
+            )
+            self._save_state()
+            return {"ok": True, "message": ev["reason"], "evaluation": ev}
 
     def evaluate_trade(self, my_driver_id: str, target_driver_id: str, cash_offer_m: float) -> dict:
         with self.lock:
@@ -1754,6 +2217,17 @@ class ChampionshipWorld:
 
             if "auto_strategy" in cmd:
                 car.auto_strategy = bool(cmd["auto_strategy"])
+            if "lift_coast" in cmd:
+                new_lc = bool(cmd["lift_coast"])
+                car.lift_coast_manual = new_lc
+                if new_lc != getattr(car, "lift_coast", False):
+                    car.lift_coast = new_lc
+                    self._push_event(
+                        "RADIO",
+                        f"PIT WALL (#{car.number} {car.code}): {'Lift-and-Coast ACTIVATED — saving fuel & tyre heat' if new_lc else 'Lift-and-Coast OFF — full throttle zones'}.",
+                    )
+            if "prefer_fresh" in cmd:
+                car.prefer_fresh_tyre = bool(cmd["prefer_fresh"])
             if "start_compound" in cmd and cmd["start_compound"] in TIRE_COMPOUNDS:
                 comp = cmd["start_compound"]
                 res = self.set_starting_compound(driver_id, comp)
@@ -2006,6 +2480,8 @@ class ChampionshipWorld:
 
             active_cars: list = []
             maneuver_session = None
+            groove_wetness = wetness
+            offline_wetness = wetness
             if self.phase in ("GRID_WALK", "RACE", "SPRINT_RACE") and self.race_session:
                 rs = self.race_session
                 maneuver_session = rs
@@ -2013,6 +2489,8 @@ class ChampionshipWorld:
                 flag = rs.flag_state
                 yellow_sec = rs.yellow_sector
                 wetness = rs.wetness
+                groove_wetness = getattr(rs, "groove_wetness", wetness)
+                offline_wetness = getattr(rs, "offline_wetness", wetness)
                 lap_cur = rs.standings[0].lap if rs.standings else 1
                 lap_tot = rs.total_laps
                 clock = round(rs.race_clock, 1)
@@ -2030,6 +2508,8 @@ class ChampionshipWorld:
                 active_cars = qs.standings
                 flag = "GREEN"
                 wetness = qs.wetness
+                groove_wetness = wetness
+                offline_wetness = wetness
                 clock = round(qs.stage_time_left, 1)
                 fastest_id = qs.fastest_driver_id
                 fastest_time = qs.fastest_time
@@ -2045,6 +2525,12 @@ class ChampionshipWorld:
                 getattr(self.race_session, "tire_allocations", None)
                 or getattr(self.quali_session, "tire_allocations", None)
                 or getattr(self, "tire_allocations", None)
+                or {}
+            )
+            tsets_map = (
+                getattr(self.race_session, "tire_sets", None)
+                or getattr(self.quali_session, "tire_sets", None)
+                or getattr(self, "tire_sets", None)
                 or {}
             )
             for c in active_cars:
@@ -2080,12 +2566,26 @@ class ChampionshipWorld:
                         "wear": int(round(c.tire_wear * 100)),
                         "tage": c.tire_age_laps,
                         "ttemp": int(round(c.tire_temp)),
+                        "scrubbed": bool(getattr(c, "tire_scrubbed", False)),
+                        "prefer_fresh": bool(getattr(c, "prefer_fresh_tyre", True)),
                         "tsets": dict(alloc_map.get(c.driver_id, DEFAULT_WEEKEND_TIRE_SETS)),
+                        "tsets_detail": summarize_tire_sets(tsets_map[c.driver_id]) if c.driver_id in tsets_map else {},
                         "dmg": int(round(c.wing_damage * 100)),
                         "dmg_side": getattr(c, "wing_damage_side", "NONE"),
                         "steer": round(getattr(c, "steer_angle", 0.0), 3),
                         "slip": round(getattr(c, "body_slip_angle", 0.0), 3),
                         "g_lat": round(getattr(c, "g_lat", 0.0), 2),
+                        "setup_df": int(getattr(c, "setup_df", 0)),
+                        "fuel_kg": round(getattr(c, "fuel_kg", 0.0), 1),
+                        "fuel_pct": max(0, min(100, int(round((getattr(c, "fuel_kg", 0.0) / max(0.1, getattr(c, "max_fuel_kg", 100.0))) * 100)))),
+                        "fuel_margin": round(getattr(c, "fuel_margin_laps", 0.0), 2),
+                        "lift_coast": bool(getattr(c, "lift_coast", False)),
+                        "rejoin_x": getattr(c, "rejoin_x", None),
+                        "rejoin_y": getattr(c, "rejoin_y", None),
+                        "rejoin_pos": getattr(c, "rejoin_pos", None),
+                        "rejoin_traffic_s": getattr(c, "rejoin_traffic_s", None),
+                        "advice": getattr(c, "strategy_advice", ""),
+                        "quali_phase": getattr(c, "quali_run_phase", ""),
                         "pits": c.pit_stops,
                         "lpit": c.last_pit_duration,
                         "in_pit": c.in_pits,
@@ -2097,6 +2597,7 @@ class ChampionshipWorld:
                         "pace": c.pace_mode,
                         "ers": c.ers_mode,
                         "order": c.team_order,
+                        "strategy": c.strategy_status,
                         "pen": c.time_penalty_s,
                         "dt_pen": c.drive_through_pending,
                         "blue_flag": getattr(c, "blue_flag", False),
@@ -2141,6 +2642,10 @@ class ChampionshipWorld:
                 "flag": flag,
                 "yellow_sector": yellow_sec,
                 "wetness": int(round(wetness * 100)),
+                "groove_wetness": int(round(groove_wetness * 100)),
+                "offline_wetness": int(round(offline_wetness * 100)),
+                "track_profile": track_upgrade_profile(trk),
+                "parc_ferme": self.is_parc_ferme_locked(),
                 "rain_risk": int(round(trk.rain_chance * 100)),
                 "temp_c": int(round(trk.base_temp_c)),
                 "lap": lap_cur,
@@ -2165,6 +2670,9 @@ class ChampionshipWorld:
     def build_full_state_payload(self) -> dict:
         """Full Championship, HQ, R&D, Driver Market, Sponsors & Current Track geometry."""
         with self.lock:
+            self._ensure_component_pools()
+            trk = self.current_track
+            track_profile = track_upgrade_profile(trk)
             p_team = self._teams_by_id()[self.player_team_id]
             upgrades_info = []
             for key, spec in UPGRADE_DEPARTMENTS.items():
@@ -2179,6 +2687,7 @@ class ChampionshipWorld:
                         "level": lvl,
                         "max_level": spec["max_level"],
                         "cost_m": upgrade_cost_m(key, lvl),
+                        "track_weight": track_profile["weights"].get(key, 0.25),
                     }
                 )
 
@@ -2206,6 +2715,7 @@ class ChampionshipWorld:
                 {
                     **t,
                     "car_rating": team_car_rating(t),
+                    "circuit_rating": circuit_car_rating(t, trk),
                     "points": self.team_points.get(t["id"], 0),
                     "wins": self.team_wins.get(t["id"], 0),
                 }
@@ -2217,8 +2727,22 @@ class ChampionshipWorld:
                 "season": self.season_year,
                 "round": self.current_round,
                 "player_team_id": self.player_team_id,
-                "player_team": {**p_team, "car_rating": team_car_rating(p_team)},
+                "player_team": {
+                    **p_team,
+                    "car_rating": team_car_rating(p_team),
+                    "circuit_rating": circuit_car_rating(p_team, trk),
+                },
+                "finances": {**self._team_finances(p_team), "salary_source": SALARY_SOURCE,
+                             "budget_source": BUDGET_SOURCE, "opening_grid_average_m": 400.0},
                 "upgrades": upgrades_info,
+                "upgrade_allowance": self._upgrade_allowance(p_team["id"]),
+                "track_profile": track_profile,
+                "parc_ferme": self.is_parc_ferme_locked(),
+                "setup_levels": {str(k): v for k, v in SETUP_LEVELS.items()},
+                "pu_specs": PU_COMPONENT_SPECS,
+                "pu_pools": copy.deepcopy(self.pu_pools),
+                "driver_setups": dict(self.driver_setups),
+                "tire_sets_summary": {did: summarize_tire_sets(ts) for did, ts in self.tire_sets.items()},
                 "teams": teams_summary,
                 "drivers": all_drivers,
                 "sponsors": SPONSORS,
@@ -2243,7 +2767,7 @@ class ChampionshipWorld:
                 ],
                 "hall_of_fame": list(reversed(self.hall_of_fame)),
                 "ledger": list(reversed(self.ledger[-40:])),
-                "track": self.current_track.to_client_payload(),
+                "track": trk.to_client_payload(),
                 "regulations": self.regulations,
                 "transfer_window_open": self.is_transfer_window_open(),
                 "starting_compounds": self.starting_compounds,

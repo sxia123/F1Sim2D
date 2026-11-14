@@ -8,7 +8,13 @@ from types import SimpleNamespace
 from sim.data import (
     TIRE_COMPOUNDS,
     DEFAULT_WEEKEND_TIRE_SETS,
+    SETUP_LEVELS,
+    PU_COMPONENT_SPECS,
     team_car_rating,
+    circuit_car_rating,
+    effective_track_upgrades,
+    create_pu_pool,
+    create_weekend_tire_sets,
     tire_thermal_wear_mult,
     tire_thermal_grip_mult,
     tire_temp_status,
@@ -16,6 +22,7 @@ from sim.data import (
 from sim.tracks import CompiledTrack
 from sim.track_geometry import pit_lateral_offset, in_pit_tunnel
 from sim.radio import RadioDispatcher
+from sim.pitwall import RivalPitWall
 from sim.car_geometry import (CAR_LEN_PX,CAR_WID_PX,CAR_HALF_LENGTH,CAR_HALF_WIDTH,
                               CAR_PAIR_RADIUS_SQ,SC_HALF_LENGTH,SC_HALF_WIDTH)
 
@@ -528,6 +535,11 @@ class CarState:
         start_compound: str,
         total_laps: int,
         max_battery_mj: float = 4.0,
+        track: CompiledTrack | None = None,
+        setup_df: int = 0,
+        pu_pool: dict | None = None,
+        start_wear: float | None = None,
+        start_scrubbed: bool = False,
     ):
         self.driver_id: str = driver["id"]
         self.name: str = driver["name"]
@@ -548,8 +560,11 @@ class CarState:
             "tire_mgmt": driver["tire_mgmt"],
             "wet_skill": driver["wet_skill"],
         }
-        self.upgrades = dict(team["upgrades"])
-        self.car_perf_index: float = team_car_rating(team)
+        self.upgrades_raw = dict(team["upgrades"])
+        self.upgrades = effective_track_upgrades(team["upgrades"], track) if track is not None else dict(team["upgrades"])
+        self.car_perf_index: float = circuit_car_rating(team, track) if track is not None else team_car_rating(team)
+        self.setup_df: int = max(-2, min(2, int(setup_df)))
+        self.pu_pool: dict = pu_pool if pu_pool is not None else create_pu_pool()
         self.grip_snapshot: float = 1.0
 
         self.grid_pos: int = grid_pos
@@ -591,12 +606,18 @@ class CarState:
         # Tires, Fuel, Damage
         self.compound: str = start_compound
         self.compounds_used: set[str] = {start_compound}
-        self.tire_wear: float = random.uniform(0.01, 0.04)
-        self.tire_age_laps: int = 0
+        self.tire_scrubbed: bool = bool(start_scrubbed)
+        self.prefer_fresh_tyre: bool = True
+        self.tire_wear: float = float(start_wear) if start_wear is not None else random.uniform(0.01, 0.04)
+        self.tire_age_laps: int = 1 if start_scrubbed else 0
         comp_spec_init = TIRE_COMPOUNDS.get(start_compound, TIRE_COMPOUNDS["MEDIUM"])
         self.tire_temp: float = comp_spec_init.get("ideal_temp", 98.0) - random.uniform(2.0, 5.0)
         self.thermal_radio_cooldown: float = 0.0
-        self.fuel_kg: float = round(total_laps * 1.75 + 2.0, 2)
+        self.max_fuel_kg: float = round(total_laps * 1.75 + 2.0, 2)
+        self.fuel_kg: float = self.max_fuel_kg
+        self.lift_coast: bool = False
+        self.fuel_margin_laps: float = 0.6
+        self.fuel_critical: bool = False
         self.wing_damage: float = 0.0
         self.wing_damage_side: str = "NONE"  # "NONE", "LEFT", "RIGHT", "BOTH"
         self.steer_angle: float = 0.0         # Dynamic steering wheel angle in radians
@@ -612,6 +633,14 @@ class CarState:
         self.pace_mode: str = "BALANCED"
         self.ers_mode: str = "AUTO"
         self.team_order: str = "FREE"
+        self.strategy_status: str = ""
+        self.strategy_gain_s: float = 0.0
+        self.strategy_advice: dict | None = None
+        self.rejoin_x: float = 0.0
+        self.rejoin_y: float = 0.0
+        self.rejoin_pos: int = grid_pos
+        self.rejoin_traffic_s: float = 99.0
+        self.rejoin_traffic_penalty: float = 0.0
         self.swap_target_id: str | None = None
         self.swap_pass_id: str | None = None
 
@@ -629,8 +658,14 @@ class CarState:
         self.eliminated: bool = False
         self.elim_stage: str = ""
         self.locked_grid_pos: int | None = None
+        self.quali_run_phase: str = "PUSH"   # GARAGE, OUTLAP, PUSH, INLAP
+        self.quali_garage_timer: float = 0.0
+        self.quali_runs_done: int = 0
+        self.quali_traffic_penalty: float = 0.0
+        self._garage_s: float = 0.0
+        self._quali_push_ready_lap: int = 0
 
-        # Timing & Classification
+        # Timing, Classification & Stint Analytics
         self.lap_start_time: float = 0.0
         self.last_lap_time: float | None = None
         self.best_lap_time: float | None = None
@@ -639,6 +674,10 @@ class CarState:
         self.best_sector_times: list[float | None] = [None, None, None]
         self.sector_start_time: float = 0.0
         self.quali_sector_plan: list[float] | None = None
+        self.lap_cross_times: dict[int, float] = {}
+        self.stints: list[dict] = [
+            {"compound": start_compound, "start_lap": 1, "end_lap": total_laps, "scrubbed": bool(start_scrubbed), "start_wear": round(self.tire_wear * 100.0, 1)}
+        ]
         self.gap_to_leader: float = 0.0
         self.interval_ahead: float = 0.0
         self.finished: bool = False
@@ -715,6 +754,9 @@ class QualifyingSession:
         is_sprint_quali: bool = False,
         regulations: dict | None = None,
         tire_allocations: dict[str, dict[str, int]] | None = None,
+        setups: dict[str, int] | None = None,
+        pu_pools: dict[str, dict] | None = None,
+        tire_sets: dict[str, dict] | None = None,
     ):
         self.track = track
         self.is_sprint_quali = is_sprint_quali
@@ -733,6 +775,9 @@ class QualifyingSession:
                 for drv in active_drivers
                 if "id" in drv
             }
+        self.setups = dict(setups or {})
+        self.pu_pools = pu_pools or {}
+        self.tire_sets = tire_sets
         self.v_env, self.is_braking = build_speed_envelope(track)
         # Qualifying uses modeled flying laps with accelerated on-track motion.
         # Split the same modeled time by each sector's reference driving time.
@@ -760,7 +805,6 @@ class QualifyingSession:
         self.cars: list[CarState] = []
         shuffled = list(active_drivers)
         random.shuffle(shuffled)
-        n_drv = max(len(shuffled), 1)
         for idx, drv in enumerate(shuffled):
             drv_id = drv["id"]
             driver_alloc = self.tire_allocations.setdefault(drv_id, dict(DEFAULT_WEEKEND_TIRE_SETS))
@@ -772,24 +816,69 @@ class QualifyingSession:
                         break
             if driver_alloc.get(chosen_comp, 0) > 0:
                 driver_alloc[chosen_comp] -= 1
+                self._mark_quali_set_used(drv_id, chosen_comp, wear=0.035)
 
             team = teams_by_id[drv["team_id"]]
             max_bat = float(self.regulations.get("max_battery_mj", 4.0))
-            car = CarState(drv, team, idx + 1, chosen_comp, 3, max_battery_mj=max_bat)
+            car = CarState(
+                drv,
+                team,
+                idx + 1,
+                chosen_comp,
+                3,
+                max_battery_mj=max_bat,
+                track=self.track,
+                setup_df=self.setups.get(drv_id, 0),
+                pu_pool=self.pu_pools.get(drv_id),
+            )
             car.max_battery_mj = float(self.regulations.get("max_battery_mj", 4.0))
             car.battery_mj = car.max_battery_mj
-            # Evenly space all 22 cars around 92% of the circuit (~220m+ apart, zero overlap)
-            car.total_dist = ((0.06 + 0.90 * (idx / n_drv)) % 1.0) * track.length_m
-            car.s = car.total_dist % track.length_m
-            car.laps_completed = int(car.total_dist // track.length_m)
-            car.v = 68.0
-            car.pace_mode = "PUSH"
-            car.ers_mode = "BOOST"
+            self._place_in_garage_for_run(car, wave_idx=idx, first_run=True)
             self._update_xy(car)
             self.cars.append(car)
 
         self.standings: list[CarState] = list(self.cars)
         self._resort()
+
+    def _mark_quali_set_used(self, driver_id: str, compound: str, wear: float = 0.04) -> None:
+        if not self.tire_sets or driver_id not in self.tire_sets:
+            return
+        pool = self.tire_sets[driver_id].get(compound, [])
+        # Prefer consuming a fresh set in qualifying; next remaining fresh/scrubbed set reflects weekend attrition
+        avail = next((s for s in pool if not s.get("in_use") and not s.get("scrubbed")), None)
+        if avail is None:
+            avail = next((s for s in pool if not s.get("in_use")), None)
+        if avail is not None:
+            avail["scrubbed"] = True
+            avail["wear"] = round(min(0.25, max(avail.get("wear", 0.0), wear)), 3)
+            avail["age_laps"] = avail.get("age_laps", 0) + 1
+            avail["in_use"] = True
+
+    def _place_in_garage_for_run(self, car: CarState, wave_idx: int, first_run: bool = False) -> None:
+        garage_s = self.track.pit_garages[TEAM_GARAGE_INDEX.get(car.team_id, 5)]["s_m"]
+        car._garage_s = garage_s
+        car.in_pits = True
+        car.pit_phase = "STOPPED"
+        car.pit_apron = 1.0
+        car.quali_run_phase = "GARAGE"
+        car.v = 0.0
+        car.aero_mode = "CORNER"
+        car.drs_active = False
+        car.d = 2.0 * self.track.pit_side
+        car.target_d = car.d
+        car.total_dist = garage_s
+        car.s = garage_s
+        car._expected_garage_dist = garage_s
+        car.laps_completed = int(garage_s // self.track.length_m)
+        car.quali_traffic_penalty = 0.0
+        car.quali_sector_plan = None
+        if first_run:
+            car.quali_runs_done = 0
+            car.quali_garage_timer = round(0.4 + (wave_idx % 5) * 1.15 + (wave_idx // 5) * 0.45, 2)
+        else:
+            car.quali_garage_timer = round(random.uniform(7.5, 13.0), 2)
+        car.pace_mode = "PUSH"
+        car.ers_mode = "BOOST"
 
     @property
     def stage_name(self) -> str:
@@ -871,11 +960,22 @@ class QualifyingSession:
         sk = car.skills
         track_evo = -0.15 * self.stage_idx
         comp_delta = 0.42 if car.compound == "MEDIUM" else 0.0
+        setup_cfg = SETUP_LEVELS.get(car.setup_df, SETUP_LEVELS[0])
+        # Track-balanced setup effect (~ -0.05s near optimal, +0.18s extreme mismatch)
+        profile_df = 0
+        # Qualifying setups reward matching circuit aero drag profile
+        setup_lap_delta = -setup_cfg["corner_grip"] * 8.0 - setup_cfg["straight_spd"] * 6.0
+        pu = car.pu_pool or {}
+        ice_wear = pu.get("ice", {}).get("wear", 0.0)
+        pu_deg_s = max(0.0, ice_wear - 0.30) * 0.48
         base_lap = (self.track.length_m / 62.5) * (1.0 + self.wetness * 0.14) + track_evo + comp_delta
         perf_delta = (
             (5.8 - (u["power_unit"] * 0.28 + u["active_aero"] * 0.28 + u["chassis"] * 0.24 + u["suspension"] * 0.20)) * 0.44
             + (90.0 - sk["pace"]) * 0.042
             + (90.0 - sk["wet_skill"]) * (0.045 if self.wetness > 0.15 else 0.0)
+            + setup_lap_delta
+            + pu_deg_s
+            + getattr(car, "quali_traffic_penalty", 0.0)
             + random.gauss(fallback_penalty, 0.145 * (1.15 - sk["consistency"] / 200.0))
         )
         return round(max(62.0, base_lap + perf_delta), 3)
@@ -892,17 +992,85 @@ class QualifyingSession:
             self.wetness = max(0.0, min(1.0, self.wetness + random.uniform(-0.002, 0.002) * dt))
 
         L = self.track.length_m
+        speed_scale = 1.68
         for car in self.cars:
             if car.eliminated:
                 continue
 
+            # Compatibility guard: if external caller positioned a GARAGE car directly on track, run PUSH immediately
+            if car.quali_run_phase == "GARAGE" and abs(car.total_dist - getattr(car, "_expected_garage_dist", car.total_dist)) > 0.5:
+                car.in_pits = False
+                car.pit_phase = "NONE"
+                car.pit_apron = 0.0
+                car.quali_run_phase = "PUSH"
+                car.v = max(car.v, 50.0)
+                car.laps_completed = int(car.total_dist // L)
+
+            # 1. Stationary inside Pit Garage waiting for release wave or Run 2
+            if car.quali_run_phase == "GARAGE":
+                car.v = 0.0
+                car.in_pits = True
+                car.pit_phase = "STOPPED"
+                car.pit_apron = 1.0
+                car.quali_garage_timer -= dt
+                car._expected_garage_dist = car.total_dist
+                self._update_xy(car)
+                if car.quali_garage_timer <= 0.0 and self.stage_time_left > 52.0:
+                    car.quali_run_phase = "OUTLAP"
+                    car.pit_phase = "EXIT"
+                    car.v = PIT_SPEED_LIMIT_MS
+                    car.quali_traffic_penalty = 0.0
+                continue
+
+            # 2. Rolling down Pit Lane on EXIT or ENTRY
+            if car.in_pits:
+                if car.pit_phase == "EXIT":
+                    car.pit_apron = max(0.0, car.pit_apron - dt * 6.0)
+                    car.v = PIT_SPEED_LIMIT_MS
+                    rel_ex = (car.s - self.track.pit_entry_s) % L
+                    ds_pit = car.v * dt * self.track.pit_distance_scale * speed_scale
+                    remaining = max(0.0, self.track.pit_span_m - rel_ex)
+                    travelled = min(ds_pit, remaining)
+                    car.total_dist += travelled
+                    car.s = car.total_dist % L
+                    self._update_xy(car)
+                    if ds_pit >= remaining:
+                        car.in_pits = False
+                        car.pit_phase = "NONE"
+                        car.pit_apron = 0.0
+                        car.d = 0.76 * self.track.pit_side
+                        car.target_d = car.d
+                        car.laps_completed = int(car.total_dist // L)
+                        car._quali_push_ready_lap = car.laps_completed
+                        car.quali_run_phase = "OUTLAP"
+                    continue
+                elif car.pit_phase == "ENTRY":
+                    car.pit_apron = max(0.0, car.pit_apron - dt * 6.0)
+                    car.v = PIT_SPEED_LIMIT_MS
+                    rel = (car.s - self.track.pit_entry_s) % L
+                    if rel > L - 150.0:
+                        rel -= L
+                    garage_s = self.track.pit_garages[TEAM_GARAGE_INDEX.get(car.team_id, 5)]["s_m"]
+                    rel_box = (garage_s - self.track.pit_entry_s) % L
+                    ds_pit = car.v * dt * self.track.pit_distance_scale * speed_scale
+                    if rel + ds_pit >= rel_box:
+                        self._place_in_garage_for_run(car, wave_idx=car.number, first_run=False)
+                        self._update_xy(car)
+                    else:
+                        car.total_dist += ds_pit
+                        car.s = car.total_dist % L
+                        self._update_xy(car)
+                    continue
+
             if car.quali_sector_plan is None:
                 car.quali_sector_plan = self._plan_sector_times(self._compute_flying_lap(car))
             prev_dist = car.total_dist
+            prev_s = car.s
             smp = self.track.sample(car.s)
             st = smp["station"]
             u = car.upgrades
             sk = car.skills
+            setup_cfg = SETUP_LEVELS.get(car.setup_df, SETUP_LEVELS[0])
 
             car_grip = (
                 1.0
@@ -910,25 +1078,28 @@ class QualifyingSession:
                 + (u["chassis"] - 5) * 0.009
                 + (u["suspension"] - 5) * 0.008
                 + (sk["pace"] - 88) * 0.0038
+                + setup_cfg["corner_grip"]
             )
             if self.wetness > 0.12:
                 car_grip += (sk["wet_skill"] - 88) * 0.0042 - self.wetness * 0.09
 
             ice_mult = float(self.regulations.get("ice_power_mult", 1.0))
-            target_v = self.v_env[st] * math.sqrt(max(0.65, car_grip))
+            run_pace_mult = 0.88 if car.quali_run_phase == "OUTLAP" else (0.76 if car.quali_run_phase == "INLAP" else 1.0)
+            target_v = self.v_env[st] * math.sqrt(max(0.65, car_grip)) * run_pace_mult
+            straight_boost = 1.0 + setup_cfg["straight_spd"]
             if self.regulations.get("has_classic_drs"):
-                if smp["straight_mode"] and self.wetness < 0.30 and not self.is_braking[st]:
+                if smp["straight_mode"] and self.wetness < 0.30 and not self.is_braking[st] and car.quali_run_phase == "PUSH":
                     car.aero_mode = "DRS"
                     car.drs_active = True
-                    pu_bonus = 1.0 + (u["power_unit"] - 5) * 0.009
+                    pu_bonus = (1.0 + (u["power_unit"] - 5) * 0.009) * straight_boost
                     target_v = min(99.5 * pu_bonus * ice_mult, target_v * 1.07)
                 else:
                     car.aero_mode = "CORNER"
                     car.drs_active = False
-            elif smp["straight_mode"] and self.wetness < 0.30 and not self.is_braking[st]:
+            elif smp["straight_mode"] and self.wetness < 0.30 and not self.is_braking[st] and car.quali_run_phase == "PUSH":
                 car.aero_mode = "STRAIGHT"
                 car.drs_active = False
-                pu_bonus = 1.0 + (u["power_unit"] - 5) * 0.009
+                pu_bonus = (1.0 + (u["power_unit"] - 5) * 0.009) * straight_boost
                 target_v = min(96.5 * pu_bonus, target_v * 1.05)
             else:
                 car.aero_mode = "CORNER"
@@ -942,10 +1113,45 @@ class QualifyingSession:
                 car.v = max(target_v, car.v - 42.0 * dt)
                 car.braking = car.v - target_v > 3.5
 
-            ds = car.v * dt * 1.42
+            # Check INLAP pit entry
+            ds = car.v * dt * speed_scale
+            if car.quali_run_phase == "INLAP":
+                entry_gap = (self.track.pit_entry_s - prev_s) % L
+                if entry_gap <= ds:
+                    car.total_dist += entry_gap
+                    car.s = car.total_dist % L
+                    car.in_pits = True
+                    car.pit_phase = "ENTRY"
+                    car.pit_apron = 0.0
+                    car.v = PIT_SPEED_LIMIT_MS
+                    self._update_xy(car)
+                    continue
+
             car.total_dist += ds
             car.s = car.total_dist % L
-            car.target_d = smp.get("racing_line_d", 0.0) + car.driver_line_bias
+
+            # Etiquette & Traffic: slow OUTLAP/INLAP cars yield off racing line for PUSH cars
+            base_d = smp.get("racing_line_d", 0.0) + car.driver_line_bias
+            if car.quali_run_phase in ("OUTLAP", "INLAP"):
+                push_behind = any(
+                    o is not car and not o.eliminated and not o.in_pits
+                    and o.quali_run_phase == "PUSH" and 0.0 < ((car.s - o.s) % L) < 95.0
+                    for o in self.cars
+                )
+                if push_behind:
+                    base_d = 0.78 * self.track.pit_side
+            elif car.quali_run_phase == "PUSH":
+                blocked = any(
+                    o is not car and not o.eliminated and not o.in_pits
+                    and o.quali_run_phase in ("OUTLAP", "INLAP")
+                    and 0.0 < ((o.s - car.s) % L) < 28.0
+                    and abs(o.d - car.d) < 0.72
+                    for o in self.cars
+                )
+                if blocked and car.quali_traffic_penalty < 0.45:
+                    car.quali_traffic_penalty = round(min(0.45, car.quali_traffic_penalty + 0.10 * dt), 3)
+
+            car.target_d = base_d
             prev_d = car.d
             car.d += (car.target_d - car.d) * min(1.0, dt * 3.2)
             half_usable_m = self.track.width_px_at(car.s) * 0.39 / self.track.px_per_m
@@ -962,36 +1168,50 @@ class QualifyingSession:
             ackerman_steer = math.atan(wheelbase_m * 1.65 * smp["curv"] * smp["inside_sign"])
             lane_steer = math.atan2(car.lateral_velocity, max(car.v, 6.0))
             car.steer_angle = round(max(-0.42, min(0.42, ackerman_steer + lane_steer)), 4)
-            # Battery state in qualifying session (cycles between 50% and 95% of max era capacity, never exceeding 100%)
-            charge_ratio = 0.50 + 0.45 * (0.5 + 0.5 * math.sin(self.elapsed * 0.4 + car.number))
-            car.battery_mj = max(0.0, min(car.max_battery_mj, round(car.max_battery_mj * charge_ratio, 3)))
+            # Battery state in qualifying session
+            if car.quali_run_phase == "PUSH":
+                charge_ratio = 0.50 + 0.45 * (0.5 + 0.5 * math.sin(self.elapsed * 0.4 + car.number))
+                car.battery_mj = max(0.0, min(car.max_battery_mj, round(car.max_battery_mj * charge_ratio, 3)))
+            else:
+                car.battery_mj = min(car.max_battery_mj, round(car.battery_mj + 0.15 * dt, 3))
 
             new_laps = int(car.total_dist // L)
-            for sector_idx in range(2):
-                gate = (car.laps_completed + (sector_idx + 1) / 3) * L
-                if prev_dist < gate <= car.total_dist:
-                    car.record_sector(sector_idx, car.quali_sector_plan[sector_idx])
+            if car.quali_run_phase == "PUSH":
+                for sector_idx in range(2):
+                    gate = (car.laps_completed + (sector_idx + 1) / 3) * L
+                    if prev_dist < gate <= car.total_dist:
+                        car.record_sector(sector_idx, car.quali_sector_plan[sector_idx])
             if new_laps > car.laps_completed:
                 car.laps_completed = new_laps
-                if self.stage_elapsed > 2.5:
-                    # Cars start distributed around the circuit on flying laps;
-                    # fill any unseen opening splits from that lap's model.
-                    for sector_idx, seconds in enumerate(car.quali_sector_plan):
-                        car.record_sector(sector_idx, seconds)
-                    lap_t = round(sum(car.quali_sector_plan), 3)
-                    car.complete_sector_lap()
-                    car.last_lap_time = lap_t
-                    if car.best_lap_time is None or lap_t < car.best_lap_time:
-                        car.best_lap_time = lap_t
-                        if self.fastest_time is None or lap_t < self.fastest_time:
-                            self.fastest_time = lap_t
-                            self.fastest_driver_id = car.driver_id
-                            event_cb(
-                                "PURPLE",
-                                f"{self.stage_name} PURPLE: {car.code} ({car.team_short}) goes P1 with {_fmt_lap(lap_t)}!",
-                            )
-                car.quali_sector_plan = None
-                car.current_sector_times = [None, None, None]
+                if car.quali_run_phase == "OUTLAP" and new_laps > car._quali_push_ready_lap:
+                    car.quali_run_phase = "PUSH"
+                    car.pace_mode = "PUSH"
+                    car.ers_mode = "BOOST"
+                    car.quali_traffic_penalty = 0.0
+                    car.quali_sector_plan = None
+                    car.current_sector_times = [None, None, None]
+                elif car.quali_run_phase == "PUSH":
+                    if self.stage_elapsed > 2.5:
+                        for sector_idx, seconds in enumerate(car.quali_sector_plan):
+                            car.record_sector(sector_idx, seconds)
+                        lap_t = round(sum(car.quali_sector_plan), 3)
+                        car.complete_sector_lap()
+                        car.last_lap_time = lap_t
+                        car.tire_wear = min(0.24, round(car.tire_wear + 0.042, 3))
+                        car.quali_runs_done += 1
+                        if car.best_lap_time is None or lap_t < car.best_lap_time:
+                            car.best_lap_time = lap_t
+                            if self.fastest_time is None or lap_t < self.fastest_time:
+                                self.fastest_time = lap_t
+                                self.fastest_driver_id = car.driver_id
+                                event_cb(
+                                    "PURPLE",
+                                    f"{self.stage_name} PURPLE: {car.code} ({car.team_short}) goes P1 with {_fmt_lap(lap_t)}!",
+                                )
+                    car.quali_sector_plan = None
+                    car.current_sector_times = [None, None, None]
+                    car.quali_run_phase = "INLAP"
+                    car.pace_mode = "CONSERVE"
 
         enforce_2d_car_separation(self.track, self.cars, True, self._update_xy, dt=dt)
 
@@ -1053,7 +1273,6 @@ class QualifyingSession:
             self.fastest_driver_id = None
             next_comp = self._stage_compound()
             advancing = [c for c in self.standings if not c.eliminated]
-            n_adv = max(len(advancing), 1)
             for idx, car in enumerate(advancing):
                 driver_alloc = self.tire_allocations.setdefault(car.driver_id, dict(DEFAULT_WEEKEND_TIRE_SETS))
                 chosen_comp = next_comp
@@ -1064,6 +1283,7 @@ class QualifyingSession:
                             break
                 if driver_alloc.get(chosen_comp, 0) > 0:
                     driver_alloc[chosen_comp] -= 1
+                    self._mark_quali_set_used(car.driver_id, chosen_comp, wear=0.04)
                 car.best_lap_time = None
                 car.last_lap_time = None
                 car.current_sector_times = [None, None, None]
@@ -1074,12 +1294,7 @@ class QualifyingSession:
                 car.interval_ahead = 0.0
                 car.compound = chosen_comp
                 car.tire_wear = 0.01
-                car.d = 0.0
-                car.target_d = 0.0
-                car.total_dist = ((0.06 + 0.90 * (idx / n_adv)) % 1.0) * self.track.length_m
-                car.s = car.total_dist
-                car.laps_completed = int(car.total_dist // self.track.length_m)
-                car.v = 68.0
+                self._place_in_garage_for_run(car, wave_idx=idx, first_run=True)
                 self._update_xy(car)
 
             enforce_2d_car_separation(self.track, self.cars, True, self._update_xy)
@@ -1150,8 +1365,12 @@ class RaceSession:
         starting_compounds: dict[str, str] | None = None,
         rain_scheduled: bool | None = None,
         tire_allocations: dict[str, dict[str, int]] | None = None,
+        setups: dict[str, int] | None = None,
+        pu_pools: dict[str, dict] | None = None,
+        tire_sets: dict[str, dict] | None = None,
     ):
         self.track = track
+        self.player_team_id = player_team_id
         self.is_sprint = is_sprint
         self.regulations = regulations or {
             "era_id": "2026_HYBRID",
@@ -1171,6 +1390,13 @@ class RaceSession:
                 for drv in grid_drivers
                 if "id" in drv
             }
+        self.setups = dict(setups or {})
+        self.pu_pools = pu_pools or {}
+        self.tire_sets = tire_sets if tire_sets is not None else {
+            drv["id"]: create_weekend_tire_sets(self.tire_allocations.get(drv["id"], DEFAULT_WEEKEND_TIRE_SETS))
+            for drv in grid_drivers
+            if "id" in drv
+        }
         self.starting_compounds = dict(starting_compounds or {})
         self.v_env, self.is_braking = build_speed_envelope(track)
         self.total_laps: int = max(6, track.sprint_laps) if (is_sprint and track.sprint_laps > 0) else track.race_laps
@@ -1183,6 +1409,8 @@ class RaceSession:
         self.post_finish_timer: float = 0.0
 
         self.wetness: float = wetness
+        self.groove_wetness: float = wetness
+        self.offline_wetness: float = wetness
         self.rain_forecast: float = rain_forecast
         forecast_val = rain_forecast[0] if isinstance(rain_forecast, list) else float(rain_forecast)
 
@@ -1277,9 +1505,22 @@ class RaceSession:
                         break
             if driver_alloc.get(comp, 0) > 0:
                 driver_alloc[comp] -= 1
+            start_wear, start_scrubbed = self._draw_tire_set_record(drv["id"], comp, prefer_fresh=True)
 
             max_bat = float(self.regulations.get("max_battery_mj", 4.0))
-            car = CarState(drv, team, grid_pos, comp, self.total_laps, max_battery_mj=max_bat)
+            car = CarState(
+                drv,
+                team,
+                grid_pos,
+                comp,
+                self.total_laps,
+                max_battery_mj=max_bat,
+                track=self.track,
+                setup_df=self.setups.get(drv["id"], 0),
+                pu_pool=self.pu_pools.get(drv["id"]),
+                start_wear=start_wear,
+                start_scrubbed=start_scrubbed,
+            )
             car.max_battery_mj = float(self.regulations.get("max_battery_mj", 4.0))
             car.battery_mj = car.max_battery_mj
             gb = track.grid_boxes[idx]
@@ -1297,6 +1538,34 @@ class RaceSession:
         self.standings: list[CarState] = list(self.cars)
         self.cars_by_id: dict[str, CarState] = {c.driver_id: c for c in self.cars}
         self.wet_declared: bool = wetness > 0.15
+        self.pitwall = RivalPitWall(self)
+        for car in self.cars:
+            self.pitwall.project_rejoin(car)
+
+    def _draw_tire_set_record(self, driver_id: str, compound: str, prefer_fresh: bool = True) -> tuple[float, bool]:
+        """Pull a fresh or scrubbed set record from weekend tire_sets if tracked."""
+        drv_sets = self.tire_sets.get(driver_id, {})
+        pool = [s for s in drv_sets.get(compound, []) if not s.get("in_use")]
+        if not pool:
+            return (0.0, False)
+        if prefer_fresh:
+            chosen = next((s for s in pool if not s.get("scrubbed")), None) or min(pool, key=lambda s: s.get("wear", 0.0))
+        else:
+            scrub_pool = [s for s in pool if s.get("scrubbed")]
+            chosen = min(scrub_pool, key=lambda s: s.get("wear", 0.0)) if scrub_pool else pool[0]
+        chosen["in_use"] = True
+        return (round(max(0.0, float(chosen.get("wear", 0.0))), 3), bool(chosen.get("scrubbed", False)))
+
+    def _refund_tire_set_record(self, driver_id: str, compound: str, wear: float, scrubbed: bool) -> None:
+        drv_sets = self.tire_sets.get(driver_id, {})
+        pool = drv_sets.get(compound, [])
+        mounted = next((s for s in pool if s.get("in_use") and bool(s.get("scrubbed")) == bool(scrubbed)), None)
+        if mounted is None:
+            mounted = next((s for s in pool if s.get("in_use")), None)
+        if mounted is not None:
+            mounted["in_use"] = False
+        else:
+            pool.append({"id": f"{compound[:1]}{len(pool)+1}", "wear": round(wear, 3), "age_laps": 0, "scrubbed": bool(scrubbed), "in_use": False})
 
     def set_starting_compound(self, driver_id: str, compound: str) -> bool:
         if compound in TIRE_COMPOUNDS and driver_id in self.cars_by_id:
@@ -1309,15 +1578,54 @@ class RaceSession:
             if alloc.get(compound, 0) <= 0:
                 return False
             alloc[car.compound] = alloc.get(car.compound, 0) + 1
+            self._refund_tire_set_record(driver_id, car.compound, car.tire_wear, car.tire_scrubbed)
             alloc[compound] -= 1
+            start_wear, start_scrubbed = self._draw_tire_set_record(driver_id, compound, prefer_fresh=car.prefer_fresh_tyre)
             car.compound = compound
             car.next_compound = compound
             car.compounds_used = {compound}
-            car.tire_age_laps = 0
-            car.tire_wear = 0.01
+            car.tire_age_laps = 1 if start_scrubbed else 0
+            car.tire_wear = start_wear
+            car.tire_scrubbed = start_scrubbed
+            if car.stints:
+                car.stints[0]["compound"] = compound
+                car.stints[0]["scrubbed"] = start_scrubbed
+                car.stints[0]["start_wear"] = round(start_wear * 100.0, 1)
             self.starting_compounds[driver_id] = compound
             return True
         return False
+
+    def build_lap_chart(self) -> list[dict]:
+        """Compute clean per-lap standings chart (lap 1..max_lap -> driver positions)."""
+        max_completed = max((c.laps_completed for c in self.cars), default=0)
+        if max_completed <= 0:
+            return []
+        chart: list[dict] = []
+        for lap_num in range(1, max_completed + 1):
+            finished_lap = [c for c in self.cars if lap_num in c.lap_cross_times]
+            finished_lap.sort(key=lambda c: c.lap_cross_times[lap_num])
+            missing = [c for c in self.cars if lap_num not in c.lap_cross_times]
+            missing.sort(key=lambda c: (not c.dnf, -c.total_dist))
+            ordered = finished_lap + missing
+            chart.append({
+                "lap": lap_num,
+                "positions": {c.driver_id: idx + 1 for idx, c in enumerate(ordered)},
+            })
+        return chart
+
+    def build_stints_summary(self) -> dict[str, list[dict]]:
+        """Return clean stint timeline list per driver for post-race analytics."""
+        out: dict[str, list[dict]] = {}
+        for c in self.cars:
+            stints = []
+            for idx, st in enumerate(c.stints):
+                item = dict(st)
+                if idx == len(c.stints) - 1:
+                    item["end_lap"] = max(item["start_lap"], c.laps_completed or self.total_laps)
+                    item["wear_end"] = round(c.tire_wear * 100.0, 1)
+                stints.append(item)
+            out[c.driver_id] = stints
+        return out
 
     def _team_pit_box_s(self, car: CarState) -> float:
         t_idx = TEAM_GARAGE_INDEX.get(car.team_id, 5)
@@ -1414,6 +1722,7 @@ class RaceSession:
         self._step_race_control(dt, event_cb)
         self._step_stewards(dt, event_cb)
         self.radio_dispatcher.step(dt, self.race_clock, self.cars, self.track, self.wetness, self.flag_state, event_cb)
+        self.pitwall.step(event_cb)
 
         leader = self.standings[0] if self.standings else None
         leader_finished = leader.finished if leader else False
@@ -1527,12 +1836,21 @@ class RaceSession:
             else:
                 self.rain_intensity = self.target_rain_intensity
 
-        # Dynamic track surface wetness accumulation and drying
+        # Dynamic drying racing groove vs. slower-drying off-line tarmac & puddles
         if self.rain_intensity > self.wetness:
-            self.wetness = min(1.0, self.wetness + (self.rain_intensity - self.wetness) * 0.022 * dt)
+            delta_g = (self.rain_intensity - self.groove_wetness) * 0.018 * dt
+            delta_o = (self.rain_intensity - self.offline_wetness) * 0.025 * dt
+            self.groove_wetness = min(1.0, self.groove_wetness + delta_g)
+            self.offline_wetness = min(1.0, self.offline_wetness + delta_o)
         else:
-            dry_rate = 0.0055 * (1.0 + (self.track_temp_c - 18.0) * 0.03)
-            self.wetness = max(0.0, self.wetness - dry_rate * dt)
+            active_cars = sum(1 for c in self.cars if not c.dnf and not c.in_pits)
+            base_dry = 0.0055 * (1.0 + (self.track_temp_c - 18.0) * 0.03)
+            # Cars displace standing water and bake the racing line dry ~2x faster than off-line tarmac
+            groove_dry = base_dry * (1.05 + 0.045 * active_cars)
+            offline_dry = base_dry * 0.62
+            self.groove_wetness = max(0.0, self.groove_wetness - groove_dry * dt)
+            self.offline_wetness = max(0.0, self.offline_wetness - offline_dry * dt)
+        self.wetness = round(0.65 * self.groove_wetness + 0.35 * self.offline_wetness, 4)
 
         if self.wetness > 0.15 and not self.wet_declared:
             self.wet_declared = True
@@ -1650,73 +1968,47 @@ class RaceSession:
             self.radio_dispatcher.trigger_safety_car("SC", reason, event_cb, self.race_clock, self.standings)
 
     def _evaluate_auto_strategy(self, car: CarState, laps_left: int) -> None:
+        # Refresh pit-exit rejoin ghost projection periodically for HUD & strategy
+        if self.tick_count % 5 == 0 or car.rejoin_x == 0.0:
+            self.pitwall.project_rejoin(car)
+
         if car.in_pits or car.box_this_lap:
             return
         if car.drive_through_pending and car.drive_through_laps_left <= 2:
             car.box_this_lap = True
             return
 
+        if car.team_id != self.player_team_id:
+            # Rival calls are coordinated for both cars before physics advances.
+            return
+
+        # Compute live undercut/overcut & traffic advice even if manual control is active
+        call = self.pitwall.advise(car)
+
         if not car.auto_strategy:
             return
 
-        is_slick = car.compound in ("SOFT", "MEDIUM", "HARD")
+        # Auto lift-and-coast fuel management unless manually requested from Pit Wall
+        if not getattr(car, "lift_coast_manual", False):
+            if getattr(car, "fuel_margin_laps", 0.5) < -0.15 and not car.lift_coast:
+                car.lift_coast = True
+            elif getattr(car, "fuel_margin_laps", 0.5) > 0.65 and car.lift_coast:
+                car.lift_coast = False
 
-        # Sprint format has no mandatory pit stops; stay out unless extreme weather change or severe structural damage
-        if self.is_sprint:
-            if self.wetness > 0.60 and car.compound != "WET" and laps_left >= 2:
-                car.box_this_lap = True
-                car.next_compound = self._best_compound_for_conditions(car, laps_left)
-                return
-            if 0.23 <= self.wetness <= 0.56 and is_slick and laps_left >= 2:
-                car.box_this_lap = True
-                car.next_compound = self._best_compound_for_conditions(car, laps_left)
-                return
-            if self.wetness < 0.09 and not is_slick and car.tire_age_laps >= 2 and laps_left >= 2:
-                car.box_this_lap = True
-                car.next_compound = self._best_compound_for_conditions(car, laps_left)
-                return
-            if car.wing_damage >= 0.68 and laps_left >= 3:
-                car.box_this_lap = True
-                car.next_compound = self._best_compound_for_conditions(car, laps_left)
-                return
-            return
-
-        if car.wing_damage >= 0.28 and laps_left >= 2:
+        if call is not None:
+            # Guard player teammate double-stacking unless urgent weather/repair
+            teammate = next((o for o in self.cars if o is not car and o.team_id == car.team_id and not o.dnf), None)
+            if not call.urgent and teammate is not None and (teammate.box_this_lap or teammate.in_pits):
+                if abs(((self.track.pit_entry_s - teammate.s) % self.track.length_m) - ((self.track.pit_entry_s - car.s) % self.track.length_m)) < 360.0:
+                    car.strategy_status = "Hold out to avoid double-stack behind teammate"
+                    return
             car.box_this_lap = True
-            car.next_compound = self._best_compound_for_conditions(car, laps_left)
+            car.next_compound = call.compound
+            car.strategy_status = f"Box: {call.reason}"
+            car.strategy_gain_s = round(call.gain_s, 1)
             return
 
-        if car.tire_age_laps >= 2 or car.lap >= 2:
-            if self.wetness > 0.60 and car.compound != "WET" and laps_left >= 2:
-                car.box_this_lap = True
-                car.next_compound = self._best_compound_for_conditions(car, laps_left)
-                return
-            if 0.23 <= self.wetness <= 0.56 and is_slick and laps_left >= 2:
-                car.box_this_lap = True
-                car.next_compound = self._best_compound_for_conditions(car, laps_left)
-                return
-            if self.wetness < 0.09 and not is_slick and car.tire_age_laps >= 2 and laps_left >= 2:
-                car.box_this_lap = True
-                car.next_compound = self._best_compound_for_conditions(car, laps_left)
-                return
-
-        need_second_dry = (
-            (not self.is_sprint)
-            and (not self.wet_declared)
-            and len(car.compounds_used & {"SOFT", "MEDIUM", "HARD"}) < 2
-        )
-        if self.flag_state in ("VSC", "SC") and laps_left >= 4 and car.tire_age_laps >= 5 and not self.is_sprint:
-            if car.tire_wear > 0.48 or (need_second_dry and car.lap >= max(6, int(self.total_laps * 0.34))):
-                car.box_this_lap = True
-                car.next_compound = self._best_compound_for_conditions(car, laps_left)
-                return
-
-        if car.tire_wear >= TIRE_COMPOUNDS[car.compound]["cliff_wear"] - 0.04 and laps_left >= 2:
-            car.box_this_lap = True
-            car.next_compound = self._best_compound_for_conditions(car, laps_left)
-            return
-
-        if need_second_dry and (car.lap >= car.planned_pit_lap or laps_left <= 2) and laps_left >= 1:
+        if car.wing_damage >= 0.68 and laps_left >= 2:
             car.box_this_lap = True
             car.next_compound = self._best_compound_for_conditions(car, laps_left)
 
@@ -1777,6 +2069,10 @@ class RaceSession:
                 continue
 
             car.laps_completed += 1
+            car.lap_cross_times[car.laps_completed] = crossing_time
+            if car.stints:
+                car.stints[-1]["end_lap"] = car.laps_completed
+                car.stints[-1]["wear_end"] = round(car.tire_wear * 100.0, 1)
             lap_time = round(crossing_time - car.lap_start_time, 3)
             car.complete_sector_lap()
             if lap_time > 35.0:
@@ -1914,7 +2210,8 @@ class RaceSession:
             car.radio_box_announced = True
             self.radio_dispatcher.trigger_box_call(car, event_cb, self.race_clock)
         if (car.box_this_lap and laps_left >= 1 and self.flag_state == "GREEN"
-                and not getattr(car, "inlap_push_announced", False)):
+                and not getattr(car, "inlap_push_announced", False)
+                and (car.team_id == self.player_team_id or car.pace_mode != "CONSERVE")):
             car.inlap_push_announced = True
             car.pace_mode = "ATTACK"
             turn = self.track.nearest_corner(car.s) if hasattr(self.track, "nearest_corner") else 1
@@ -1950,19 +2247,30 @@ class RaceSession:
 
         w_min = comp_spec["optimal_wet_min"]
         w_max = comp_spec["optimal_wet_max"]
-        if w_min <= self.wetness <= w_max:
-            weather_grip = 1.0 - self.wetness * 0.08
-        elif self.wetness > w_max:
-            excess = self.wetness - w_max
-            weather_grip = max(0.52, 1.0 - excess * 0.72)
+        racing_line_d = smp.get("racing_line_d", 0.0)
+        off_line_amt = min(1.0, max(0.0, (abs(car.d - racing_line_d) - 0.16) / 0.45))
+        local_wetness = (1.0 - off_line_amt) * self.groove_wetness + off_line_amt * self.offline_wetness
+        if w_min <= local_wetness <= w_max:
+            weather_grip = 1.0 - local_wetness * 0.08
+        elif local_wetness > w_max:
+            excess = local_wetness - w_max
+            weather_grip = max(0.48, 1.0 - excess * 0.76)
         else:
-            deficit = w_min - self.wetness
+            deficit = w_min - local_wetness
             weather_grip = max(0.76, 1.0 - deficit * 0.42)
 
         is_slick = car.compound in ("SOFT", "MEDIUM", "HARD")
-        warmup_factor = 1.025 if (car.tire_age_laps == 0 and car.pit_stops > 0 and is_slick and self.wetness < 0.15) else 1.0
+        if car.tire_scrubbed and car.tire_age_laps <= 1:
+            warmup_factor = 1.015
+        elif not car.tire_scrubbed and car.tire_age_laps == 0 and car.pit_stops > 0 and is_slick and local_wetness < 0.15:
+            warmup_factor = 1.025
+        else:
+            warmup_factor = 1.0
+        setup_cfg = SETUP_LEVELS.get(car.setup_df, SETUP_LEVELS[0])
         pace_grip_mod = {"CONSERVE": 0.982, "BALANCED": 1.000, "PUSH": 1.014, "ATTACK": 1.024}.get(car.pace_mode, 1.0)
         pace_wear_mod = {"CONSERVE": 0.76, "BALANCED": 1.00, "PUSH": 1.24, "ATTACK": 1.48}.get(car.pace_mode, 1.0)
+        if car.lift_coast:
+            pace_wear_mod *= 0.88
 
         slipstream_bonus = 0.0
         dirty_air_loss = 0.0
@@ -1986,7 +2294,8 @@ class RaceSession:
             car.tailing_timer = max(0.0, car.tailing_timer - dt * 0.4)
 
         # AI dynamic push / attack / conserve mode switching based on proximity and tyres
-        if car.auto_strategy and self.flag_state == "GREEN" and not car.box_this_lap:
+        if (car.auto_strategy and car.team_id == self.player_team_id
+                and self.flag_state == "GREEN" and not car.box_this_lap):
             if car.pace_mode == "BALANCED" and 0.25 < gap_ahead_s < 1.05 and car.tire_wear < 0.45:
                 if random.random() < 0.04 * dt:
                     car.pace_mode = "PUSH"
@@ -2006,6 +2315,16 @@ class RaceSession:
 
         fw_grip_factor = 1.0 - car.wing_damage * (0.28 if smp["curv"] > 0.005 else 0.12)
         thermal_grip_mod = tire_thermal_grip_mult(car.compound, car.tire_temp)
+        pu = car.pu_pool or {}
+        ice_wear = pu.get("ice", {}).get("wear", 0.0)
+        turbo_wear = pu.get("turbo", {}).get("wear", 0.0)
+        mguk_wear = pu.get("mgu_k", {}).get("wear", 0.0)
+        gbx_wear = pu.get("gearbox", {}).get("wear", 0.0)
+        pu_power_health = max(0.92, 1.0 - max(0.0, ice_wear - 0.35) * 0.045 - max(0.0, turbo_wear - 0.35) * 0.030 - max(0.0, gbx_wear - 0.50) * 0.025)
+        mguk_eff = max(0.82, 1.0 - max(0.0, mguk_wear - 0.40) * 0.18)
+        fuel_mass_grip = max(0.955, 1.0 - (car.fuel_kg / 100.0) * 0.036)
+        fuel_mass_accel = max(0.945, 1.0 - (car.fuel_kg / 100.0) * 0.048)
+
         grip_mult = (
             comp_spec["base_grip"]
             * wear_factor
@@ -2013,11 +2332,12 @@ class RaceSession:
             * warmup_factor
             * pace_grip_mod
             * thermal_grip_mod
+            * (1.0 + setup_cfg["corner_grip"])
             * (1.0 - dirty_air_loss)
             * fw_grip_factor
             * (1.0 + (u["active_aero"] - 5) * 0.0036 + (u["chassis"] - 5) * 0.0030 + (u["suspension"] - 5) * 0.0026)
-            * (1.0 + (sk["pace"] - 88) * 0.0008 + (sk["wet_skill"] - 88) * (0.0035 if self.wetness > 0.15 else 0.0))
-            * (1.0 + (22.0 - car.fuel_kg) * 0.0007)
+            * (1.0 + (sk["pace"] - 88) * 0.0008 + (sk["wet_skill"] - 88) * (0.0035 if local_wetness > 0.15 else 0.0))
+            * fuel_mass_grip
         )
         grip_mult = max(0.45, grip_mult)
         car.grip_snapshot = grip_mult
@@ -2025,7 +2345,7 @@ class RaceSession:
         in_yellow = (self.flag_state == "YELLOW" and self.yellow_sector == sector)
         has_active_aero = self.regulations.get("has_active_aero", True)
         has_classic_drs = self.regulations.get("has_classic_drs", False)
-        ice_power_mult = float(self.regulations.get("ice_power_mult", 1.0))
+        ice_power_mult = float(self.regulations.get("ice_power_mult", 1.0)) * pu_power_health
         is_v8_era = (self.regulations.get("era_id") == "V8_DRS")
 
         # Check DRS active for classic DRS era
@@ -2067,7 +2387,7 @@ class RaceSession:
         if self.flag_state == "GREEN" and not in_yellow:
             if self.is_braking[st]:
                 base_harvest = 0.22 if is_v8_era else 0.35
-                harvest = base_harvest * dt * (1.0 + (u["power_unit"] - 5) * 0.03)
+                harvest = base_harvest * mguk_eff * dt * (1.0 + (u["power_unit"] - 5) * 0.03)
                 car.battery_mj = max(0.0, min(car.max_battery_mj, car.battery_mj + harvest))
                 car.recharging = True
             elif car.aero_mode in ("STRAIGHT", "DRS") or smp["curv"] < 0.0065:
@@ -2103,39 +2423,46 @@ class RaceSession:
                     car.battery_mj = max(0.0, car.battery_mj - drain)
                 elif car.ers_mode == "HARVEST" or car.battery_mj <= threshold_low:
                     car.recharging = True
-                    car.battery_mj = max(0.0, min(car.max_battery_mj, car.battery_mj + (0.08 if is_v8_era else 0.12) * dt))
+                    car.battery_mj = max(0.0, min(car.max_battery_mj, car.battery_mj + (0.08 if is_v8_era else 0.12) * mguk_eff * dt))
             else:
                 if car.v < target_v and car.ers_mode != "HARVEST" and car.battery_mj > 0.25:
                     corner_drain = (0.12 if is_v8_era else 0.22) * dt
                     car.battery_mj = max(0.0, car.battery_mj - corner_drain)
 
         target_v = self.v_env[st] * math.sqrt(grip_mult)
+        straight_setup = 1.0 + setup_cfg["straight_spd"]
         if has_active_aero and car.aero_mode == "STRAIGHT":
-            pu_top = 1.0 + (u["power_unit"] - 5) * 0.0024 + (u["active_aero"] - 5) * 0.0018
+            pu_top = (1.0 + (u["power_unit"] - 5) * 0.0024 + (u["active_aero"] - 5) * 0.0018) * straight_setup * pu_power_health
             if car.overtake_active:
-                top_cap = min(OVERTAKE_MAX_MS, 98.6 * pu_top * (1.0 + slipstream_bonus))
+                top_cap = min(OVERTAKE_MAX_MS, 98.6 * pu_top * mguk_eff * (1.0 + slipstream_bonus))
                 target_v = max(target_v, top_cap)
             else:
-                boost_add = 2.1 if car.boost_active else (0.0 if not car.recharging else -2.6)
+                boost_add = (2.1 * mguk_eff) if car.boost_active else (0.0 if not car.recharging else -2.6)
                 top_cap = (91.2 * pu_top + boost_add) * (1.0 + slipstream_bonus)
                 target_v = min(max(target_v, 82.0), top_cap)
         elif has_classic_drs and car.drs_active:
             # Classic DRS open: +22 km/h drag reduction boost!
-            pu_top = 1.0 + (u["power_unit"] - 5) * 0.0024
+            pu_top = (1.0 + (u["power_unit"] - 5) * 0.0024) * straight_setup * pu_power_health
             drs_bonus_ms = 22.0 / 3.6  # +22 km/h (~6.11 m/s)
             top_cap = (93.5 * pu_top * ice_power_mult + drs_bonus_ms) * (1.0 + slipstream_bonus)
             target_v = max(target_v, min(OVERTAKE_MAX_MS, top_cap))
         elif has_classic_drs and smp["curv"] < 0.0065 and not self.is_braking[st]:
             # V8 NA Straight Top Speed without DRS
-            pu_top = 1.0 + (u["power_unit"] - 5) * 0.0024
+            pu_top = (1.0 + (u["power_unit"] - 5) * 0.0024) * straight_setup * pu_power_health
             boost_add = 1.6 if car.boost_active else 0.0
             top_cap = (90.2 * pu_top * ice_power_mult + boost_add) * (1.0 + slipstream_bonus)
             target_v = min(max(target_v, 82.0), top_cap)
         else:
             if car.overtake_active:
-                target_v *= 1.052
+                target_v *= 1.052 * mguk_eff
             elif car.boost_active:
-                target_v *= 1.020
+                target_v *= 1.020 * mguk_eff
+
+        if car.lift_coast and (self.is_braking[st] or smp["straight_mode"]):
+            target_v *= 0.980
+        car.fuel_critical = (car.fuel_kg <= 1.0 and not car.finished)
+        if car.fuel_critical:
+            target_v *= 0.925
 
         # Preserve available pace before following/flags reduce the target.
         # Matched traffic speed must not hide a faster car's ability to pass.
@@ -2281,13 +2608,13 @@ class RaceSession:
                 car.defending_side = 0.0
 
         if car.v < target_v:
-            pu_acc = 13.8 * ice_power_mult * (1.0 + (u["power_unit"] - 5) * 0.022) * (1.0 - car.wing_damage * 0.08)
+            pu_acc = 13.8 * ice_power_mult * fuel_mass_accel * (1.0 + (u["power_unit"] - 5) * 0.022) * (1.0 - car.wing_damage * 0.08)
             if car.drs_active:
                 pu_acc *= 1.28
             elif car.overtake_active:
-                pu_acc *= 1.52
+                pu_acc *= 1.52 * mguk_eff
             elif car.boost_active:
-                pu_acc *= 1.15
+                pu_acc *= 1.15 * mguk_eff
             elif car.v > DERATE_START_MS:
                 derate_frac = min(1.0, (car.v - DERATE_START_MS) / (DERATE_END_MS - DERATE_START_MS))
                 pu_acc *= max(0.28, 1.0 - 0.65 * derate_frac)
@@ -2295,6 +2622,8 @@ class RaceSession:
             drag_fade = max(0.18, 1.0 - (max(0.0, car.v) / 104.0) ** 1.85)
             v_deficit = target_v - car.v
             max_acc = pu_acc * drag_fade
+            if car.lift_coast:
+                max_acc *= 0.96
             in_braking_or_apex = (smp["curv"] > 0.003 or self.is_braking[st])
             if in_braking_or_apex and v_deficit <= 1.5:
                 # Progressive throttle roll-on in braking/corner zones: prevents full-power ping-pong
@@ -2309,7 +2638,9 @@ class RaceSession:
                 car.sparks = True
         else:
             v_diff = car.v - target_v
-            max_brake = 42.0 * (0.85 + 0.15 * grip_mult)
+            max_brake = 42.0 * (0.85 + 0.15 * grip_mult) * (1.02 - (car.fuel_kg / 100.0) * 0.05)
+            if car.lift_coast:
+                max_brake *= 0.90
             if v_diff <= 1.5:
                 # Smooth throttle lift & aerodynamic coasting (zero slamming!)
                 brake_decel = min(10.0, v_diff / max(dt, 0.001))
@@ -2421,6 +2752,15 @@ class RaceSession:
                 blend = min(1.0, max(0.0, (car.total_dist - t1_s * 0.72) / max(t1_s * 0.28, 1.0)))
                 car.target_d = (1.0 - blend) * car.grid_start_d + blend * max(-0.88, min(0.88, base_line_d))
             else:
+                # In damp crossover (drying groove, wet edges), Inter/Wet drivers drift onto wet patches down straights to cool rubber
+                if (
+                    not is_slick
+                    and self.groove_wetness < 0.14
+                    and self.offline_wetness > 0.16
+                    and car.tire_temp > comp_spec.get("opt_temp_max", 92.0) - 2.0
+                    and smp["straight_mode"]
+                ):
+                    base_line_d = 0.56 * (-self.track.pit_side)
                 car.target_d = max(-0.88, min(0.88, base_line_d))
 
         self._move_laterally(car, dt)
@@ -2431,8 +2771,8 @@ class RaceSession:
 
         # Dynamic body slip angle: increases with lateral acceleration, worn tires, or low grip (wet)
         base_grip = comp_spec.get("grip", 1.0) * max(0.40, 1.0 - car.tire_wear * 0.45)
-        if self.wetness > 0.18 and car.compound not in ("INTER", "WET"):
-            base_grip *= max(0.35, 1.0 - self.wetness * 0.75)
+        if local_wetness > 0.18 and car.compound not in ("INTER", "WET"):
+            base_grip *= max(0.35, 1.0 - local_wetness * 0.78)
         chassis_stiffness = 950.0 + (u.get("active_aero", 5) - 5) * 45.0 + (u.get("suspension", 5) - 5) * 35.0 + (u.get("chassis", 5) - 5) * 45.0
         slip_rad = (a_lat * smp["inside_sign"]) / max(300.0, chassis_stiffness * base_grip)
         car.body_slip_angle = round(max(-0.075, min(0.075, slip_rad)), 4)
@@ -2449,10 +2789,11 @@ class RaceSession:
             comp_spec["wear_per_km"]
             * self.track.tire_abrasion
             * pace_wear_mod
+            * setup_cfg["wear_mult"]
             * (1.0 - (sk["tire_mgmt"] - 85) * 0.012)
             * (1.0 - (u["chassis"] - 5) * 0.018)
             * (1.28 if dirty_air_loss > 0.015 else 1.0)
-            * (1.65 if (self.wetness < 0.08 and car.compound in ("INTER", "WET")) else 1.0)
+            * (1.65 if (local_wetness < 0.08 and car.compound in ("INTER", "WET")) else 1.0)
             * thermal_wear_mod
         )
         car.tire_wear = min(0.99, car.tire_wear + km_step * max(0.002, wear_rate))
@@ -2461,44 +2802,35 @@ class RaceSession:
         comp_ideal = comp_spec.get("ideal_temp", 100.0)
         track_temp_bias = (self.track_temp_c - 28.0) * 0.32
 
-        # Physical driving stress delta relative to standard (BALANCED) driving:
-        # Instead of an artificial flat temperature jump on input change, heating is
-        # derived from the physical difference in driving: apex scrub work, braking stress,
-        # and traction demand versus lift-and-coast smooth tire preservation.
+        # Physical driving stress delta relative to standard (BALANCED) driving
         driving_stress = {
             "ATTACK": 1.00,
             "PUSH": 0.55,
             "BALANCED": 0.00,
             "CONSERVE": -0.65,
         }.get(car.pace_mode, 0.0)
+        if car.lift_coast:
+            driving_stress = min(driving_stress, -0.35)
 
-        # 1. Cornering scrub friction heat (derived from actual lateral G and curvature)
-        # Higher lateral G and higher apex velocity physically generate contact patch scrub work.
         base_corner_heat = min(11.0, abs(car.g_lat) * 2.5) if smp["curv"] > 0.0015 else 0.0
         corner_scrub_heat = base_corner_heat * (1.0 + 0.65 * driving_stress)
 
-        # 2. Braking & deceleration friction heat (kinetic energy dissipated into contact patch)
-        # Braking zones heat tires longitudinally; pushing brakes harder/later, conserve lifts & coasts.
         is_braking_zone = car.braking or self.is_braking[st]
         braking_heat = (3.2 * (1.0 + 0.85 * driving_stress)) if is_braking_zone else 0.0
 
-        # 3. Longitudinal traction acceleration scrub (powering out of slower corners)
         traction_heat = max(0.0, (1.0 - car.v / 55.0)) * 3.2 * max(0.0, driving_stress) if not is_braking_zone else 0.0
 
-        # 4. Straight-line convective air cooling at high speed
         straight_cooling = -min(5.5, max(0.0, car.v - 48.0) * 0.12) if (smp["curv"] < 0.0020 and car.v > 48.0) else 0.0
 
-        # 5. Dirty air wake heating (cooling radiator airflow loss + turbulent wake micro-slides)
         dirty_air_heat = 6.5 if dirty_air_loss > 0.012 else (3.0 if dirty_air_loss > 0.004 else 0.0)
 
-        # 6. Track wetness / evaporative water cooling
         if car.compound in ("INTER", "WET"):
-            if self.wetness < 0.08:
-                dry_overheat_spike = 24.0  # Massive thermal overheating on dry track
+            if local_wetness < 0.08:
+                dry_overheat_spike = 24.0
             else:
-                dry_overheat_spike = -(self.wetness * 22.0)
+                dry_overheat_spike = -(local_wetness * 22.0)
         else:
-            dry_overheat_spike = -(self.wetness * 32.0)
+            dry_overheat_spike = -(local_wetness * 32.0)
 
         target_temp = (
             comp_ideal
@@ -2511,8 +2843,9 @@ class RaceSession:
             + dry_overheat_spike
         )
 
-        # Carcass thermal mass inertia: progressive temperature evolution over laps (~12-16s time constant)
         thermal_rate = dt * (0.075 if target_temp > car.tire_temp else 0.055)
+        if car.tire_scrubbed and car.tire_age_laps <= 1 and target_temp > car.tire_temp:
+            thermal_rate *= 1.35
         car.tire_temp += (target_temp - car.tire_temp) * min(1.0, thermal_rate)
         car.tire_temp = max(40.0, min(145.0, car.tire_temp))
 
@@ -2527,9 +2860,22 @@ class RaceSession:
                 f"PIT WALL ({car.team_short} / #{car.number} {car.code}): Tyre temps critical ({int(round(car.tire_temp))}°C - {status_str}). Manage the rear traction and look after the carcass.",
             )
 
-        car.fuel_kg = max(0.1, car.fuel_kg - km_step * 0.31)
+        pace_fuel_mult = {"CONSERVE": 0.94, "BALANCED": 1.00, "PUSH": 1.035, "ATTACK": 1.07}.get(car.pace_mode, 1.0)
+        fuel_burn_rate = (
+            0.31
+            * setup_cfg["fuel_mult"]
+            * pace_fuel_mult
+            * (0.78 if car.lift_coast else 1.0)
+            * (0.85 if self.flag_state in ("SC", "VSC") else 1.0)
+        )
+        car.fuel_kg = max(0.1, car.fuel_kg - km_step * fuel_burn_rate)
+        lap_km = max(0.5, self.track.length_m / 1000.0)
+        est_burn_per_lap = max(0.05, lap_km * fuel_burn_rate)
+        fuel_laps_left = car.fuel_kg / est_burn_per_lap
+        laps_rem = max(0.05, self.total_laps - car.laps_completed - car.s / max(1.0, self.track.length_m))
+        car.fuel_margin_laps = round(fuel_laps_left - laps_rem, 2)
 
-        self._check_solo_incidents(car, smp, dt, event_cb)
+        self._check_solo_incidents(car, smp, dt, event_cb, local_wetness=local_wetness, off_line_amt=off_line_amt)
         if car.dnf:
             return
 
@@ -2713,10 +3059,28 @@ class RaceSession:
                     else:
                         fitted_comp = target
 
+                if car.stints:
+                    car.stints[-1]["end_lap"] = max(car.stints[-1]["start_lap"], car.laps_completed)
+                    car.stints[-1]["wear_end"] = round(car.tire_wear * 100.0, 1)
+
+                start_wear, start_scrubbed = self._draw_tire_set_record(
+                    car.driver_id,
+                    fitted_comp,
+                    prefer_fresh=car.prefer_fresh_tyre,
+                )
                 car.compound = fitted_comp
                 car.compounds_used.add(car.compound)
-                car.tire_wear = 0.0
-                car.tire_age_laps = 0
+                car.tire_wear = start_wear
+                car.tire_scrubbed = start_scrubbed
+                car.tire_age_laps = 1 if start_scrubbed else 0
+                car.stints.append({
+                    "compound": fitted_comp,
+                    "start_lap": car.laps_completed + 1,
+                    "end_lap": car.laps_completed + 1,
+                    "scrubbed": start_scrubbed,
+                    "start_wear": round(start_wear * 100.0, 1),
+                    "wear_end": round(start_wear * 100.0, 1),
+                })
                 new_comp = TIRE_COMPOUNDS.get(car.compound, TIRE_COMPOUNDS["MEDIUM"])
                 car.tire_temp = round(new_comp.get("ideal_temp", 100.0) - 14.0, 1)
                 car.pit_stops += 1
@@ -2726,7 +3090,7 @@ class RaceSession:
                 car.next_compound = self._best_compound_for_conditions(car, max(1, self.total_laps - car.laps_completed))
                 event_cb(
                     "PIT",
-                    f"PIT OUT: #{car.number} {car.code} ({car.team_short}) rejoins on {car.compound} ({car.last_pit_duration:.2f}s stationary).",
+                    f"PIT OUT: #{car.number} {car.code} ({car.team_short}) rejoins on {car.compound}{' (SCRUB)' if start_scrubbed else ''} ({car.last_pit_duration:.2f}s stationary).",
                 )
                 car.radio_box_announced = False
                 car.cliff_radio_triggered = False
@@ -2771,7 +3135,15 @@ class RaceSession:
                 leftover=max(0,dt-travelled/(car.v*self.track.pit_distance_scale))
                 if leftover:self._advance_car_progress(car,car.v*leftover,leader_finished,event_cb)
 
-    def _check_solo_incidents(self, car: CarState, smp: dict, dt: float, event_cb) -> None:
+    def _check_solo_incidents(
+        self,
+        car: CarState,
+        smp: dict,
+        dt: float,
+        event_cb,
+        local_wetness: float | None = None,
+        off_line_amt: float = 0.0,
+    ) -> None:
         if self.flag_state != "GREEN":
             return
 
@@ -2797,13 +3169,16 @@ class RaceSession:
                         f"PENALTY: +5s Time Penalty for #{car.number} {car.code} â€” Exceeding Track Limits (4 strikes).",
                     )
 
-        slick_in_rain = self.wetness > 0.25 and car.compound in ("SOFT", "MEDIUM", "HARD")
+        wet_here = self.wetness if local_wetness is None else float(local_wetness)
+        slick_in_rain = wet_here > 0.25 and car.compound in ("SOFT", "MEDIUM", "HARD")
+        offline_slick_risk = 1.45 if (off_line_amt > 0.35 and slick_in_rain) else 1.0
         # Base crash risk tuned to authentic F1 low attrition (0.000026)
         risk = (
             0.000026
             * push_mult
             * (1.20 - sk["consistency"] / 115.0)
-            * (2.8 if slick_in_rain else (1.30 if self.wetness > 0.35 else 1.0))
+            * (2.8 if slick_in_rain else (1.30 if wet_here > 0.35 else 1.0))
+            * offline_slick_risk
             * (1.7 if car.tire_wear > 0.76 else 1.0)
             * dt
         )
@@ -2853,17 +3228,30 @@ class RaceSession:
                 self.yellow_timer = 7.5
                 return
 
-        # Mechanical reliability failure (scaled to authentic modern F1 standards, ~80% reduction)
+        # Mechanical reliability failure (scaled to authentic modern F1 standards + PU component wear)
         rel_lvl = u.get("reliability", 5)
         pace_factor = 0.65 if car.pace_mode == "CONSERVE" else (1.20 if car.pace_mode == "ATTACK" else 1.0)
-        # Grace period for early race (clock > 35.0s) and reduced coefficient from 0.00016 to 0.000032
+        pu = getattr(car, "pu_pool", None) or {}
+        pu_items = [(k, v) for k, v in pu.items() if isinstance(v, dict)]
+        max_pu_wear = max((float(v.get("wear", 0.0)) for _, v in pu_items), default=0.0)
+        pu_risk_mult = 1.0 + max(0.0, max_pu_wear - 0.72) * 5.2
         mech_prob = (
-            (0.000018 * max(0.16, 1.30 - rel_lvl * 0.12) * pace_factor * dt)
+            (0.000018 * max(0.16, 1.30 - rel_lvl * 0.12) * pace_factor * pu_risk_mult * dt)
             if self.race_clock > 45.0
             else 0.0
         )
         if random.random() < mech_prob:
-            failure = random.choice(["MGU-K Electrical Failure", "Turbocharger Failure", "Hydraulics Leak", "Gearbox Issue"])
+            worst_comp = max(pu_items, key=lambda kv: float(kv[1].get("wear", 0.0)))[0] if pu_items else ""
+            comp_label_map = {
+                "ice": "ICE Power Unit Failure",
+                "turbo": "Turbocharger Failure",
+                "mgu_k": "MGU-K Electrical Failure",
+                "gearbox": "Gearbox Issue",
+            }
+            if max_pu_wear > 0.78 and worst_comp in comp_label_map and random.random() < 0.70:
+                failure = comp_label_map[worst_comp]
+            else:
+                failure = random.choice(["MGU-K Electrical Failure", "Turbocharger Failure", "Hydraulics Leak", "Gearbox Issue"])
             turn = self.track.nearest_corner(car.s)
             car.dnf = True
             car.dnf_reason = failure

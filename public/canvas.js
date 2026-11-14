@@ -835,6 +835,19 @@ export class CircuitRenderer {
       ctx.stroke();
     }
 
+    // 4b. Drying Racing Groove Contrast (dry/drier line vs wet offline marbles)
+    const gWet = (this.tick && this.tick.groove_wetness != null) ? this.tick.groove_wetness : wet;
+    const oWet = (this.tick && this.tick.offline_wetness != null) ? this.tick.offline_wetness : wet;
+    if (oWet > gWet + 6) {
+      ctx.save();
+      this._traceClosedSpline(ctx, sts);
+      const contrast = Math.min(0.65, 0.25 + (oWet - gWet) / 60);
+      ctx.strokeStyle = `rgba(18, 22, 32, ${contrast.toFixed(2)})`;
+      ctx.lineWidth = Math.max(5.5, wPx * 0.36);
+      ctx.stroke();
+      ctx.restore();
+    }
+
     // 5. Suzuka Figure-8 Bridge Overpass Deck (if circuit has crossover)
     if (this.track.has_overpass && this.track.overpass_station != null) {
       const ov = this.track.overpass_station;
@@ -1083,6 +1096,8 @@ export class CircuitRenderer {
       this._drawSafetyCar(ctx, this.scInterp, now);
     }
 
+    this._drawRejoinGhost(ctx, now);
+
     // Pass 1: Draw all visible 2026 F1 chassis (back-to-front so leaders sit cleanly on top of wakes)
     const ordered = [...this.tick.cars].reverse();
     for (const c of ordered) {
@@ -1132,6 +1147,63 @@ export class CircuitRenderer {
     ctx.font = "800 7.5px 'Titillium Web', Inter, sans-serif";
     ctx.fillStyle = "#ffd000";
     ctx.fillText("SC", sc.cx - 5, sc.cy - 8.5);
+    ctx.restore();
+  }
+
+  _drawRejoinGhost(ctx, now) {
+    if (!this.tick || (this.tick.phase !== "RACE" && this.tick.phase !== "SPRINT_RACE")) return;
+    const cars = this.tick.cars || [];
+    let target = cars.find((c) => c.id === this.selectedDriverId && !c.dnf && c.rejoin_x != null);
+    if (!target) {
+      target = cars.find((c) => c.tid === this.tick.player_team_id && !c.dnf && c.rejoin_x != null);
+    }
+    if (!target || target.in_pit) return;
+
+    const gx = target.rejoin_x;
+    const gy = target.rejoin_y;
+    const traf = target.rejoin_traffic_s != null ? target.rejoin_traffic_s : 5.0;
+    const col = traf < 1.2 ? "#ff3b30" : traf < 2.2 ? "#ffd000" : "#00d2be";
+    const pulse = 0.65 + 0.35 * Math.sin(now * 0.006);
+
+    ctx.save();
+    ctx.strokeStyle = col;
+    ctx.globalAlpha = pulse * 0.85;
+    ctx.lineWidth = 1.6 / Math.max(0.35, this._viewTransform.scale);
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.arc(gx, gy, 7.5 / Math.max(0.45, this._viewTransform.scale), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = col;
+    ctx.globalAlpha = 0.32;
+    ctx.beginPath();
+    ctx.arc(gx, gy, 3.6 / Math.max(0.45, this._viewTransform.scale), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    const { scale, ox, oy } = this._viewTransform;
+    const sx = gx * scale + ox;
+    const sy = gy * scale + oy;
+    const label = `${target.code} REJOIN P${target.rejoin_pos || "?"} ${traf < 2.2 ? `+${traf.toFixed(1)}s` : "CLR"}`;
+
+    ctx.save();
+    ctx.translate(-ox / scale, -oy / scale);
+    ctx.scale(1 / scale, 1 / scale);
+    ctx.font = "800 9.5px 'Titillium Web', Inter, sans-serif";
+    const w = ctx.measureText(label).width + 10;
+    const h = 15;
+    const bx = sx - w * 0.5;
+    const by = sy - 22;
+    ctx.fillStyle = "rgba(12, 13, 20, 0.92)";
+    ctx.beginPath();
+    ctx.roundRect(bx, by, w, h, 3);
+    ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.1;
+    ctx.stroke();
+    ctx.fillStyle = col;
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, bx + 5, by + h * 0.5 + 0.4);
     ctx.restore();
   }
 

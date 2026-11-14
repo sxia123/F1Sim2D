@@ -72,7 +72,7 @@
       <button class="nav-tab" data-tab="upgrades">TECHNICAL R&amp;D</button>
       <button class="nav-tab" data-tab="drivers">DRIVER CONTRACTS &amp; TRADES</button>
       <button class="nav-tab" data-tab="database">DRIVER DATABASE</button>
-      <button class="nav-tab" data-tab="finances">COMMERCIAL &amp; COST CAP</button>
+      <button class="nav-tab" data-tab="finances">COMMERCIAL &amp; FINANCES</button>
       <button class="nav-tab" data-tab="standings">CHAMPIONSHIP CLASSIFICATION</button>
       <button class="nav-tab" data-tab="hall-of-fame">HALL OF FAME</button>
     </nav>
@@ -152,6 +152,7 @@
         <!-- TAB 2: TECHNICAL R&D UPGRADES -->
         <div class="tab-pane scroll-pane" id="tab-upgrades">
           <div class="f1-frame-hdr" id="rd-header"></div>
+          <div id="setup-circuit-panel"></div>
           <div class="hq-grid-2">
             <div>
               <h3 class="sec-title">2026 FACTORY DEVELOPMENT PROGRAMMES</h3>
@@ -160,6 +161,8 @@
             <div>
               <h3 class="sec-title">CONSTRUCTOR PERFORMANCE INDEX</h3>
               <div class="power-rank-card" id="power-rank-list"></div>
+              <h3 class="sec-title" style="margin-top:16px">POWER UNIT &amp; GEARBOX ALLOCATION POOL</h3>
+              <div id="pu-pool-panel"></div>
             </div>
           </div>
         </div>
@@ -199,6 +202,36 @@
               </div>
               <div class="free-agent-list" id="free-agent-list"></div>
             </div>
+          </div>
+
+          <div class="market-card" style="margin-top:16px">
+            <h3 class="sec-title">MULTI-YEAR CONTRACT NEGOTIATION</h3>
+            <p class="muted-note">Renew current drivers anytime for 1-4 seasons or negotiate multi-year seats &amp; poaching deals during the Transfer Window.</p>
+            <div class="neg-grid">
+              <div class="form-row">
+                <label>TARGET DRIVER (OWN RENEWALS / RIVALS / FREE AGENTS)</label>
+                <select id="neg-driver"></select>
+              </div>
+              <div class="form-row" id="neg-release-wrap">
+                <label>SEAT TO VACATE (FOR EXTERNAL SIGNING)</label>
+                <select id="neg-release-driver"></select>
+              </div>
+              <div class="form-row">
+                <label>CONTRACT LENGTH (SEASONS)</label>
+                <select id="neg-years">
+                  <option value="1">1 Season</option>
+                  <option value="2" selected>2 Seasons</option>
+                  <option value="3">3 Seasons</option>
+                  <option value="4">4 Seasons</option>
+                </select>
+              </div>
+              <div class="form-row">
+                <label>ANNUAL SALARY OFFER: <strong id="neg-salary-label">$10.0M/YR</strong></label>
+                <input type="range" id="neg-salary-slider" min="1" max="60" step="0.5" value="10" />
+              </div>
+            </div>
+            <div class="trade-eval-box" id="neg-eval-box">Evaluating contract terms...</div>
+            <button class="btn-primary btn-block" id="btn-exec-neg">SIGN MULTI-YEAR CONTRACT</button>
           </div>
 
           <div class="db-banner-card" style="margin-top:20px;padding:14px 18px;background:#0d0e17;border:1px solid #232438;border-left:3px solid var(--f1-red);border-radius:4px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
@@ -259,7 +292,8 @@
               <div class="sponsor-list" id="sponsor-list"></div>
             </div>
             <div>
-              <h3 class="sec-title">FINANCIAL &amp; COST CAP LEDGER</h3>
+              <div id="finance-summary"></div>
+              <h3 class="sec-title">TEAM CASH LEDGER</h3>
               <div class="table-wrap">
                 <table class="data-table" id="ledger-table">
                   <thead>
@@ -444,6 +478,26 @@
         </div>
       </aside>
     </main>
+  </div>
+
+  <!-- MODAL: RACE ANALYTICS (POSITION CHART & STINT TIMELINE) -->
+  <div class="modal-backdrop hidden" id="analytics-modal">
+    <div class="modal-box analytics-modal-box">
+      <div class="modal-hdr">
+        <h3 id="analytics-modal-title">RACE STRATEGY &amp; POSITION CHART</h3>
+        <button class="btn-outline btn-sm" id="btn-close-analytics">CLOSE</button>
+      </div>
+      <div class="analytics-body">
+        <div class="analytics-section">
+          <div class="sec-title">LAP-BY-LAP RACE POSITION TRACE</div>
+          <div id="analytics-pos-chart" class="analytics-chart-wrap"></div>
+        </div>
+        <div class="analytics-section" style="margin-top:14px">
+          <div class="sec-title">TYRE STINT TIMELINE</div>
+          <div id="analytics-stints-chart" class="analytics-stints-wrap"></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- MODAL: CONSTRUCTOR SELECTION / CAREER RESET -->

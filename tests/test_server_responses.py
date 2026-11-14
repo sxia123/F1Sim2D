@@ -2,6 +2,9 @@
 import io
 import json
 import unittest
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
 
 from server import F1RequestHandler
 
@@ -14,6 +17,23 @@ class LimitedTransport(io.BytesIO):
 
 
 class ServerResponseTests(unittest.TestCase):
+    def test_large_browser_module_uses_bounded_writes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            module = b"// finance module\n" * 10000
+            (root / "app.js").write_bytes(module)
+            handler = object.__new__(F1RequestHandler)
+            handler.path = "/app.js"
+            handler.wfile = LimitedTransport()
+            headers = {}
+            handler.send_response = lambda status: self.assertEqual(status, 200)
+            handler.send_header = lambda name, value: headers.__setitem__(name, value)
+            handler.end_headers = lambda: None
+            with patch("server.PUBLIC_DIR", root):
+                handler.do_GET()
+            self.assertEqual(handler.wfile.getvalue(), module)
+            self.assertEqual(int(headers["Content-Length"]), len(module))
+
     def test_large_scenery_state_is_complete_and_has_correct_content_length(self):
         handler=object.__new__(F1RequestHandler)
         handler.wfile=LimitedTransport()
