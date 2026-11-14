@@ -26,6 +26,9 @@ class RivalPitWall:
         self.race = race
         self.next_review = 0.0
         self.managed_orders = {}
+        self.team_order_cooldown = {}
+        self.reverse_order_blocked_until = {}
+        self.team_order_count = {}
         track = race.track
         self.lap_s = sum(track.ds_m / max(v, 20.0) for v in race.v_env)
         self.mean_speed = track.length_m / self.lap_s
@@ -377,31 +380,56 @@ class RivalPitWall:
             target = race.cars_by_id[target_id]
             if (race.race_clock >= expires or not self.eligible(car) or not self.eligible(target)
                     or car.in_pits or target.in_pits or car.box_this_lap or target.box_this_lap
-                    or race.flag_state != "GREEN"):
+                    or car.team_order != "YIELD" or race.flag_state != "GREEN"):
                 if car.team_order == "YIELD" and car.swap_target_id == target_id:
                     car.team_order = "FREE"
                     car.swap_target_id = None
                 if target.swap_pass_id == driver_id:
                     target.swap_pass_id = None
+                self.team_order_cooldown[car.team_id] = max(
+                    self.team_order_cooldown.get(car.team_id, 0.0), race.race_clock + 240.0
+                )
                 del self.managed_orders[driver_id]
         if race.flag_state != "GREEN":
             return
+        min_laps = 2 if race.total_laps <= 12 else 4
         for car in race.cars:
             if not self.eligible(car) or car.in_pits or car.box_this_lap or car.team_order != "FREE":
+                continue
+            damaged = car.wing_damage >= 0.25
+            if not damaged and car.laps_completed < min_laps:
+                continue
+            if not damaged and self.team_order_count.get(car.team_id, 0) >= 2:
+                continue
+            if not damaged and race.race_clock < self.team_order_cooldown.get(car.team_id, 0.0):
                 continue
             for other in race.cars:
                 if (other is car or other.team_id != car.team_id or not self.eligible(other)
                         or other.in_pits or other.box_this_lap or other.laps_completed != car.laps_completed):
                     continue
                 gap = (car.total_dist - other.total_dist) / self.mean_speed
-                if not 0.15 < gap < 1.0 or car.laps_completed < 2:
+                if not 0.12 < gap < 0.78:
                     continue
-                advantage = other.free_air_target_v - car.free_air_target_v
-                if advantage > 0.9 or car.wing_damage > 0.3:
+                if not damaged and race.race_clock < self.reverse_order_blocked_until.get((car.driver_id, other.driver_id), 0.0):
+                    continue
+                v_ref_car = max(20.0, race.v_env[race.track.sample(car.s)["station"]])
+                v_ref_other = max(20.0, race.v_env[race.track.sample(other.s)["station"]])
+                # Comparing instantaneous free_air_target_v across braking/straight transitions creates false +40 m/s spikes.
+                if not damaged and abs(v_ref_other - v_ref_car) > 8.0:
+                    continue
+                advantage = other.free_air_target_v * (v_ref_car / v_ref_other) - car.free_air_target_v
+                tyre_delta = (other.tire_age_laps + 5 <= car.tire_age_laps
+                              and (car.tire_wear - other.tire_wear) >= 0.14
+                              and advantage > 1.3)
+                if advantage > 2.8 or tyre_delta or damaged:
                     car.team_order = "YIELD"
                     car.swap_target_id = other.driver_id
                     other.swap_pass_id = car.driver_id
                     self.managed_orders[car.driver_id] = (other.driver_id, race.race_clock + 12.0)
+                    self.team_order_cooldown[car.team_id] = race.race_clock + 240.0
+                    self.reverse_order_blocked_until[(other.driver_id, car.driver_id)] = race.race_clock + 540.0
+                    if not damaged:
+                        self.team_order_count[car.team_id] = self.team_order_count.get(car.team_id, 0) + 1
                     event_cb("TEAM_ORDER", f"PIT WALL ({car.team_short}): {car.code}, release the faster {other.code}; reassess in clean air.")
                     break
 

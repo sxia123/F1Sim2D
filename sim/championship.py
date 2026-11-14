@@ -370,6 +370,7 @@ class ChampionshipWorld:
                 "tire_sets": getattr(self, "tire_sets", {}),
                 "pu_pools": getattr(self, "pu_pools", {}),
                 "driver_setups": getattr(self, "driver_setups", {}),
+                "temp_ban_subs": [list(item) for item in getattr(self, "temp_ban_subs", [])],
                 "hall_of_fame": self.hall_of_fame[-25:],
                 "ledger": self.ledger[-60:],
                 "event_feed": self.event_feed[-80:],
@@ -471,6 +472,11 @@ class ChampionshipWorld:
             self.tire_sets = data.get("tire_sets", {})
             self.pu_pools = data.get("pu_pools", {})
             self.driver_setups = data.get("driver_setups", {})
+            self.temp_ban_subs = [
+                (str(item[0]), str(item[1]), str(item[2]))
+                for item in data.get("temp_ban_subs", [])
+                if isinstance(item, (list, tuple)) and len(item) == 3
+            ]
             self._ensure_component_pools()
             self._begin_weekend()
             self._push_event(
@@ -709,9 +715,31 @@ class ChampionshipWorld:
         self._save_state()
 
     def _apply_race_bans_if_any(self) -> None:
-        self.temp_ban_subs = []
-        free = sorted(self._free_agents(), key=driver_overall, reverse=True)
+        existing_bans = list(getattr(self, "temp_ban_subs", []))
+        self.temp_ban_subs = existing_bans
+        suspended_ids = {reg_id for reg_id, _, _ in existing_bans}
+        active_sub_ids = {sub_id for _, sub_id, _ in existing_bans}
+        reserve_pool = [
+            d for d in self._free_agents()
+            if not d.get("legend") and d.get("contract_years", 0) <= 0 and d["id"] not in suspended_ids
+        ]
+        fallback_non_legend = [
+            d for d in self._free_agents()
+            if not d.get("legend") and d not in reserve_pool and d["id"] not in suspended_ids
+        ]
+        free = (
+            sorted(reserve_pool, key=driver_overall, reverse=True)
+            + sorted(fallback_non_legend, key=driver_overall, reverse=True)
+        )
+        if not free:
+            free = sorted(
+                (d for d in self._free_agents() if d["id"] not in suspended_ids),
+                key=driver_overall,
+                reverse=True,
+            )
         for drv in list(self._active_drivers()):
+            if drv["id"] in active_sub_ids:
+                continue
             if drv.get("penalty_points", 0) >= 12 and free:
                 sub = free.pop(0)
                 team_id = drv["team_id"]
@@ -725,6 +753,8 @@ class ChampionshipWorld:
                 self.driver_poles.setdefault(sub["id"], 0)
                 self.driver_dnfs.setdefault(sub["id"], 0)
                 self.temp_ban_subs.append((drv["id"], sub["id"], team_id))
+                suspended_ids.add(drv["id"])
+                active_sub_ids.add(sub["id"])
                 self._push_event(
                     "PENALTY",
                     f"FIA 1-RACE BAN: {drv['name']} reached 12 Super Licence Penalty Points! Reserve {sub['name']} subs in at {t_short}!",

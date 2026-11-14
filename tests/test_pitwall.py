@@ -368,6 +368,38 @@ class RivalPitWallTests(unittest.TestCase):
         self.race.rain_intensity = 0.65
         self.assertIsNone(self.wall.plan(self.car))
 
+    def test_team_orders_ignore_braking_zone_mismatch_and_enforce_cooldown(self):
+        self.configure(self.mate, lap=10)
+        self.race.cars.append(self.mate)
+        slow_st = min(range(len(self.race.v_env)), key=lambda i: self.race.v_env[i])
+        ds = self.race.track.ds_m
+        self.car.s = slow_st * ds
+        self.car.total_dist = 9 * self.race.track.length_m + self.car.s
+        self.mate.total_dist = self.car.total_dist - 0.5 * self.wall.mean_speed
+        self.mate.s = self.mate.total_dist % self.race.track.length_m
+        mate_st = self.race.track.sample(self.mate.s)["station"]
+        self.car.free_air_target_v = self.race.v_env[slow_st]
+        self.mate.free_air_target_v = self.race.v_env[mate_st]
+        self.wall._team_orders(self.emit)
+        self.assertEqual(self.car.team_order, "FREE")
+        self.assertEqual(self.events, [])
+
+        # Genuine same-zone pace advantage triggers once, then enforces team and reverse cooldowns.
+        self.mate.s = self.car.s
+        self.mate.free_air_target_v = self.car.free_air_target_v + 3.2
+        self.wall._team_orders(self.emit)
+        self.assertEqual(self.car.team_order, "YIELD")
+        self.assertEqual(sum(1 for k, _ in self.events if k == "TEAM_ORDER"), 1)
+
+        # Complete swap and flip roles shortly after; reverse flip-flop is blocked.
+        self.car.team_order = "FREE"
+        self.mate.total_dist = self.car.total_dist + 0.4 * self.wall.mean_speed
+        self.car.free_air_target_v = self.mate.free_air_target_v + 3.5
+        self.race.race_clock += 20.0
+        self.wall._team_orders(self.emit)
+        self.assertEqual(self.mate.team_order, "FREE")
+        self.assertEqual(sum(1 for k, _ in self.events if k == "TEAM_ORDER"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

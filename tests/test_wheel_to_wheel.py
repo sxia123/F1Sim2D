@@ -365,6 +365,47 @@ class WheelToWheelTests(unittest.TestCase):
         self.assertLessEqual(reversals[b.driver_id], 1)
         self.assertLessEqual(max_dh, 0.28)
 
+    def test_all_physical_contacts_deal_damage_without_zero_damage_gaps(self):
+        """Lap 1 post-launch hits, multi-car chain collisions, and spin collisions always inflict real damage."""
+        race = self.race("bahrain", count=3)
+        race.lights_out = True
+        race.flag_state = "GREEN"
+        race.race_clock = 18.0
+        a, b, c = race.cars
+        s = self.straight(race.track)
+        events = []
+
+        # 1. Lap 1 racing (post-launch) rear-end hit damages both cars proportionally
+        self.place(race, a, s + 6.0, 0.0)
+        self.place(race, b, s, 0.0)
+        a.lap = b.lap = 1
+        a.v, b.v = 60.0, 66.5
+        race._on_physical_contact(a, b, (2.2, 1.8, 2.2, 1.8), lambda k, m: events.append((k, m)))
+        self.assertGreater(b.wing_damage, 0.0)
+        self.assertGreater(a.wing_damage, 0.0)
+
+        # 2. Immediate secondary contact against a 3rd car 2s later still inflicts damage on c
+        race.race_clock = 20.0
+        self.place(race, c, s + 10.0, 0.45)
+        b.lap = c.lap = 2
+        b_dmg_before = b.wing_damage
+        race._on_physical_contact(b, c, (1.4, 1.3, 1.4, 1.3), lambda k, m: events.append((k, m)))
+        self.assertGreater(b.wing_damage, b_dmg_before)
+        self.assertGreater(c.wing_damage, 0.0)
+
+        # 3. Spin collision branch in _handle_collision damages both culprit and spinning victim
+        race2 = self.race("bahrain", count=2)
+        race2.lights_out = True
+        race2.flag_state = "GREEN"
+        x, y = race2.cars
+        self.place(race2, x, s + 5.0, 0.1)
+        self.place(race2, y, s, 0.2)
+        rolls = iter([0.1, 0.85])
+        with patch("sim.physics.random.random", side_effect=lambda: next(rolls, 0.5)):
+            race2._handle_collision(x, y, 1, ignore_event)
+        self.assertGreater(x.wing_damage, 0.0)
+        self.assertGreater(y.wing_damage, 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

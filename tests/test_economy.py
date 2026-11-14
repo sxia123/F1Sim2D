@@ -140,6 +140,36 @@ class EconomyTests(unittest.TestCase):
         backup = self.path.with_name("career.before-balance-v1.json")
         self.assertEqual(json.loads(backup.read_text()), original)
 
+    def test_race_ban_sub_persists_across_reload_and_prefers_non_legend_reserve(self):
+        self.world.current_round = 3
+        before_lineups = {d["id"]: d.get("team_id") for d in self.world.drivers if d.get("team_id")}
+        rus = self.world._drivers_by_id()["russell"]
+        rus["penalty_points"] = 12
+
+        self.world._begin_weekend()
+        self.assertIsNone(rus["team_id"])
+        self.assertEqual(len(self.world.temp_ban_subs), 1)
+        reg_id, sub_id, team_id = self.world.temp_ban_subs[0]
+        self.assertEqual((reg_id, team_id), ("russell", "mercedes"))
+        sub_drv = self.world._drivers_by_id()[sub_id]
+        self.assertEqual(sub_drv["team_id"], "mercedes")
+        self.assertFalse(sub_drv.get("legend", False))
+
+        # Server restart / reload mid-weekend must preserve the pending ban restoration.
+        with patch.object(ChampionshipWorld, "_run_ai_rd_upgrades"):
+            resumed = ChampionshipWorld(self.path)
+        self.assertEqual(resumed.temp_ban_subs, [("russell", sub_id, "mercedes")])
+        self.assertEqual(resumed._drivers_by_id()[sub_id]["team_id"], "mercedes")
+        self.assertIsNone(resumed._drivers_by_id()["russell"]["team_id"])
+
+        resumed._prepare_race_grid()
+        resumed._conclude_race()
+        self.assertEqual(resumed.temp_ban_subs, [])
+        self.assertEqual(resumed._drivers_by_id()["russell"]["team_id"], "mercedes")
+        self.assertIsNone(resumed._drivers_by_id()[sub_id]["team_id"])
+        after_lineups = {d["id"]: d.get("team_id") for d in resumed.drivers if d.get("team_id")}
+        self.assertEqual(after_lineups, before_lineups)
+
 
 if __name__ == "__main__":
     unittest.main()

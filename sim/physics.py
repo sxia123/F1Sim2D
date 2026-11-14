@@ -598,8 +598,8 @@ def enforce_2d_car_separation(
                 lat_dir = 1.0 if c1.d < c2.d else -1.0
                 closing_lat_v = (getattr(c1, "lateral_velocity", 0.0) - getattr(c2, "lateral_velocity", 0.0)) * lat_dir
                 is_contact = (
-                    (is_lateral and min_pen_w > 1.35 and (closing_lat_v > 1.15 or min_pen_w > 2.15))
-                    or ((not is_lateral) and closing_long_v > 5.5 and min_pen_l > 2.10)
+                    (is_lateral and min_pen_w > 0.55 and (closing_lat_v > 0.70 or min_pen_w > 1.20))
+                    or ((not is_lateral) and min_pen_l > 0.90 and (closing_long_v > 2.6 or (min_pen_l > 1.85 and closing_long_v > 1.0)))
                 )
                 if pass_idx == 0 and is_contact and collision_cb is not None and not c1.in_pits and not c2.in_pits and not c1.dnf and not c2.dnf:
                     collision_cb(c1, c2, sat)
@@ -1726,6 +1726,7 @@ class RaceSession:
 
         self.standings: list[CarState] = list(self.cars)
         self.cars_by_id: dict[str, CarState] = {c.driver_id: c for c in self.cars}
+        self._pair_contact_until: dict[tuple[str, str], float] = {}
         self.wet_declared: bool = wetness > 0.15
         self.pitwall = RivalPitWall(self)
         for car in self.cars:
@@ -2077,25 +2078,26 @@ class RaceSession:
             event_cb("STEWARDS", f"FIA STEWARDS: Turn {turn} ({item['summary']}) â€” Racing Incident, No Further Action.")
         elif verdict == "5S":
             culprit.time_penalty_s += 5
-            culprit.penalty_points_season += 1
-            culprit.penalty_points_added += 1
+            pts = 1 if item.get("reason", "").startswith(("Causing", "Reckless")) else 0
+            culprit.penalty_points_season += pts
+            culprit.penalty_points_added += pts
             event_cb(
                 "PENALTY",
                 f"PENALTY: +5s Time Penalty for #{culprit.number} {culprit.code} ({item['reason']} at Turn {turn}).",
             )
         elif verdict == "10S":
             culprit.time_penalty_s += 10
-            culprit.penalty_points_season += 2
-            culprit.penalty_points_added += 2
+            culprit.penalty_points_season += 1
+            culprit.penalty_points_added += 1
             event_cb(
                 "PENALTY",
-                f"PENALTY: +10s Time Penalty for #{culprit.number} {culprit.code} ({item['reason']} at Turn {turn}) + 2 Penalty Pts!",
+                f"PENALTY: +10s Time Penalty for #{culprit.number} {culprit.code} ({item['reason']} at Turn {turn}) + 1 Penalty Pt!",
             )
         elif verdict == "DT":
             culprit.drive_through_pending = True
             culprit.drive_through_laps_left = 3
-            culprit.penalty_points_season += 3
-            culprit.penalty_points_added += 3
+            culprit.penalty_points_season += 2
+            culprit.penalty_points_added += 2
             event_cb(
                 "PENALTY",
                 f"SEVERE PENALTY: Drive-Through Penalty for #{culprit.number} {culprit.code} ({item['reason']} at Turn {turn})!",
@@ -2638,18 +2640,7 @@ class RaceSession:
             if teammate:
                 # Check if teammate has successfully passed (is now ahead in total_dist)
                 if teammate.total_dist > car.total_dist:
-                    car.team_order = "FREE"
-                    car.swap_target_id = None
-                    teammate.swap_pass_id = None
-                    turn = self.track.nearest_corner(car.s) if hasattr(self.track, "nearest_corner") else 1
-                    event_cb(
-                        "TEAM_ORDER",
-                        f"TEAM ORDERS EXECUTED ({car.team_short}): #{car.number} {car.code} lets #{teammate.number} {teammate.code} through near Turn {turn}!",
-                    )
-                    event_cb(
-                        "RADIO",
-                        f"PIT WALL ({car.team_short}): 'Swap completed. Great teamwork #{car.code}. Now #{teammate.code}, push hard!'",
-                    )
+                    self._complete_team_yield(car, teammate, event_cb)
                 else:
                     dist_tm = (car.s - teammate.s) % self.track.length_m
                     if 0.0 < dist_tm < 95.0:
@@ -4162,21 +4153,28 @@ class RaceSession:
                     "culprit_id": culprit.driver_id,
                     "summary": f"{attacker.code} & {defender.code}",
                     "reason": "Forcing Another Driver Off the Track",
-                    "verdict": random.choice(["NFA", "5S", "5S"]),
+                    "verdict": random.choice(["NFA", "NFA", "5S"]),
                 }
             )
         elif roll < 0.988:
-            attacker.wing_damage = min(0.85, attacker.wing_damage + random.uniform(0.24, 0.45))
-            attacker.wing_damage_side = "RIGHT" if attacker.d > defender.d else "LEFT"
-            attacker.repair_cost_m += 0.45
-            self._maybe_schedule_damage_pit(attacker)
+            culprit_dmg = random.uniform(0.22, 0.42)
+            culprit.wing_damage = min(0.85, culprit.wing_damage + culprit_dmg)
+            culprit.wing_damage_side = "RIGHT" if culprit.d > victim.d else "LEFT"
+            culprit.repair_cost_m += round(0.25 + culprit_dmg * 0.65, 2)
+            self._maybe_schedule_damage_pit(culprit)
+            victim_dmg = random.uniform(0.10, 0.24)
+            victim.wing_damage = min(0.85, victim.wing_damage + victim_dmg)
+            victim.wing_damage_side = "LEFT" if victim.d >= culprit.d else "RIGHT"
             victim.spin_timer = random.uniform(2.8, 4.5)
             victim.spin_omega = random.choice([-5.8, 5.8]) * random.uniform(0.85, 1.25)
             victim.spin_lateral_dir = 1.0 if victim.d >= 0.0 else -1.0
             victim.spin_rebound_done = False
             victim.smoke = 2.4
+            victim.sparks = True
+            culprit.sparks = True
             self.radio_dispatcher.trigger_spin(victim, turn, event_cb, self.race_clock)
-            victim.repair_cost_m += 0.32
+            victim.repair_cost_m += round(0.18 + victim_dmg * 0.65, 2)
+            self._maybe_schedule_damage_pit(victim)
             self.flag_state = "YELLOW"
             self.yellow_sector = sector
             self.yellow_timer = 8.0
@@ -4192,7 +4190,7 @@ class RaceSession:
                     "culprit_id": culprit.driver_id,
                     "summary": f"{attacker.code} & {defender.code} collision",
                     "reason": "Causing a Collision",
-                    "verdict": random.choice(["5S", "10S", "NFA"]),
+                    "verdict": random.choice(["NFA", "5S", "10S"]),
                 }
             )
         else:
@@ -4218,6 +4216,8 @@ class RaceSession:
                 culprit.total_dist = victim.total_dist - min_long_m * 1.15
                 culprit.s = culprit.total_dist % self.track.length_m
                 culprit.smoke = 4.5
+                culprit.wing_damage = min(0.90, culprit.wing_damage + random.uniform(0.35, 0.70))
+                culprit.wing_damage_side = "BOTH"
                 culprit.repair_cost_m += round(random.uniform(1.10, 2.25), 2)
                 self._update_xy(culprit)
                 event_cb(
@@ -4257,35 +4257,59 @@ class RaceSession:
         car.box_this_lap = True
         car.next_compound = self._best_compound_for_conditions(car, laps_left)
 
-    def _trigger_side_by_side_contact(self, c1: CarState, c2: CarState, turn: int, event_cb) -> None:
+    def _contact_pair_key(self, c1: CarState, c2: CarState) -> tuple[str, str]:
+        return (c1.driver_id, c2.driver_id) if c1.driver_id <= c2.driver_id else (c2.driver_id, c1.driver_id)
+
+    def _complete_team_yield(self, car: CarState, teammate: CarState, event_cb) -> None:
+        car.team_order = "FREE"
+        car.swap_target_id = None
+        teammate.swap_pass_id = None
+        turn = self.track.nearest_corner(car.s) if hasattr(self.track, "nearest_corner") else 1
+        event_cb(
+            "TEAM_ORDER",
+            f"TEAM ORDERS EXECUTED ({car.team_short}): #{car.number} {car.code} lets #{teammate.number} {teammate.code} through near Turn {turn}!",
+        )
+        event_cb(
+            "RADIO",
+            f"PIT WALL ({car.team_short}): 'Swap completed. Great teamwork #{car.code}. Now #{teammate.code}, push hard!'",
+        )
+
+    def _trigger_side_by_side_contact(self, c1: CarState, c2: CarState, turn: int, event_cb, minor: bool = False) -> None:
         """Wheel-banging contact physics during wheel-to-wheel battles."""
         if c1.dnf or c2.dnf or c1.in_pits or c2.in_pits:
             return
         if self.flag_state in ("GRID", "LIGHTS") and not self.lights_out:
             return
-        if c1.contact_cooldown > 0.0 or c2.contact_cooldown > 0.0:
+        pair_key = self._contact_pair_key(c1, c2)
+        if self._pair_contact_until.get(pair_key, -1.0) > self.race_clock:
             return
 
-        c1.contact_cooldown = 9.0
-        c2.contact_cooldown = 9.0
+        cd = 5.0 if minor else 8.0
+        self._pair_contact_until[pair_key] = self.race_clock + cd
+        c1.contact_cooldown = max(c1.contact_cooldown, cd)
+        c2.contact_cooldown = max(c2.contact_cooldown, cd)
         c1.sparks = True
         c2.sparks = True
-        c1.smoke = max(c1.smoke, 1.4)
-        c2.smoke = max(c2.smoke, 1.4)
+        if not minor:
+            c1.smoke = max(c1.smoke, 1.4)
+            c2.smoke = max(c2.smoke, 1.4)
 
         # Physical lateral separation impulse (smooth target guidance, zero snap!)
         d_diff = c1.d - c2.d
         side_norm = 1.0 if d_diff >= 0.0 else -1.0
-        c1.target_d = max(-1.05, min(1.05, c1.d + side_norm * 0.18))
-        c2.target_d = max(-1.05, min(1.05, c2.d - side_norm * 0.18))
+        nudge = 0.12 if minor else 0.18
+        c1.target_d = max(-1.05, min(1.05, c1.d + side_norm * nudge))
+        c2.target_d = max(-1.05, min(1.05, c2.d - side_norm * nudge))
 
         # Speed scrub from physical tire/bodywork collision
-        c1.v = max(8.0, c1.v - random.uniform(0.8, 1.8))
-        c2.v = max(8.0, c2.v - random.uniform(0.8, 1.8))
+        scrub_lo, scrub_hi = (0.35, 0.90) if minor else (0.8, 1.8)
+        c1.v = max(8.0, c1.v - random.uniform(scrub_lo, scrub_hi))
+        c2.v = max(8.0, c2.v - random.uniform(scrub_lo, scrub_hi))
 
         # Sidepod and front wing endplate damage
-        dmg1 = random.uniform(0.025, 0.085)
-        dmg2 = random.uniform(0.025, 0.085)
+        dmg_lo, dmg_hi = (0.015, 0.045) if minor else (0.025, 0.085)
+        dmg1 = random.uniform(dmg_lo, dmg_hi)
+        dmg2 = random.uniform(dmg_lo, dmg_hi)
         c1.wing_damage = min(0.85, c1.wing_damage + dmg1)
         c2.wing_damage = min(0.85, c2.wing_damage + dmg2)
         c1.wing_damage_side = "RIGHT" if c1.d < c2.d else "LEFT"
@@ -4294,13 +4318,16 @@ class RaceSession:
         c2.repair_cost_m += round(dmg2 * 0.75, 2)
 
         # Tire scrub and thermal spike
-        c1.tire_wear = min(0.99, c1.tire_wear + 0.010)
-        c2.tire_wear = min(0.99, c2.tire_wear + 0.010)
-        c1.tire_temp = min(140.0, c1.tire_temp + random.uniform(4.0, 8.0))
-        c2.tire_temp = min(140.0, c2.tire_temp + random.uniform(4.0, 8.0))
+        c1.tire_wear = min(0.99, c1.tire_wear + (0.004 if minor else 0.010))
+        c2.tire_wear = min(0.99, c2.tire_wear + (0.004 if minor else 0.010))
+        c1.tire_temp = min(140.0, c1.tire_temp + random.uniform(2.0 if minor else 4.0, 4.5 if minor else 8.0))
+        c2.tire_temp = min(140.0, c2.tire_temp + random.uniform(2.0 if minor else 4.0, 4.5 if minor else 8.0))
 
         self._maybe_schedule_damage_pit(c1)
         self._maybe_schedule_damage_pit(c2)
+
+        if minor:
+            return
 
         event_cb(
             "INCIDENT",
@@ -4315,7 +4342,7 @@ class RaceSession:
                 "culprit_id": c1.driver_id if c1.d < c2.d else c2.driver_id,
                 "summary": f"{c1.code} & {c2.code} side-by-side",
                 "reason": "Wheel-to-wheel contact",
-                "verdict": random.choice(["NFA", "NFA", "NFA", "5S"]),
+                "verdict": random.choice(["NFA", "NFA", "NFA", "NFA", "5S"]),
             }
         )
 
@@ -4324,12 +4351,13 @@ class RaceSession:
         if c1.dnf or c2.dnf or c1.in_pits or c2.in_pits:
             return
 
-        # Lap 1 start discipline: pack is compressed 22-wide; SAT cushions without false contact alerts/damage
-        if c1.lap == 1 or c2.lap == 1:
+        # Cushion only the standing start launch shuffle; once racing, Lap 1 contacts must deal damage too.
+        if (c1.lap == 1 or c2.lap == 1) and self.race_clock < 5.5:
             return
 
-        # Cooldown prevents spamming damage, repeated deceleration scrub, and alerts across consecutive frames
-        if c1.contact_cooldown > 0.0 or c2.contact_cooldown > 0.0:
+        # Per-pair cooldown stops consecutive-frame spam while still allowing chain hits against a 3rd car.
+        pair_key = self._contact_pair_key(c1, c2)
+        if self._pair_contact_until.get(pair_key, -1.0) > self.race_clock:
             return
 
         L = self.track.length_m
@@ -4343,47 +4371,59 @@ class RaceSession:
         turn = self.track.nearest_corner(behind.s)
         pen_l1, pen_w1, pen_l2, pen_w2 = sat
         min_pen_w = min(pen_w1, pen_w2)
+        min_pen_l = min(pen_l1, pen_l2)
         delta_v = behind.v - ahead.v
 
         # Distinguish side-by-side vs nose-to-tail contact
         is_side_by_side = min_pen_w < 3.2 and abs(c1.d - c2.d) > 0.16
 
         if is_side_by_side:
-            self._trigger_side_by_side_contact(c1, c2, turn, event_cb)
+            is_minor = (min_pen_w <= 1.25) or ((c1.lap == 1 or c2.lap == 1) and min_pen_w <= 1.85)
+            self._trigger_side_by_side_contact(c1, c2, turn, event_cb, minor=is_minor)
         else:
-            # Longitudinal contact: trailing car into rear of car ahead
-            c1.contact_cooldown = 8.0
-            c2.contact_cooldown = 8.0
+            is_light_tap = (delta_v < 5.0 and min_pen_l <= 2.15) or ((c1.lap == 1 or c2.lap == 1) and delta_v < 7.5)
+            cd = 5.0 if is_light_tap else 7.5
+            self._pair_contact_until[pair_key] = self.race_clock + cd
+            c1.contact_cooldown = max(c1.contact_cooldown, cd)
+            c2.contact_cooldown = max(c2.contact_cooldown, cd)
             # Physical longitudinal impulse
-            behind.v = max(8.0, ahead.v - 1.4)
-            ahead.v = min(ahead.v + 0.8, 95.0)
+            behind.v = max(8.0, ahead.v - (0.6 if is_light_tap else 1.4))
+            ahead.v = min(ahead.v + (0.4 if is_light_tap else 0.8), 95.0)
             behind.sparks = True
             ahead.sparks = True
 
-            # Authentic damage: trailing car front wing takes real damage on closing contact
-            rear_dmg = min(0.30, max(0.06, delta_v * 0.032))
+            # Authentic damage: trailing car front wing AND car ahead diffuser/rear bodywork both take proportional damage
+            if is_light_tap:
+                rear_dmg = min(0.085, max(0.025, max(0.8, delta_v) * 0.015))
+            else:
+                rear_dmg = min(0.28, max(0.06, delta_v * 0.028))
             behind.wing_damage = min(0.85, behind.wing_damage + rear_dmg)
             behind.wing_damage_side = "RIGHT" if behind.d > ahead.d else "LEFT"
             behind.repair_cost_m += round(rear_dmg * 0.65, 2)
-            ahead.tire_wear = min(0.99, ahead.tire_wear + 0.012)
+            ahead_dmg = min(0.14, max(0.015, round(rear_dmg * 0.35, 3)))
+            ahead.wing_damage = min(0.85, ahead.wing_damage + ahead_dmg)
+            if ahead.wing_damage_side == "NONE":
+                ahead.wing_damage_side = "LEFT" if ahead.d > behind.d else "RIGHT"
+            ahead.repair_cost_m += round(ahead_dmg * 0.50, 2)
+            ahead.tire_wear = min(0.99, ahead.tire_wear + (0.005 if is_light_tap else 0.012))
             self._maybe_schedule_damage_pit(behind)
+            self._maybe_schedule_damage_pit(ahead)
 
-            if delta_v > 6.8:
+            if not is_light_tap and delta_v > 6.8:
                 behind.smoke = max(behind.smoke, 1.5)
 
-                wing_add = random.uniform(0.14, 0.28)
+                wing_add = random.uniform(0.12, 0.24)
                 behind.wing_damage = min(0.85, behind.wing_damage + wing_add)
                 if behind.wing_damage_side == "NONE":
                     behind.wing_damage_side = "RIGHT" if behind.d > ahead.d else ("LEFT" if behind.d < ahead.d else "BOTH")
                 elif behind.wing_damage_side != "BOTH" and random.random() < 0.3:
                     behind.wing_damage_side = "BOTH"
 
-                behind.repair_cost_m += round(random.uniform(0.18, 0.38), 2)
-                behind.tire_wear = min(0.99, behind.tire_wear + 0.018)
-                ahead.tire_wear = min(0.99, ahead.tire_wear + 0.012)
+                behind.repair_cost_m += round(random.uniform(0.16, 0.34), 2)
+                behind.tire_wear = min(0.99, behind.tire_wear + 0.015)
                 self._maybe_schedule_damage_pit(behind)
 
-                if delta_v > 9.5 and random.random() < 0.22:
+                if delta_v > 10.5 and behind.lap > 1 and random.random() < 0.14:
                     ahead.spin_timer = random.uniform(2.8, 4.2)
                     ahead.spin_omega = random.choice([-5.8, 5.8]) * random.uniform(0.85, 1.25)
                     ahead.spin_lateral_dir = 1.0 if ahead.d >= 0.0 else -1.0
@@ -4408,7 +4448,7 @@ class RaceSession:
                         "culprit_id": behind.driver_id,
                         "summary": f"{behind.code} on {ahead.code}",
                         "reason": "Causing a Collision",
-                        "verdict": random.choice(["5S", "10S", "NFA"]),
+                        "verdict": random.choice(["NFA", "5S", "10S"]),
                     }
                 )
 
@@ -4430,9 +4470,7 @@ class RaceSession:
             if c.team_order == "YIELD":
                 tm = next((o for o in self.standings if o.team_id == c.team_id and o.driver_id != c.driver_id and not o.dnf), None)
                 if tm and tm.total_dist > c.total_dist:
-                    c.team_order = "FREE"
-                    c.swap_target_id = None
-                    tm.swap_pass_id = None
+                    self._complete_team_yield(c, tm, event_cb)
             old_p = prev_pos.get(c.driver_id, new_p)
             if (
                 new_p < old_p
