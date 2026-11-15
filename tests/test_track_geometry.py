@@ -374,5 +374,41 @@ class TrackGeometryTests(unittest.TestCase):
                 self.assertLessEqual(sum(exit_devs) / len(exit_devs), 2.5, f"{t.id} exit mean dev")
                 self.assertLessEqual(max(exit_devs), 6.0, f"{t.id} exit max dev")
 
+    def test_track_edges_and_normals_are_smooth(self):
+        for t in COMPILED_TRACKS:
+            with self.subTest(track=t.id):
+                sts = t.stations
+                n = len(sts)
+                max_dn = 0.0
+                max_center_kink = 0.0
+                max_edge_kink = 0.0
+                for i in range(n):
+                    a, b, c = sts[(i - 1) % n], sts[i], sts[(i + 1) % n]
+                    self.assertAlmostEqual(math.hypot(b["nx"], b["ny"]), 1.0, places=3)
+                    dn = math.hypot(c["nx"] - b["nx"], c["ny"] - b["ny"])
+                    max_dn = max(max_dn, dn)
+                    ux1, uy1 = b["x"] - a["x"], b["y"] - a["y"]
+                    ux2, uy2 = c["x"] - b["x"], c["y"] - b["y"]
+                    m1, m2 = math.hypot(ux1, uy1), math.hypot(ux2, uy2)
+                    if m1 > 1e-6 and m2 > 1e-6:
+                        cos_t = max(-1.0, min(1.0, (ux1 * ux2 + uy1 * uy2) / (m1 * m2)))
+                        max_center_kink = max(max_center_kink, math.degrees(math.acos(cos_t)))
+                    for side in (1.0, -1.0):
+                        ea = (a["x"] + side * a["nx"] * a["width_px"] * 0.5, a["y"] + side * a["ny"] * a["width_px"] * 0.5)
+                        eb = (b["x"] + side * b["nx"] * b["width_px"] * 0.5, b["y"] + side * b["ny"] * b["width_px"] * 0.5)
+                        ec = (c["x"] + side * c["nx"] * c["width_px"] * 0.5, c["y"] + side * c["ny"] * c["width_px"] * 0.5)
+                        vx1, vy1 = eb[0] - ea[0], eb[1] - ea[1]
+                        vx2, vy2 = ec[0] - eb[0], ec[1] - eb[1]
+                        n1, n2 = math.hypot(vx1, vy1), math.hypot(vx2, vy2)
+                        if n1 > 0.25 and n2 > 0.25:
+                            cos_e = max(-1.0, min(1.0, (vx1 * vx2 + vy1 * vy2) / (n1 * n2)))
+                            max_edge_kink = max(max_edge_kink, math.degrees(math.acos(cos_e)))
+                self.assertLessEqual(max_dn, 0.44, f"{t.id} normal jump {max_dn:.3f}")
+                self.assertLessEqual(max_center_kink, 36.0, f"{t.id} centerline kink {max_center_kink:.1f}")
+                self.assertLessEqual(max_edge_kink, 45.0, f"{t.id} edge kink {max_edge_kink:.1f}")
+                mid = t.sample(t.ds_m * 0.5)
+                self.assertAlmostEqual(math.hypot(mid["tx"], mid["ty"]), 1.0, places=5)
+                self.assertAlmostEqual(math.hypot(mid["nx"], mid["ny"]), 1.0, places=5)
+
 
 if __name__=='__main__':unittest.main()

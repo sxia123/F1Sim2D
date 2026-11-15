@@ -74,14 +74,26 @@ class CompiledTrack:
         self.px_per_m = total_canvas_len / self.length_m
         canvas_to_m = self.length_m / total_canvas_len
 
+        raw_t = []
         for k in range(m):
-            prev_s = self.stations[(k - 1) % m]
-            next_s = self.stations[(k + 1) % m]
-            dx = next_s["x"] - prev_s["x"]
-            dy = next_s["y"] - prev_s["y"]
+            p1 = self.stations[(k - 1) % m]
+            n1 = self.stations[(k + 1) % m]
+            p2 = self.stations[(k - 2) % m]
+            n2 = self.stations[(k + 2) % m]
+            dx = 0.65 * (n1["x"] - p1["x"]) + 0.35 * 0.5 * (n2["x"] - p2["x"])
+            dy = 0.65 * (n1["y"] - p1["y"]) + 0.35 * 0.5 * (n2["y"] - p2["y"])
             mag = max(math.hypot(dx, dy), 1e-6)
-            tx = dx / mag
-            ty = dy / mag
+            raw_t.append((dx / mag, dy / mag))
+        for _ in range(4):
+            smoothed_t = []
+            for k in range(m):
+                tx_s = 0.22 * raw_t[(k - 1) % m][0] + 0.56 * raw_t[k][0] + 0.22 * raw_t[(k + 1) % m][0]
+                ty_s = 0.22 * raw_t[(k - 1) % m][1] + 0.56 * raw_t[k][1] + 0.22 * raw_t[(k + 1) % m][1]
+                mag = max(math.hypot(tx_s, ty_s), 1e-6)
+                smoothed_t.append((tx_s / mag, ty_s / mag))
+            raw_t = smoothed_t
+        for k in range(m):
+            tx, ty = raw_t[k]
             nx = -ty
             ny = tx
             self.stations[k]["tx"] = round(tx, 4)
@@ -428,9 +440,9 @@ class CompiledTrack:
             if span_st < 5:
                 continue
 
-            inner_pts: list[list[float]] = []
-            outer_pts: list[list[float]] = []
-            peak_local_w = 0.0
+            inner_raw: list[tuple[float, float, int, dict]] = []
+            raw_widths: list[float] = []
+            safe_limits: list[float] = []
             for step_i in range(span_st + 1):
                 k = (k_c - pre_st + step_i) % m
                 u = step_i / span_st
@@ -442,6 +454,7 @@ class CompiledTrack:
                 ix = st["x"] + st["nx"] * verge_off
                 iy = st["y"] + st["ny"] * verge_off
 
+                safe_lim = max_w_m
                 if pit_pts:
                     ox_try = ix + st["nx"] * (outside_sign * local_w_m * WORLD_UNITS_PER_M)
                     oy_try = iy + st["ny"] * (outside_sign * local_w_m * WORLD_UNITS_PER_M)
@@ -449,7 +462,8 @@ class CompiledTrack:
                     if min_p_d < pit_buf_px + 3.0:
                         mid_p_d = min(math.hypot(ix - pp["x"], iy - pp["y"]) for pp in pit_pts)
                         safe_px = max(0.0, mid_p_d - pit_buf_px - 3.0)
-                        local_w_m = min(local_w_m, safe_px / WORLD_UNITS_PER_M)
+                        safe_lim = min(safe_lim, safe_px / WORLD_UNITS_PER_M)
+                        local_w_m = min(local_w_m, safe_lim)
 
                 for step_j in range(0, m, 6):
                     arc = min((k - step_j) % m, (step_j - k) % m)
@@ -458,18 +472,48 @@ class CompiledTrack:
                     other = self.stations[step_j]
                     clr = math.hypot(ix - other["x"], iy - other["y"]) - other["width_px"] * 0.5 - 3.5
                     if clr < local_w_m * WORLD_UNITS_PER_M:
-                        local_w_m = min(local_w_m, max(0.0, clr / WORLD_UNITS_PER_M))
+                        safe_lim = min(safe_lim, max(0.0, clr / WORLD_UNITS_PER_M))
+                        local_w_m = min(local_w_m, safe_lim)
 
+                inner_raw.append((ix, iy, k, st))
+                raw_widths.append(local_w_m)
+                safe_limits.append(safe_lim)
+
+            n_rw = len(raw_widths)
+            if n_rw >= 3:
+                for _ in range(3):
+                    smoothed_w = list(raw_widths)
+                    for idx_w in range(1, n_rw - 1):
+                        cand_w = 0.25 * raw_widths[idx_w - 1] + 0.50 * raw_widths[idx_w] + 0.25 * raw_widths[idx_w + 1]
+                        smoothed_w[idx_w] = min(cand_w, safe_limits[idx_w])
+                    raw_widths = smoothed_w
+
+            inner_pts: list[list[float]] = []
+            outer_raw: list[tuple[float, float]] = []
+            peak_local_w = 0.0
+            for idx_w, (ix, iy, _k, st) in enumerate(inner_raw):
+                local_w_m = raw_widths[idx_w]
                 ox = ix + st["nx"] * (outside_sign * local_w_m * WORLD_UNITS_PER_M)
                 oy = iy + st["ny"] * (outside_sign * local_w_m * WORLD_UNITS_PER_M)
                 inner_pts.append([round(ix, 1), round(iy, 1)])
-                outer_pts.append([round(ox, 1), round(oy, 1)])
+                outer_raw.append((ox, oy))
                 peak_local_w = max(peak_local_w, local_w_m)
 
                 if local_w_m > st["runoff_width_m"] and local_w_m >= 1.2:
                     st["runoff_width_m"] = round(local_w_m, 2)
                     st["runoff_side"] = outside_sign
                     st["runoff_surface"] = 2 if surface == "gravel" else 1
+
+            if len(outer_raw) >= 3:
+                for _ in range(2):
+                    smoothed_outer = list(outer_raw)
+                    for idx_o in range(1, len(outer_raw) - 1):
+                        smoothed_outer[idx_o] = (
+                            0.22 * outer_raw[idx_o - 1][0] + 0.56 * outer_raw[idx_o][0] + 0.22 * outer_raw[idx_o + 1][0],
+                            0.22 * outer_raw[idx_o - 1][1] + 0.56 * outer_raw[idx_o][1] + 0.22 * outer_raw[idx_o + 1][1],
+                        )
+                    outer_raw = smoothed_outer
+            outer_pts = [[round(ox, 1), round(oy, 1)] for ox, oy in outer_raw]
 
             if peak_local_w >= 2.2 and len(inner_pts) >= 4:
                 poly = inner_pts + list(reversed(outer_pts))
@@ -529,16 +573,23 @@ class CompiledTrack:
         b = self.stations[i1]
         surf_code = a.get("runoff_surface", 0) or b.get("runoff_surface", 0)
         runoff_type = "gravel" if surf_code == 2 else ("tarmac" if surf_code == 1 else "none")
+        raw_tx = a["tx"] + (b["tx"] - a["tx"]) * t
+        raw_ty = a["ty"] + (b["ty"] - a["ty"]) * t
+        t_mag = max(math.hypot(raw_tx, raw_ty), 1e-6)
+        tx = raw_tx / t_mag
+        ty = raw_ty / t_mag
+        nx = -ty
+        ny = tx
         return {
             "x": a["x"] + (b["x"] - a["x"]) * t,
             "y": a["y"] + (b["y"] - a["y"]) * t,
-            "tx": a["tx"] + (b["tx"] - a["tx"]) * t,
-            "ty": a["ty"] + (b["ty"] - a["ty"]) * t,
-            "nx": a["nx"] + (b["nx"] - a["nx"]) * t,
-            "ny": a["ny"] + (b["ny"] - a["ny"]) * t,
+            "tx": tx,
+            "ty": ty,
+            "nx": nx,
+            "ny": ny,
             "curv": a["curv"] + (b["curv"] - a["curv"]) * t,
             "straight_mode": a["straight_mode"],
-            "inside_sign": a["inside_sign"],
+            "inside_sign": a["inside_sign"] + (b["inside_sign"] - a["inside_sign"]) * t,
             "racing_line_d": a.get("racing_line_d", 0.0) + (b.get("racing_line_d", 0.0) - a.get("racing_line_d", 0.0)) * t,
             "runoff_width_m": a.get("runoff_width_m", 0.0) + (b.get("runoff_width_m", 0.0) - a.get("runoff_width_m", 0.0)) * t,
             "runoff_side": a.get("runoff_side", 0) or b.get("runoff_side", 0),

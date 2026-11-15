@@ -199,14 +199,18 @@ def _apply_chassis_dynamics(
     prev_slip = getattr(car, "body_slip_angle", 0.0)
     car.body_slip_angle = round(prev_slip + (target_slip - prev_slip) * slip_alpha, 4)
 
-    geom_steer = curv * inside_sign * 4.14
-    lat_steer = math.atan2(car.lateral_velocity, max(12.0, car.v)) * 0.85
+    v_lat_smooth = getattr(car, "_smooth_lat_v", car.lateral_velocity)
+    eff_curv_signed = (car.g_lat * 9.81) / max(car.v * car.v, 144.0)
+    geom_steer = eff_curv_signed * 4.14
+    lat_steer = math.atan2(v_lat_smooth, max(13.5, car.v)) * 0.75
     raw_steer = (geom_steer + lat_steer + target_slip * 0.35) * wing_steer_auth
     target_steer = max(-0.42, min(0.42, raw_steer))
 
-    steer_alpha = min(1.0, dt * 13.5)
+    steer_alpha = min(1.0, dt * 9.5)
     prev_steer = getattr(car, "steer_angle", 0.0)
-    car.steer_angle = round(prev_steer + (target_steer - prev_steer) * steer_alpha, 4)
+    max_dsteer = 2.2 * max(dt, 1e-4)
+    delta_steer = max(-max_dsteer, min(max_dsteer, (target_steer - prev_steer) * steer_alpha))
+    car.steer_angle = round(prev_steer + delta_steer, 4)
 
 
 def _update_car_heading(
@@ -245,9 +249,9 @@ def _update_car_heading(
     prev_h = getattr(car, "heading", None)
     if prev_h is not None and has_init:
         dh_raw = (target_heading - prev_h + math.pi) % (2.0 * math.pi) - math.pi
-        track_alpha = min(1.0, cur_dt * 15.5)
+        track_alpha = min(1.0, cur_dt * 11.0)
         dh = dh_raw * track_alpha
-        max_dh = max(5.2, abs(car.v * smp["curv"]) * 2.8) * cur_dt
+        max_dh = max(3.4, abs(car.v * smp["curv"]) * 2.3) * cur_dt
         dh_clamped = max(-max_dh, min(max_dh, dh))
         car.heading = round((prev_h + dh_clamped + math.pi) % (2.0 * math.pi) - math.pi, 4)
     else:
@@ -3242,21 +3246,25 @@ class RaceSession:
             or getattr(car, "_sep_lane_timer", 0.0) > 0.0
         )
         if car.maneuver_pass_timer > 0.0 or car.maneuver_timer > 0.0:
-            steer_rate, max_lat_v, lat_accel = 2.2, 4.0, 7.5
+            target_sr, max_lat_v, lat_accel = 2.2, 4.0, 7.5
         elif car.pit_blend_active:
-            steer_rate, max_lat_v, lat_accel = 1.55, 2.7, 6.2
+            target_sr, max_lat_v, lat_accel = 1.55, 2.7, 6.2
         elif active_move:
-            steer_rate, max_lat_v, lat_accel = 1.65, 3.8, 7.5
+            target_sr, max_lat_v, lat_accel = 1.65, 3.8, 7.5
         else:
-            steer_rate, max_lat_v, lat_accel = 1.15, 2.6, 4.8
+            target_sr, max_lat_v, lat_accel = 1.15, 2.6, 4.8
+
+        prev_sr = getattr(car, "_eff_steer_rate", target_sr)
+        steer_rate = prev_sr + (target_sr - prev_sr) * min(1.0, dt * 8.0)
+        car._eff_steer_rate = steer_rate
 
         desired_v = max(-max_lat_v, min(max_lat_v, (car.target_d - car.d) * steer_rate * half_width_m))
         if bound_hi < 9.0 and desired_v > 0.0:
             room_hi_m = max(0.0, (bound_hi - car.d) * half_width_m)
-            desired_v = min(desired_v, room_hi_m / 0.16)
+            desired_v = min(desired_v, room_hi_m / 0.22)
         if bound_lo > -9.0 and desired_v < 0.0:
             room_lo_m = max(0.0, (car.d - bound_lo) * half_width_m)
-            desired_v = max(desired_v, -room_lo_m / 0.16)
+            desired_v = max(desired_v, -room_lo_m / 0.22)
 
         velocity = car.lateral_velocity
         velocity += max(-lat_accel * dt, min(lat_accel * dt, desired_v - velocity))
@@ -3270,7 +3278,7 @@ class RaceSession:
             proposed = car.d
         car.lateral_velocity = (proposed - car.d) * half_width_m / dt
         prev_slv = getattr(car, "_smooth_lat_v", car.lateral_velocity)
-        car._smooth_lat_v = prev_slv + (car.lateral_velocity - prev_slv) * min(1.0, dt * 11.0)
+        car._smooth_lat_v = prev_slv + (car.lateral_velocity - prev_slv) * min(1.0, dt * 9.0)
         car.d = proposed
 
     def _roll_pit_stop_duration(self, car: CarState, event_cb) -> tuple[float, str]:

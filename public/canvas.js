@@ -713,24 +713,34 @@ export class CircuitRenderer {
       if (!inner || !outer || inner.length < 3 || outer.length < 3) continue;
 
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const p of inner) {
+        if (p[0] < minX) minX = p[0];
+        if (p[0] > maxX) maxX = p[0];
+        if (p[1] < minY) minY = p[1];
+        if (p[1] > maxY) maxY = p[1];
+      }
+      for (const p of outer) {
+        if (p[0] < minX) minX = p[0];
+        if (p[0] > maxX) maxX = p[0];
+        if (p[1] < minY) minY = p[1];
+        if (p[1] > maxY) maxY = p[1];
+      }
+
       ctx.beginPath();
       ctx.moveTo(inner[0][0], inner[0][1]);
-      for (let i = 0; i < inner.length; i++) {
-        const ix = inner[i][0], iy = inner[i][1];
-        if (ix < minX) minX = ix;
-        if (ix > maxX) maxX = ix;
-        if (iy < minY) minY = iy;
-        if (iy > maxY) maxY = iy;
-        if (i > 0) ctx.lineTo(ix, iy);
+      for (let i = 1; i < inner.length - 1; i++) {
+        const mx = (inner[i][0] + inner[i + 1][0]) * 0.5;
+        const my = (inner[i][1] + inner[i + 1][1]) * 0.5;
+        ctx.quadraticCurveTo(inner[i][0], inner[i][1], mx, my);
       }
-      for (let i = outer.length - 1; i >= 0; i--) {
-        const ox = outer[i][0], oy = outer[i][1];
-        if (ox < minX) minX = ox;
-        if (ox > maxX) maxX = ox;
-        if (oy < minY) minY = oy;
-        if (oy > maxY) maxY = oy;
-        ctx.lineTo(ox, oy);
+      ctx.lineTo(inner[inner.length - 1][0], inner[inner.length - 1][1]);
+      ctx.lineTo(outer[outer.length - 1][0], outer[outer.length - 1][1]);
+      for (let i = outer.length - 2; i >= 1; i--) {
+        const mx = (outer[i][0] + outer[i - 1][0]) * 0.5;
+        const my = (outer[i][1] + outer[i - 1][1]) * 0.5;
+        ctx.quadraticCurveTo(outer[i][0], outer[i][1], mx, my);
       }
+      ctx.lineTo(outer[0][0], outer[0][1]);
       ctx.closePath();
 
       if (z.surface === "gravel") {
@@ -758,11 +768,7 @@ export class CircuitRenderer {
         ctx.restore();
       }
 
-      ctx.beginPath();
-      ctx.moveTo(outer[0][0], outer[0][1]);
-      for (let i = 1; i < outer.length; i++) {
-        ctx.lineTo(outer[i][0], outer[i][1]);
-      }
+      this._traceSmoothOpenPoints(ctx, outer);
       ctx.strokeStyle = "rgba(18, 22, 30, 0.88)";
       ctx.lineWidth = 2.2;
       ctx.stroke();
@@ -790,9 +796,7 @@ export class CircuitRenderer {
     const ppts = this.track.pit_points || [];
     const pitWidth = this.track.pit_width_px || 32;
     if (ppts.length > 1) {
-      ctx.beginPath();
-      ctx.moveTo(...ppts[0]);
-      for (const pt of ppts.slice(1)) ctx.lineTo(...pt);
+      this._traceSmoothOpenPoints(ctx, ppts);
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = "#060609";
@@ -922,18 +926,27 @@ export class CircuitRenderer {
     }
 
     // 3. FIA Red & White Corner Kerbs
+    const kerbOut = this._computeSmoothEdgePoints(sts, 1, -1.6);
+    const kerbIn = this._computeSmoothEdgePoints(sts, -1, -1.6);
+    ctx.save();
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 5.8;
     for (let i = 0; i < n; i++) {
       if (sts[i].curv > 0.012) {
-        const s0 = sts[i];
-        const s1 = sts[(i + 1) % n];
-        ctx.beginPath();
-        ctx.moveTo(s0.x, s0.y);
-        ctx.lineTo(s1.x, s1.y);
+        const ip = (i - 1 + n) % n;
+        const nx = (i + 1) % n;
         ctx.strokeStyle = i % 2 === 0 ? "#e10600" : "#e8ecf2";
-        ctx.lineWidth = (s0.width_px || wPx) + 4.4;
-        ctx.stroke();
+        for (const edge of [kerbOut, kerbIn]) {
+          const pPrev = edge[ip], pCur = edge[i], pNext = edge[nx];
+          ctx.beginPath();
+          ctx.moveTo((pPrev.x + pCur.x) * 0.5, (pPrev.y + pCur.y) * 0.5);
+          ctx.quadraticCurveTo(pCur.x, pCur.y, (pCur.x + pNext.x) * 0.5, (pCur.y + pNext.y) * 0.5);
+          ctx.stroke();
+        }
       }
     }
+    ctx.restore();
 
     // 4. White FIA Track Edge Lines + Wide Dark Racing Asphalt
     this._traceRoadRibbon(ctx, sts, .96);
@@ -947,29 +960,29 @@ export class CircuitRenderer {
 
     // Dual-tier rubbered geometric racing groove (sweeps from outside entry to apex kerb to exit kerb)
     if (this.track.racing_line_points && this.track.racing_line_points.length > 2) {
-      const rpts = this.track.racing_line_points;
+      let groove = this.track.racing_line_points.map((p) => ({ x: p[0], y: p[1] }));
+      const gn = groove.length;
+      for (let pass = 0; pass < 2; pass++) {
+        groove = groove.map((p, idx) => {
+          const prv = groove[(idx - 1 + gn) % gn];
+          const nxt = groove[(idx + 1) % gn];
+          return {
+            x: 0.22 * prv.x + 0.56 * p.x + 0.22 * nxt.x,
+            y: 0.22 * prv.y + 0.56 * p.y + 0.22 * nxt.y,
+          };
+        });
+      }
       ctx.save();
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
 
       // 1. Soft wide rubbered track foundation
-      ctx.beginPath();
-      ctx.moveTo(rpts[0][0], rpts[0][1]);
-      for (let i = 1; i < rpts.length; i++) {
-        ctx.lineTo(rpts[i][0], rpts[i][1]);
-      }
-      ctx.closePath();
+      this._traceSmoothClosedPoints(ctx, groove);
       ctx.strokeStyle = wet > 25 ? "rgba(8, 10, 14, 0.18)" : "rgba(10, 10, 14, 0.32)";
       ctx.lineWidth = Math.max(6.5, wPx * 0.38);
       ctx.stroke();
 
       // 2. High-grip dark central rubber groove
-      ctx.beginPath();
-      ctx.moveTo(rpts[0][0], rpts[0][1]);
-      for (let i = 1; i < rpts.length; i++) {
-        ctx.lineTo(rpts[i][0], rpts[i][1]);
-      }
-      ctx.closePath();
       ctx.strokeStyle = wet > 25 ? "rgba(6, 8, 12, 0.32)" : "rgba(6, 6, 10, 0.58)";
       ctx.lineWidth = Math.max(3.6, wPx * 0.20);
       ctx.stroke();
@@ -1211,32 +1224,76 @@ export class CircuitRenderer {
     }
   }
 
-  _traceClosedSpline(ctx, sts) {
-    ctx.beginPath();
-    ctx.moveTo(sts[0].x, sts[0].y);
-    for (let i = 1; i < sts.length; i++) {
-      ctx.lineTo(sts[i].x, sts[i].y);
+  _traceSmoothClosedPoints(ctx, pts, doBeginPath = true) {
+    if (doBeginPath) ctx.beginPath();
+    const n = pts.length;
+    if (n < 2) return;
+    const gx = (p) => (Array.isArray(p) ? p[0] : p.x);
+    const gy = (p) => (Array.isArray(p) ? p[1] : p.y);
+    const pLast = pts[n - 1], p0 = pts[0];
+    ctx.moveTo((gx(pLast) + gx(p0)) * 0.5, (gy(pLast) + gy(p0)) * 0.5);
+    for (let i = 0; i < n; i++) {
+      const p = pts[i];
+      const nxt = pts[(i + 1) % n];
+      ctx.quadraticCurveTo(
+        gx(p),
+        gy(p),
+        (gx(p) + gx(nxt)) * 0.5,
+        (gy(p) + gy(nxt)) * 0.5,
+      );
     }
     ctx.closePath();
   }
 
-  _traceRoadRibbon(ctx, sts, extraWidth = 0) {
-    // One continuous polygon: the same per-station metre widths as physics.
-    // Separate strokes would leave gaps or inflate the narrow corners.
+  _traceSmoothOpenPoints(ctx, pts) {
     ctx.beginPath();
-    for (const [side, reverse] of [[1, false], [-1, true]]) {
-      for (let j = 0; j < sts.length; j++) {
-        const i = reverse ? sts.length - 1 - j : j;
-        const p = sts[i], h = ((p.width_px || this.track.track_width_px) + extraWidth) * .5;
-        const x = p.x + side * p.nx * h, y = p.y + side * p.ny * h;
-        if (side === 1 && j === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-      }
-      // Explicitly close each edge loop; even-odd fill preserves the infield.
-      const p = sts[reverse ? sts.length - 1 : 0];
-      const h = ((p.width_px || this.track.track_width_px) + extraWidth) * .5;
-      ctx.lineTo(p.x + side * p.nx * h, p.y + side * p.ny * h);
+    const n = pts.length;
+    if (n === 0) return;
+    const gx = (p) => (Array.isArray(p) ? p[0] : p.x);
+    const gy = (p) => (Array.isArray(p) ? p[1] : p.y);
+    ctx.moveTo(gx(pts[0]), gy(pts[0]));
+    if (n === 2) {
+      ctx.lineTo(gx(pts[1]), gy(pts[1]));
+      return;
     }
-    ctx.closePath();
+    for (let i = 1; i < n - 1; i++) {
+      const mx = (gx(pts[i]) + gx(pts[i + 1])) * 0.5;
+      const my = (gy(pts[i]) + gy(pts[i + 1])) * 0.5;
+      ctx.quadraticCurveTo(gx(pts[i]), gy(pts[i]), mx, my);
+    }
+    ctx.lineTo(gx(pts[n - 1]), gy(pts[n - 1]));
+  }
+
+  _computeSmoothEdgePoints(sts, side, extraWidth = 0) {
+    const n = sts.length;
+    let pts = sts.map((p) => {
+      const h = ((p.width_px || this.track.track_width_px) + extraWidth) * 0.5;
+      return { x: p.x + side * p.nx * h, y: p.y + side * p.ny * h };
+    });
+    for (let pass = 0; pass < 3; pass++) {
+      pts = pts.map((p, idx) => {
+        const prv = pts[(idx - 1 + n) % n];
+        const nxt = pts[(idx + 1) % n];
+        return {
+          x: 0.22 * prv.x + 0.56 * p.x + 0.22 * nxt.x,
+          y: 0.22 * prv.y + 0.56 * p.y + 0.22 * nxt.y,
+        };
+      });
+    }
+    return pts;
+  }
+
+  _traceClosedSpline(ctx, sts) {
+    this._traceSmoothClosedPoints(ctx, sts, true);
+  }
+
+  _traceRoadRibbon(ctx, sts, extraWidth = 0) {
+    // One continuous ribbon with smoothed offset borders to prevent hairpin inner pinching.
+    const outerPts = this._computeSmoothEdgePoints(sts, 1, extraWidth);
+    const innerPts = this._computeSmoothEdgePoints(sts, -1, extraWidth).reverse();
+    ctx.beginPath();
+    this._traceSmoothClosedPoints(ctx, outerPts, false);
+    this._traceSmoothClosedPoints(ctx, innerPts, false);
   }
 
   _drawParticles(ctx) {

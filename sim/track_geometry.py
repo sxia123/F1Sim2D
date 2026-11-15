@@ -37,8 +37,41 @@ def resample(points, count, closed=False):
 
 def compile_centerline(track):
     layout = LAYOUTS[track.id]
-    points, canvas_len = resample(layout['points'], track.NUM_STATIONS, closed=True)
-    scale = track.length_m * WORLD_UNITS_PER_M / canvas_len
+    raw_points, _ = resample(layout['points'], track.NUM_STATIONS, closed=True)
+    rx0 = min(p[0] for p in raw_points)
+    rx1 = max(p[0] for p in raw_points)
+    ry0 = min(p[1] for p in raw_points)
+    ry1 = max(p[1] for p in raw_points)
+
+    # Round off sharp polygon corners in the reference centerline while keeping
+    # uniform station spacing and the exact geographic bounding box.
+    pts = list(raw_points)
+    n_pts = len(pts)
+    for _ in range(6):
+        pts = [
+            (
+                0.22 * pts[(i - 1) % n_pts][0] + 0.56 * pts[i][0] + 0.22 * pts[(i + 1) % n_pts][0],
+                0.22 * pts[(i - 1) % n_pts][1] + 0.56 * pts[i][1] + 0.22 * pts[(i + 1) % n_pts][1],
+            )
+            for i in range(n_pts)
+        ]
+
+    points, _ = resample(pts, track.NUM_STATIONS, closed=True)
+    sx0 = min(p[0] for p in points)
+    sx1 = max(p[0] for p in points)
+    sy0 = min(p[1] for p in points)
+    sy1 = max(p[1] for p in points)
+    sw = max(sx1 - sx0, 1e-9)
+    sh = max(sy1 - sy0, 1e-9)
+    rw = rx1 - rx0
+    rh = ry1 - ry0
+    points = [
+        (rx0 + (x - sx0) * (rw / sw), ry0 + (y - sy0) * (rh / sh))
+        for x, y in points
+    ]
+
+    points, smoothed_canvas_len = resample(points, track.NUM_STATIONS, closed=True)
+    scale = track.length_m * WORLD_UNITS_PER_M / smoothed_canvas_len
     track.map_scale = scale
     track.layout = layout
     track.geometry_source = layout['source']
@@ -48,12 +81,21 @@ def compile_centerline(track):
     if widths:
         track.track_width_m=median(widths)
         track.track_width_px=track.track_width_m*WORLD_UNITS_PER_M
-    for k,station in enumerate(track.stations):
-        f=k*len(widths)/len(points) if widths else 0
-        i=int(f)
-        width=(widths[i%len(widths)]*(1-f+i)+widths[(i+1)%len(widths)]*(f-i)) if widths else track.track_width_m
-        station['width_m']=width
-        station['width_px']=width*WORLD_UNITS_PER_M
+    n_st = len(track.stations)
+    raw_w_m = []
+    for k in range(n_st):
+        f = k * len(widths) / n_st if widths else 0
+        i = int(f)
+        w_m = (widths[i % len(widths)] * (1 - f + i) + widths[(i + 1) % len(widths)] * (f - i)) if widths else track.track_width_m
+        raw_w_m.append(w_m)
+    for _ in range(8):
+        raw_w_m = [
+            0.25 * raw_w_m[(k - 1) % n_st] + 0.50 * raw_w_m[k] + 0.25 * raw_w_m[(k + 1) % n_st]
+            for k in range(n_st)
+        ]
+    for k, station in enumerate(track.stations):
+        station['width_m'] = raw_w_m[k]
+        station['width_px'] = raw_w_m[k] * WORLD_UNITS_PER_M
     return track.length_m * WORLD_UNITS_PER_M
 
 

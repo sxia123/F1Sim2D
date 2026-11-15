@@ -1,5 +1,6 @@
 """Tests for natural vehicle turning dynamics, velocity heading, body slip angle, and steer angles."""
 import math
+import random
 import unittest
 
 from sim.data import clone_initial_roster
@@ -274,6 +275,42 @@ class NaturalTurningTests(unittest.TestCase):
             return trail._last_dirty_air_loss
 
         self.assertGreater(run_wake_step(0.0), run_wake_step(0.65) * 2.0)
+
+    def test_steering_and_heading_transitions_are_smooth(self):
+        random.seed(21)
+        race = RaceSession(self.track, self.teams_dict, self.drivers[:1], 0, 0, "mclaren")
+        race.lights_out = True
+        race.flag_state = "GREEN"
+        c = race.cars[0]
+        dt = 0.05
+        # Start approaching Turn 1 of Bahrain with an abrupt lane target switch mid-run.
+        corner_st = max(range(self.track.NUM_STATIONS), key=lambda i: self.track.stations[i]["curv"])
+        c.s = ((corner_st - 15) % self.track.NUM_STATIONS) * self.track.ds_m
+        c.total_dist = self.track.length_m + c.s
+        c.lap = 2
+        c.v = 60.0
+        c.d = c.target_d = -0.6
+        ignore = lambda *a, **kw: None
+        prev_steer = None
+        prev_h = None
+        max_steer_rate = 0.0
+        max_h_rate = 0.0
+        for step_idx in range(100):
+            if step_idx == 25:
+                c.target_d = 0.6
+            elif step_idx == 60:
+                c.target_d = -0.4
+            race.race_clock += dt
+            race._step_car(c, None, None, False, dt, ignore)
+            if prev_steer is not None:
+                max_steer_rate = max(max_steer_rate, abs(c.steer_angle - prev_steer) / dt)
+            if prev_h is not None:
+                dh = (c.heading - prev_h + math.pi) % (2.0 * math.pi) - math.pi
+                max_h_rate = max(max_h_rate, abs(dh) / dt)
+            prev_steer = c.steer_angle
+            prev_h = c.heading
+        self.assertLessEqual(max_steer_rate, 2.25)
+        self.assertLessEqual(max_h_rate, 4.0)
 
 
 if __name__ == "__main__":
