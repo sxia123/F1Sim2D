@@ -1405,6 +1405,57 @@ INITIAL_DRIVERS = [
 ]
 
 
+DRIVER_RISK_RATINGS: dict[str, int] = {
+    # Active 2026 grid (22)
+    "verstappen": 90,
+    "lawson": 88,
+    "lindblad": 88,
+    "colapinto": 88,
+    "antonelli": 87,
+    "hadjar": 86,
+    "bearman": 86,
+    "leclerc": 84,
+    "stroll": 84,
+    "ocon": 80,
+    "norris": 76,
+    "gasly": 76,
+    "perez": 76,
+    "bortoleto": 75,
+    "hamilton": 74,
+    "russell": 72,
+    "alonso": 70,
+    "piastri": 68,
+    "sainz": 66,
+    "albon": 64,
+    "hulkenberg": 62,
+    "bottas": 55,
+    # Free agents (10)
+    "oward": 89,
+    "doohan": 85,
+    "tsunoda": 83,
+    "aron": 78,
+    "browning": 74,
+    "pourchaire": 68,
+    "fornaroli": 67,
+    "palou": 64,
+    "drugovich": 60,
+    "zhou": 56,
+    # Legends (9)
+    "senna": 95,
+    "mansell": 94,
+    "schumacher": 89,
+    "hakkinen": 80,
+    "vettel": 79,
+    "raikkonen": 77,
+    "fangio": 60,
+    "lauda": 54,
+    "prost": 52,
+}
+
+for _drv in INITIAL_DRIVERS:
+    _drv.setdefault("risk", DRIVER_RISK_RATINGS.get(_drv["id"], 70))
+
+
 def driver_overall(driver: dict) -> float:
     """Weighted overall driver rating (0-100)."""
     return round(
@@ -1416,6 +1467,14 @@ def driver_overall(driver: dict) -> float:
         + driver["wet_skill"] * 0.08,
         1,
     )
+
+
+def driver_risk(driver: dict) -> int:
+    """Resolve a driver's risk appetite (40-99), separate from skill OVR."""
+    raw = driver.get("risk")
+    if raw is None:
+        raw = DRIVER_RISK_RATINGS.get(driver.get("id", ""), 70)
+    return max(40, min(99, int(round(raw))))
 
 
 def upgrade_cost_m(dept_key: str, current_level: int) -> float:

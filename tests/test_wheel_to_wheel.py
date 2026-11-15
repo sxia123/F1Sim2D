@@ -406,6 +406,87 @@ class WheelToWheelTests(unittest.TestCase):
         self.assertGreater(x.wing_damage, 0.0)
         self.assertGreater(y.wing_damage, 0.0)
 
+    def test_high_risk_driver_attempts_daring_divebombs_more_than_cautious_driver(self):
+        race = self.race("bahrain", count=2)
+        race.lights_out = True
+        race.flag_state = "GREEN"
+        atk, dfn = race.cars
+        hairpin_c = max(
+            race.track.corners,
+            key=lambda c: race.track.stations[c["station"]]["curv"],
+        )
+        s = hairpin_c["s_m"] - 15.0
+        smp = race.track.sample(s)
+        ins = float(smp.get("inside_sign", 1))
+        self.place(race, dfn, s + 8.0, 0.35 * ins)
+        self.place(race, atk, s, 0.0)
+        atk.car_perf_index = dfn.car_perf_index = 90.0
+        atk.skills.update({"pace": 88, "racecraft": 88, "consistency": 88, "defense": 82})
+        dfn.skills.update({"pace": 88, "racecraft": 88, "consistency": 88, "defense": 82})
+        atk.pace_mode = "PUSH"
+
+        def count_divebombs(risk_val: int) -> int:
+            atk.skills["risk"] = risk_val
+            rng = random.Random(123)
+            with patch("sim.physics.random.random", side_effect=rng.random):
+                return sum(
+                    1
+                    for _ in range(300)
+                    if race.select_and_evaluate_maneuver(atk, dfn, smp, True)[0] == "DIVEBOMB"
+                )
+
+        cautious_dives = count_divebombs(52)
+        daring_dives = count_divebombs(92)
+        self.assertGreater(daring_dives, cautious_dives * 2)
+
+    def test_risk_increases_solo_crash_exposure_and_collision_can_retire_on_street_walls(self):
+        # 1. Higher risk scales solo corner incident probability strictly upward across uniform threshold draws
+        def run_solo_trials(risk_val: int) -> int:
+            race = self.race("monaco", count=2)
+            race.lights_out = True
+            race.flag_state = "GREEN"
+            car = race.cars[0]
+            car.skills.update({"consistency": 84, "risk": risk_val})
+            car.pace_mode = "ATTACK"
+            corner = max(
+                race.track.corners,
+                key=lambda c: race.track.stations[c["station"]]["curv"],
+            )
+            smp = race.track.sample(corner["s_m"])
+            events = []
+            # Step threshold evenly through [0.00002 .. 0.00120]; inside _check_solo_incidents,
+            # the 2nd random.random() call evaluates solo_err_prob (1st evaluates track limits).
+            for idx in range(60):
+                thresh = 0.00002 * (idx + 1)
+                race.flag_state = "GREEN"
+                car.dnf = False
+                car.spin_timer = 0.0
+                car.tire_wear = 0.85
+                self.place(race, car, corner["s_m"], 0.0)
+                seq = iter([0.5, thresh, 0.99, 0.99, 0.99, 0.99])
+                with patch("sim.physics.random.random", side_effect=lambda: next(seq, 0.99)):
+                    race._check_solo_incidents(car, smp, 1.0, lambda k, m: events.append(k))
+            return sum(1 for k in events if k in ("CRASH", "YELLOW"))
+
+        cautious_events = run_solo_trials(52)
+        aggressive_events = run_solo_trials(94)
+        self.assertGreater(aggressive_events, 15)
+        self.assertGreater(aggressive_events, cautious_events * 2)
+
+        # 2. Street-circuit crash DNF threshold retires victim on high-severity collision
+        street_race = self.race("monaco", count=2)
+        street_race.lights_out = True
+        street_race.flag_state = "GREEN"
+        street_race.race_clock = 40.0
+        a, b = street_race.cars
+        s = self.straight(street_race.track)
+        self.place(street_race, a, s + 4.0, 0.1)
+        self.place(street_race, b, s, 0.2)
+        rolls = iter([0.1, 0.78, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5])
+        with patch("sim.physics.random.random", side_effect=lambda: next(rolls, 0.5)):
+            street_race._handle_collision(a, b, 1, ignore_event)
+        self.assertTrue(b.dnf)
+
 
 if __name__ == "__main__":
     unittest.main()

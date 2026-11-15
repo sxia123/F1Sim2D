@@ -1265,7 +1265,7 @@ class F1App {
     if (list.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="12" style="text-align:center;padding:26px 12px;color:#8f90a6;font-style:italic">
+          <td colspan="13" style="text-align:center;padding:26px 12px;color:#8f90a6;font-style:italic">
             No drivers found matching current filter or search criteria.
           </td>
         </tr>
@@ -1297,6 +1297,7 @@ class F1App {
           <td>${d.consistency}</td>
           <td>${d.tire_mgmt}</td>
           <td>${d.wet_skill}</td>
+          <td>${d.risk ?? 70}</td>
           <td>$${d.salary_m.toFixed(2)}M/yr</td>
           <td>$${d.value_m.toFixed(1)}M</td>
         </tr>

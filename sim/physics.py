@@ -12,6 +12,7 @@ from sim.data import (
     PU_COMPONENT_SPECS,
     team_car_rating,
     circuit_car_rating,
+    driver_risk,
     effective_track_upgrades,
     create_pu_pool,
     create_weekend_tire_sets,
@@ -23,6 +24,27 @@ from sim.tracks import CompiledTrack
 from sim.track_geometry import pit_lateral_offset, in_pit_tunnel
 from sim.radio import RadioDispatcher
 from sim.pitwall import RivalPitWall
+
+WALLED_CIRCUITS = frozenset({
+    "monaco",
+    "saudi",
+    "azerbaijan",
+    "singapore",
+    "canada",
+    "australia",
+    "madrid",
+})
+
+
+def _car_risk_norm(car: "CarState") -> float:
+    """Normalized driver risk appetite around 70 (-1.20 cautious .. +1.16 attack)."""
+    return (float(car.skills.get("risk", 70)) - 70.0) / 25.0
+
+
+def _car_risk_scale(car: "CarState", exp: float = 1.35) -> float:
+    """Multiplicative crash exposure scaling around neutral 70 risk (1.0x)."""
+    ratio = max(0.45, float(car.skills.get("risk", 70)) / 70.0)
+    return max(0.52, min(1.90, ratio ** exp))
 from sim.car_geometry import (CAR_LEN_PX,CAR_WID_PX,CAR_HALF_LENGTH,CAR_HALF_WIDTH,
                               CAR_PAIR_RADIUS_SQ,SC_HALF_LENGTH,SC_HALF_WIDTH)
 
@@ -767,6 +789,7 @@ class CarState:
             "consistency": driver["consistency"],
             "tire_mgmt": driver["tire_mgmt"],
             "wet_skill": driver["wet_skill"],
+            "risk": driver_risk(driver),
         }
         self.upgrades_raw = dict(team["upgrades"])
         self.upgrades = effective_track_upgrades(team["upgrades"], track) if track is not None else dict(team["upgrades"])
@@ -3368,20 +3391,25 @@ class RaceSession:
         wet_here = self.wetness if local_wetness is None else float(local_wetness)
         slick_in_rain = wet_here > 0.25 and car.compound in ("SOFT", "MEDIUM", "HARD")
         offline_slick_risk = 1.45 if (off_line_amt > 0.35 and slick_in_rain) else 1.0
-        # Base crash risk tuned to authentic F1 low attrition (0.000026)
-        risk = (
-            0.000026
+        wall_track = self.track.id in WALLED_CIRCUITS
+        risk_mult = _car_risk_scale(car, 1.75)
+        cons_err = max(0.36, 1.18 - sk["consistency"] / 122.0)
+        # Base solo error probability scaled by driver risk, consistency, wall proximity, weather & tire wear
+        solo_err_prob = (
+            0.000125
             * push_mult
-            * (1.20 - sk["consistency"] / 115.0)
+            * cons_err
+            * risk_mult
+            * (1.30 if wall_track else 1.0)
             * (2.8 if slick_in_rain else (1.30 if wet_here > 0.35 else 1.0))
             * offline_slick_risk
             * (1.7 if car.tire_wear > 0.76 else 1.0)
             * dt
         )
-        if smp["curv"] > 0.012 and random.random() < risk:
+        if smp["curv"] > 0.0072 and random.random() < solo_err_prob:
             turn = self.track.nearest_corner(car.s)
-            # Terminal barrier impact DNF rate: 2.5% permanent circuits, 5.0% street tracks
-            if random.random() < (0.05 if self.track.id in ("monaco", "saudi", "azerbaijan", "singapore", "canada") else 0.025):
+            # Terminal barrier impact DNF rate: 16% permanent circuits, 32% walled/street circuits
+            if random.random() < (0.32 if wall_track else 0.16):
                 car.dnf = True
                 car.dnf_reason = f"Crashed at Turn {turn}"
                 car.dnf_timer = 35.0
@@ -3395,7 +3423,7 @@ class RaceSession:
                     f"CRASH! #{car.number} {car.name} ({car.team_short}) loses the rear and hits the barrier at Turn {turn}! OUT OF THE RACE!",
                 )
                 self.trigger_safety_car(
-                    "SC" if random.random() < 0.58 else "VSC",
+                    "SC" if random.random() < 0.65 else "VSC",
                     f"#{car.number} {car.code} barrier impact at Turn {turn}",
                     event_cb,
                 )
@@ -3406,7 +3434,7 @@ class RaceSession:
                 car.tire_wear = min(0.98, car.tire_wear + 0.06)
                 car.tire_temp = min(140.0, car.tire_temp + random.uniform(8.0, 15.0))
                 self.radio_dispatcher.trigger_spin(car, turn, event_cb, self.race_clock)
-                if random.random() < 0.20:
+                if random.random() < 0.32:
                     car.wing_damage = min(0.75, car.wing_damage + random.uniform(0.24, 0.48))
                     car.wing_damage_side = random.choice(["LEFT", "RIGHT"])
                     car.repair_cost_m += 0.28
@@ -3501,6 +3529,7 @@ class RaceSession:
         is_corner = (apex_curv >= 0.0062 and apex_v <= 65.0) and (dist_to_corner <= 55.0 or curv >= 0.0065)
 
         # Lap 1 opening sector: pack is compressed 22-wide; drivers avoid reckless divebombs and hold clean racing line
+        atk_rn = _car_risk_norm(attacker)
         t2_s = self.track.corners[1]["s_m"] if len(self.track.corners) > 1 else 600.0
         if attacker.lap == 1 and attacker.total_dist < t2_s:
             maneuver = "SLIPSTREAM"
@@ -3514,7 +3543,8 @@ class RaceSession:
                 target_d = -0.74 * ins
                 maneuver_base = 0.06
             else:
-                if random.random() < 0.65 or self.track.track_width_m >= 13.5:
+                p_outside = max(0.45, min(0.88, 0.65 + atk_rn * 0.16))
+                if random.random() < p_outside or self.track.track_width_m >= 13.5:
                     maneuver = "OUTSIDE"
                     target_d = -0.80 * ins
                     maneuver_base = -0.10 + (self.track.track_width_m - 13.0) * 0.10
@@ -3525,20 +3555,26 @@ class RaceSession:
         elif is_hairpin:
             # Hairpin: Premier territory for divebombing down the inside!
             if def_covers_inside:
-                if attacker.skills["racecraft"] >= 88 and random.random() < 0.40:
+                dummy_p = max(0.20, min(0.45, 0.40 - max(0.0, atk_rn) * 0.14))
+                lunge_p = max(
+                    0.08,
+                    min(0.68, (0.38 if attacker.pace_mode == "ATTACK" else 0.18) + atk_rn * 0.28),
+                )
+                if attacker.skills["racecraft"] >= 88 and random.random() < dummy_p:
                     maneuver = "DUMMY"
                     target_d = -0.78 * ins if defender.d * ins > 0.05 else 0.78 * ins
                     maneuver_base = 0.12
-                elif attacker.pace_mode == "ATTACK" and random.random() < 0.35:
+                elif random.random() < lunge_p:
                     maneuver = "DIVEBOMB"
                     target_d = 0.82 * ins if defender.d * ins < 0.15 else -0.80 * ins
-                    maneuver_base = -0.08
+                    maneuver_base = -0.12
                 else:
                     maneuver = "OUTSIDE"
                     target_d = -0.80 * ins
                     maneuver_base = -0.06 + (self.track.track_width_m - 13.0) * 0.10
             else:
-                if random.random() < 0.75:
+                dive_p = max(0.45, min(0.92, 0.72 + atk_rn * 0.18))
+                if random.random() < dive_p:
                     maneuver = "DIVEBOMB"
                     target_d = 0.80 * ins
                     maneuver_base = 0.20
@@ -3547,14 +3583,24 @@ class RaceSession:
                     target_d = -0.76 * ins if defender.d * ins > 0.05 else 0.76 * ins
                     maneuver_base = 0.08
         else:
-            # Standard Corner: Divebomb only if inside door is left open; otherwise work outside/switchback
+            # Standard Corner: higher-risk drivers still try late inside sends when covered
             if is_braking_zone:
                 if def_covers_inside:
-                    if attacker.skills["racecraft"] >= 88 and random.random() < 0.38:
+                    dummy_p = max(0.18, min(0.42, 0.38 - max(0.0, atk_rn) * 0.12))
+                    daring_dive_p = max(
+                        0.0,
+                        min(0.36, (0.14 if attacker.pace_mode == "ATTACK" else 0.06) + atk_rn * 0.18),
+                    )
+                    out_p = max(0.48, min(0.82, 0.65 + atk_rn * 0.14))
+                    if attacker.skills["racecraft"] >= 88 and random.random() < dummy_p:
                         maneuver = "DUMMY"
                         target_d = -0.78 * ins if defender.d * ins > 0.05 else 0.78 * ins
                         maneuver_base = 0.08
-                    elif self.track.track_width_m >= 13.4 or random.random() < 0.65:
+                    elif random.random() < daring_dive_p:
+                        maneuver = "DIVEBOMB"
+                        target_d = 0.80 * ins if defender.d * ins < 0.15 else -0.80 * ins
+                        maneuver_base = -0.14
+                    elif self.track.track_width_m >= 13.4 or random.random() < out_p:
                         maneuver = "OUTSIDE"
                         target_d = -0.80 * ins
                         maneuver_base = -0.12 + (self.track.track_width_m - 13.0) * 0.10
@@ -3564,11 +3610,13 @@ class RaceSession:
                         maneuver_base = 0.02
                 else:
                     r = random.random()
-                    if r < 0.52:
+                    dive_cut = max(0.34, min(0.76, 0.52 + atk_rn * 0.18))
+                    switch_cut = min(0.90, dive_cut + max(0.18, 0.28 - atk_rn * 0.08))
+                    if r < dive_cut:
                         maneuver = "DIVEBOMB"
                         target_d = 0.78 * ins
                         maneuver_base = 0.15
-                    elif r < 0.80:
+                    elif r < switch_cut:
                         maneuver = "SWITCHBACK"
                         target_d = -0.76 * ins if defender.d * ins > 0.05 else 0.76 * ins
                         maneuver_base = 0.06
@@ -3577,7 +3625,8 @@ class RaceSession:
                         target_d = -0.80 * ins
                         maneuver_base = -0.10 + (self.track.track_width_m - 13.0) * 0.10
             else:
-                if random.random() < 0.58:
+                switch_p = max(0.38, min(0.74, 0.58 - atk_rn * 0.14))
+                if random.random() < switch_p:
                     maneuver = "SWITCHBACK"
                     target_d = -0.76 * ins if defender.d * ins > 0.05 else 0.76 * ins
                     maneuver_base = 0.04
@@ -3601,6 +3650,7 @@ class RaceSession:
         )
         width_mod = (self.track.track_width_m - 13.2) * 0.10
         agg_mod = 0.30 if attacker.pace_mode == "ATTACK" else (0.12 if attacker.pace_mode == "PUSH" else -0.08)
+        risk_mod = atk_rn * 0.12
 
         logit = (
             maneuver_base
@@ -3610,6 +3660,7 @@ class RaceSession:
             + ers_mod
             + width_mod
             + agg_mod
+            + risk_mod
         )
         p_success = 1.0 / (1.0 + math.exp(-max(-4.2, min(4.2, logit))))
         return maneuver, p_success, target_d
@@ -3855,7 +3906,8 @@ class RaceSession:
                             c_cons = c.skills.get("consistency", 90)
                             tgt_cons = tgt.skills.get("consistency", 90)
                             push_mult = 1.6 if (c.pace_mode in ("PUSH", "ATTACK") or tgt.pace_mode in ("PUSH", "ATTACK")) else 1.0
-                            contact_risk = 0.012 * push_mult * max(0.18, 1.20 - (c_cons + tgt_cons) / 230.0) * dt
+                            risk_mult = max(0.62, min(1.85, (_car_risk_scale(c, 1.35) + _car_risk_scale(tgt, 1.35)) * 0.5))
+                            contact_risk = 0.024 * push_mult * risk_mult * max(0.20, 1.20 - (c_cons + tgt_cons) / 230.0) * dt
                             if random.random() < contact_risk:
                                 turn = self.track.nearest_corner(c.s)
                                 self._trigger_side_by_side_contact(c, tgt, turn, event_cb)
@@ -3973,7 +4025,13 @@ class RaceSession:
                     attacker.attacking_side = 0.0
                 continue
 
-            max_attempt_gap = min_long_m * (2.85 if (smp.get("straight_mode", False) or self.is_braking[st]) else 2.05)
+            atk_rn = _car_risk_norm(attacker)
+            risk_gap_scale = max(0.84, min(1.26, 1.0 + atk_rn * 0.22))
+            max_attempt_gap = (
+                min_long_m
+                * (2.85 if (smp.get("straight_mode", False) or self.is_braking[st]) else 2.05)
+                * risk_gap_scale
+            )
             if actual_gap > max(max_attempt_gap * 1.45, min_long_m * 3.4):
                 continue
 
@@ -4016,12 +4074,13 @@ class RaceSession:
                 elif actual_gap >= min_long_m * 1.05:
                     attacker.target_d = defender.target_d
 
-            # Aggressive slingshot attack launch window: up to 2.85x car lengths on straights / braking zones
+            # Aggressive slingshot attack launch window: riskier drivers commit from further back and reload quicker
+            min_closing_margin = 2.8 + max(-0.6, atk_rn * 1.4)
             if (
                 0.0 <= actual_gap <= max_attempt_gap
                 and attacker.maneuver_attempt_cooldown <= 0.0
                 and attacker.maneuver_pass_timer <= 0.0
-                and attacker.v >= defender.v - 2.8
+                and attacker.v >= defender.v - min_closing_margin
             ):
                 maneuver, p_success, man_d = self.select_and_evaluate_maneuver(
                     attacker, defender, smp, self.is_braking[st]
@@ -4034,8 +4093,9 @@ class RaceSession:
                 attacker.maneuver = maneuver
                 attacker.maneuver_timer = 2.8
                 attacker.target_d = man_d
-                # Shorter attempt cooldown: aggressive pursuit
-                attacker.maneuver_attempt_cooldown = random.uniform(1.6, 3.2)
+                # Attempt cooldown scales down for daring drivers and up for patient ones
+                cd_scale = max(0.72, min(1.28, 1.0 - atk_rn * 0.22))
+                attacker.maneuver_attempt_cooldown = random.uniform(1.6 * cd_scale, 3.2 * cd_scale)
 
                 turn = self.track.nearest_corner(attacker.s)
                 target_pos = defender.pos
@@ -4089,15 +4149,30 @@ class RaceSession:
                         attacker._sep_lane_timer = max(getattr(attacker, "_sep_lane_timer", 0.0), 0.55)
                     attacker.attacking_side = 0.0
 
-                    if maneuver in ("DIVEBOMB", "OUTSIDE") and smp["curv"] > 0.0085:
-                        lockup_prob = 0.10 * (1.20 - attacker.skills["consistency"] / 110.0)
-                        if random.random() < lockup_prob:
+                    if maneuver in ("DIVEBOMB", "OUTSIDE") and smp["curv"] > 0.0078:
+                        atk_scale = _car_risk_scale(attacker, 1.75)
+                        def_scale = max(0.82, min(1.25, 0.85 + defender.skills.get("risk", 70) / 400.0))
+                        inside_defended = (defender.d * float(smp.get("inside_sign", 1))) > 0.20
+                        lockup_prob = min(
+                            0.44,
+                            0.14
+                            * (1.22 - attacker.skills["consistency"] / 115.0)
+                            * (0.76 + attacker.skills.get("risk", 70) / 160.0),
+                        )
+                        locked_up = random.random() < lockup_prob
+                        if locked_up:
                             attacker.smoke = 1.9
-                            attacker.tire_wear = min(0.99, attacker.tire_wear + 0.012)
-                            inc_chance = 0.0016 * max(0.2, 1.15 - attacker.skills["consistency"] / 100.0)
-                            if attacker.contact_cooldown <= 0.0 and defender.contact_cooldown <= 0.0 and random.random() < inc_chance:
-                                self._handle_collision(attacker, defender, smp["sector"], event_cb)
-                                continue
+                            attacker.tire_wear = min(0.99, attacker.tire_wear + 0.014)
+                        daring_mult = (
+                            1.40
+                            if (maneuver == "DIVEBOMB" and inside_defended)
+                            else (1.18 if maneuver == "DIVEBOMB" else 0.90)
+                        )
+                        cons_factor = max(0.42, 1.16 - attacker.skills["consistency"] / 132.0)
+                        inc_chance = (0.19 if locked_up else 0.024) * cons_factor * atk_scale * def_scale * daring_mult
+                        if attacker.contact_cooldown <= 0.0 and defender.contact_cooldown <= 0.0 and random.random() < inc_chance:
+                            self._handle_collision(attacker, defender, smp["sector"], event_cb)
+                            continue
 
                     if target_pos <= 6 and defender.overtake_cooldown <= 0.0 and random.random() < 0.25 and self.race_clock > 10.0:
                         defender.overtake_cooldown = 9.0
@@ -4112,12 +4187,18 @@ class RaceSession:
         attacker.maneuver_pass_timer = 0.0
         turn = self.track.nearest_corner(attacker.s)
 
-        culprit = attacker if random.random() < 0.65 else defender
+        atk_risk = attacker.skills.get("risk", 70)
+        def_risk = defender.skills.get("risk", 70)
+        atk_blame_p = max(0.45, min(0.80, 0.62 + (atk_risk - def_risk) * 0.004))
+        culprit = attacker if random.random() < atk_blame_p else defender
         victim = defender if culprit is attacker else attacker
         roll = random.random()
 
-        is_lap1 = attacker.lap == 1
-        if roll < 0.78 or is_lap1:
+        wall_track = self.track.id in WALLED_CIRCUITS
+        is_lap1 = attacker.lap == 1 and self.race_clock < 18.0
+        minor_thresh = 0.66 if is_lap1 else (0.52 if wall_track else 0.58)
+        dnf_thresh = 0.88 if is_lap1 else (0.72 if wall_track else 0.82)
+        if roll < minor_thresh:
             victim.v = max(8.0, victim.v - 2.2)
             deflect_dir = 1.0 if victim.d >= culprit.d else -1.0
             victim.target_d = max(-1.05, min(1.05, victim.d + deflect_dir * 0.22))
@@ -4156,7 +4237,7 @@ class RaceSession:
                     "verdict": random.choice(["NFA", "NFA", "5S"]),
                 }
             )
-        elif roll < 0.988:
+        elif roll < dnf_thresh:
             culprit_dmg = random.uniform(0.22, 0.42)
             culprit.wing_damage = min(0.85, culprit.wing_damage + culprit_dmg)
             culprit.wing_damage_side = "RIGHT" if culprit.d > victim.d else "LEFT"
@@ -4329,17 +4410,38 @@ class RaceSession:
         if minor:
             return
 
-        event_cb(
-            "INCIDENT",
-            f"WHEEL BANGING! Contact between #{c1.number} {c1.code} and #{c2.number} {c2.code} fighting through Turn {turn}!",
-        )
+        spin_p = min(0.28, 0.14 * (_car_risk_scale(c1, 1.25) + _car_risk_scale(c2, 1.25)) * 0.5)
+        if c1.lap > 1 and c2.lap > 1 and random.random() < spin_p:
+            culp, vict = (c1, c2) if random.random() < 0.5 else (c2, c1)
+            vict.spin_timer = random.uniform(2.6, 4.0)
+            vict.spin_omega = random.choice([-5.4, 5.4]) * random.uniform(0.85, 1.20)
+            vict.spin_lateral_dir = 1.0 if vict.d >= 0.0 else -1.0
+            vict.spin_rebound_done = False
+            vict.smoke = 2.6
+            smp_v = self.track.sample(vict.s)
+            self.flag_state = "YELLOW"
+            self.yellow_sector = smp_v["sector"]
+            self.yellow_timer = 7.5
+            self.radio_dispatcher.trigger_spin(vict, turn, event_cb, self.race_clock)
+            event_cb(
+                "CRASH",
+                f"WHEEL-TO-WHEEL SPIN AT TURN {turn}! {culp.code} and {vict.code} bang wheels — {vict.code} spins!",
+            )
+            culprit_id = culp.driver_id
+        else:
+            event_cb(
+                "INCIDENT",
+                f"WHEEL BANGING! Contact between #{c1.number} {c1.code} and #{c2.number} {c2.code} fighting through Turn {turn}!",
+            )
+            culprit_id = c1.driver_id if c1.d < c2.d else c2.driver_id
+
         self.radio_dispatcher.trigger_contact(c1, c2, turn, event_cb, self.race_clock)
         self.stewards_queue.append(
             {
                 "timer": 7.0,
                 "stage": "NOTED",
                 "turn": turn,
-                "culprit_id": c1.driver_id if c1.d < c2.d else c2.driver_id,
+                "culprit_id": culprit_id,
                 "summary": f"{c1.code} & {c2.code} side-by-side",
                 "reason": "Wheel-to-wheel contact",
                 "verdict": random.choice(["NFA", "NFA", "NFA", "NFA", "5S"]),
@@ -4423,17 +4525,34 @@ class RaceSession:
                 behind.tire_wear = min(0.99, behind.tire_wear + 0.015)
                 self._maybe_schedule_damage_pit(behind)
 
-                if delta_v > 10.5 and behind.lap > 1 and random.random() < 0.14:
+                rear_spin_p = min(0.40, 0.18 * _car_risk_scale(behind, 1.30))
+                if delta_v > 10.5 and behind.lap > 1 and random.random() < rear_spin_p:
                     ahead.spin_timer = random.uniform(2.8, 4.2)
                     ahead.spin_omega = random.choice([-5.8, 5.8]) * random.uniform(0.85, 1.25)
                     ahead.spin_lateral_dir = 1.0 if ahead.d >= 0.0 else -1.0
                     ahead.spin_rebound_done = False
                     ahead.smoke = 2.8
                     self.radio_dispatcher.trigger_spin(ahead, turn, event_cb, self.race_clock)
-                    event_cb(
-                        "CRASH",
-                        f"HEAVY CONTACT AT TURN {turn}! #{behind.number} {behind.code} tags #{ahead.number} {ahead.code} into a spin! Front wing damage for {behind.code}!",
-                    )
+                    wall_track = self.track.id in WALLED_CIRCUITS
+                    if delta_v > 14.5 and random.random() < (0.28 if wall_track else 0.16):
+                        behind.dnf = True
+                        behind.dnf_reason = f"Rear-end crash with {ahead.code} (T{turn})"
+                        behind.dnf_timer = 35.0
+                        behind.v = 0.0
+                        behind.target_d = 1.35 if behind.d >= 0.0 else -1.35
+                        behind.smoke = 4.2
+                        behind.repair_cost_m += round(random.uniform(0.90, 1.95), 2)
+                        self._update_xy(behind)
+                        event_cb(
+                            "CRASH",
+                            f"HEAVY SHUNT AT TURN {turn}! #{behind.number} {behind.code} slams into the back of #{ahead.number} {ahead.code} and is OUT!",
+                        )
+                        self.trigger_safety_car("SC", f"Debris at Turn {turn} ({behind.code}/{ahead.code})", event_cb)
+                    else:
+                        event_cb(
+                            "CRASH",
+                            f"HEAVY CONTACT AT TURN {turn}! #{behind.number} {behind.code} tags #{ahead.number} {ahead.code} into a spin! Front wing damage for {behind.code}!",
+                        )
                 else:
                     event_cb(
                         "INCIDENT",

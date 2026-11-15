@@ -170,6 +170,42 @@ class EconomyTests(unittest.TestCase):
         after_lineups = {d["id"]: d.get("team_id") for d in resumed.drivers if d.get("team_id")}
         self.assertEqual(after_lineups, before_lineups)
 
+    def test_driver_risk_ratings_and_legacy_save_backfill(self):
+        from sim.data import INITIAL_DRIVERS, driver_overall, driver_risk
+
+        by_id = {d["id"]: d for d in INITIAL_DRIVERS}
+        self.assertEqual(len(by_id), 41)
+        for drv in INITIAL_DRIVERS:
+            val = drv.get("risk")
+            self.assertIsInstance(val, int)
+            self.assertGreaterEqual(val, 40)
+            self.assertLessEqual(val, 99)
+
+        # Daring legends and aggressive stars sit clearly above calculated drivers
+        self.assertGreater(driver_risk(by_id["senna"]), driver_risk(by_id["prost"]))
+        self.assertGreater(driver_risk(by_id["verstappen"]), driver_risk(by_id["sainz"]))
+        self.assertGreater(driver_risk(by_id["sainz"]), driver_risk(by_id["bottas"]))
+
+        # Changing risk trait must never distort skill overall rating
+        low_copy = {**by_id["verstappen"], "risk": 45}
+        high_copy = {**by_id["verstappen"], "risk": 98}
+        self.assertEqual(driver_overall(low_copy), driver_overall(high_copy))
+
+        # Legacy save missing "risk" keys must backfill from curated roster values
+        self.world._save_state()
+        saved = json.loads(self.path.read_text())
+        for d in saved["drivers"]:
+            d.pop("risk", None)
+        self.path.write_text(json.dumps(saved))
+
+        with patch.object(ChampionshipWorld, "_run_ai_rd_upgrades"):
+            reloaded = ChampionshipWorld(self.path)
+        reloaded_by_id = reloaded._drivers_by_id()
+        self.assertEqual(reloaded_by_id["verstappen"]["risk"], by_id["verstappen"]["risk"])
+        self.assertEqual(reloaded_by_id["bottas"]["risk"], by_id["bottas"]["risk"])
+        all_drv = {d["id"]: d for d in reloaded.build_full_state_payload()["drivers"]}
+        self.assertEqual(all_drv["verstappen"]["risk"], by_id["verstappen"]["risk"])
+
 
 if __name__ == "__main__":
     unittest.main()

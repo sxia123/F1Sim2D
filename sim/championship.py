@@ -27,6 +27,7 @@ from sim.data import (
     create_pu_pool,
     create_weekend_tire_sets,
     driver_overall,
+    driver_risk,
     effective_track_upgrades,
     summarize_tire_sets,
     team_car_rating,
@@ -423,6 +424,11 @@ class ChampionshipWorld:
                         existing_ids[did]["number"] = 20
                     if did == "doohan" and existing_ids[did].get("number") == 7:
                         existing_ids[did]["number"] = 17
+                    if existing_ids[did].get("risk") is None:
+                        existing_ids[did]["risk"] = driver_risk(init_d)
+            for d in self.drivers:
+                if d.get("risk") is None:
+                    d["risk"] = driver_risk(d)
 
                 if did not in self.driver_points:
                     self.driver_points[did] = 0
@@ -2730,6 +2736,7 @@ class ChampionshipWorld:
                 all_drivers.append(
                     {
                         **d,
+                        "risk": driver_risk(d),
                         "overall": driver_overall(d),
                         "team_short": tm["short"] if tm else "Free Agent",
                         "team_color": tm["color"] if tm else "#64748b",
