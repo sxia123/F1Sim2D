@@ -1266,18 +1266,29 @@ export class CircuitRenderer {
 
   _computeSmoothEdgePoints(sts, side, extraWidth = 0) {
     const n = sts.length;
-    let pts = sts.map((p) => {
-      const h = ((p.width_px || this.track.track_width_px) + extraWidth) * 0.5;
+    const rawH = sts.map((p) => ((p.width_px || this.track.track_width_px) + extraWidth) * 0.5);
+    let pts = sts.map((p, idx) => {
+      const h = rawH[idx];
       return { x: p.x + side * p.nx * h, y: p.y + side * p.ny * h };
     });
-    for (let pass = 0; pass < 3; pass++) {
+    for (let pass = 0; pass < 2; pass++) {
       pts = pts.map((p, idx) => {
         const prv = pts[(idx - 1 + n) % n];
         const nxt = pts[(idx + 1) % n];
-        return {
-          x: 0.22 * prv.x + 0.56 * p.x + 0.22 * nxt.x,
-          y: 0.22 * prv.y + 0.56 * p.y + 0.22 * nxt.y,
-        };
+        let sx = 0.20 * prv.x + 0.60 * p.x + 0.20 * nxt.x;
+        let sy = 0.20 * prv.y + 0.60 * p.y + 0.20 * nxt.y;
+        const st = sts[idx];
+        const h = rawH[idx];
+        const isOutside = side * (st.inside_sign || 1) <= 0;
+        if (isOutside || (st.curv || 0) < 0.022) {
+          const proj = (sx - st.x) * side * st.nx + (sy - st.y) * side * st.ny;
+          if (proj < h * 0.985) {
+            const fix = h * 0.985 - proj;
+            sx += side * st.nx * fix;
+            sy += side * st.ny * fix;
+          }
+        }
+        return { x: sx, y: sy };
       });
     }
     return pts;

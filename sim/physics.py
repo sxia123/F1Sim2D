@@ -75,18 +75,22 @@ def build_speed_envelope(track: CompiledTrack) -> tuple[list[float], list[bool]]
     """Precompute reference cornering + backward-integrated 4.5G braking speed envelope (m/s)."""
     m = track.NUM_STATIONS
     ds = track.ds_m
-    mu_ref = 3.95
+    mu_ref = 4.35
     v_corner = []
     for k in range(m):
-        curv = track.stations[k]["curv"]
+        st = track.stations[k]
+        curv = st["curv"]
         if curv < 0.0022:
             v_c = 98.5
         else:
-            # Low-speed hairpins are purely mechanical-grip limited; high-speed sweepers enjoy massive aero downforce
-            aero_factor = 0.38 + 0.68 * min(1.0, 0.0058 / max(curv, 0.002))
-            v_c = math.sqrt((mu_ref * aero_factor * GRAVITY) / max(curv, 1e-4))
-            # Authentic F1 hairpin apex speeds: slow hairpins (Monaco, Montreal T10) drop to 58-75 km/h
-            v_c = min(98.5, max(15.2, v_c))
+            w_m = st.get("width_m", track.track_width_m)
+            line_amp = abs(st.get("racing_line_d", 0.0))
+            # Using the track width from outside edge to inside apex opens up the corner radius
+            eff_curv = curv / (1.0 + curv * w_m * (0.52 + 0.30 * line_amp))
+            # Low-speed hairpins rely on mechanical grip; high-speed sweepers build strong downforce
+            aero_factor = 0.46 + 0.66 * min(1.0, 0.0072 / max(eff_curv, 0.002))
+            v_c = math.sqrt((mu_ref * aero_factor * GRAVITY) / max(eff_curv, 1e-4))
+            v_c = min(98.5, max(18.0, v_c))
         v_corner.append(v_c)
 
     v_env = list(v_corner)
@@ -2625,11 +2629,11 @@ class RaceSession:
         opt_inside_d = racing_line_d * inside_sign
         corner_line_mod = 1.0
         if smp["curv"] > 0.0035:
-            if inside_d > max(0.15, opt_inside_d + 0.12):
+            if inside_d > max(0.15, opt_inside_d + 0.06):
                 pinch_excess = inside_d - max(0.15, opt_inside_d)
-                corner_line_mod = max(0.92, 1.0 - pinch_excess * min(0.10, smp["curv"] * 4.0))
-            elif abs(car.d - racing_line_d) < 0.18:
-                corner_line_mod = 1.006
+                corner_line_mod = max(0.92, 1.0 - pinch_excess * min(0.12, smp["curv"] * 4.5))
+            elif abs(car.d - racing_line_d) < 0.20:
+                corner_line_mod = 1.018
         risk_n = _car_risk_norm(car)
         pace_n = (sk.get("pace", 88) - 88.0) / 12.0
         cons_n = (sk.get("consistency", 88) - 88.0) / 12.0
@@ -2897,8 +2901,8 @@ class RaceSession:
             drag_fade = max(0.18, 1.0 - (max(0.0, car.v) / 104.0) ** 1.85)
             v_deficit = target_v - car.v
             max_acc = pu_acc * drag_fade
-            if car.v < 58.0 and smp["curv"] > 0.0025:
-                traction_circle = math.sqrt(max(0.32, 1.0 - 0.68 * (lat_load_ratio ** 2)))
+            if car.v < 64.0 and smp["curv"] > 0.0025:
+                traction_circle = math.sqrt(max(0.42, 1.0 - 0.58 * (lat_load_ratio ** 2)))
                 max_acc *= traction_circle
             car._trail_brake_wash = 0.0
             if car.lift_coast:

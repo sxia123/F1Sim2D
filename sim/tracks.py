@@ -265,9 +265,9 @@ class CompiledTrack:
             d_next = (c_next["station"] - k_cur) % m
 
             # Scale lateral amplitude by corner severity so minor sweepers stay fluid
-            severity = min(1.0, max(0.26, (peak_curv - 0.0030) / 0.011))
-            apex_mag = 0.56 * severity
-            out_mag = 0.52 * severity
+            severity = min(1.0, max(0.28, (peak_curv - 0.0030) / 0.011))
+            apex_mag = 0.68 * severity
+            out_mag = 0.64 * severity
             # True late-apex geometry: clip the inside kerb slightly past the geometric corner midpoint
             late_shift = min(2.2, max(0.6, 9.0 / max(self.ds_m, 1.0)), d_next * 0.22)
             k_apex = (k_cur + late_shift) % m
@@ -294,7 +294,7 @@ class CompiledTrack:
                 if d_next >= 58:
                     k_nxt_st = c_next["station"]
                     nxt_curv = max(self.stations[(k_nxt_st + off) % m]["curv"] for off in range(-3, 4))
-                    nxt_out = 0.52 * min(1.0, max(0.26, (nxt_curv - 0.0030) / 0.011))
+                    nxt_out = 0.64 * min(1.0, max(0.28, (nxt_curv - 0.0030) / 0.011))
                     k_mid = (k_cur + d_next * 0.50) % m
                     raw_wps.append((float(k_mid), 0.5 * (-out_mag * ins_cur - nxt_out * ins_next)))
 
@@ -352,17 +352,31 @@ class CompiledTrack:
             m2 = 0.5 * (w3[1] - w1[1]) * (span / (span + span_next)) * 2.0
             raw_line[k] = h00 * w1[1] + h10 * m1 + h01 * w2[1] + h11 * m2
 
-        # 44-pass circular Laplacian filter removes inflection kinks without delaying apex timing
-        cur_line = list(raw_line)
-        for _ in range(44):
-            nxt_line = [
-                0.25 * cur_line[(k - 1) % m] + 0.50 * cur_line[k] + 0.25 * cur_line[(k + 1) % m]
+        # Clamp before smoothing so edge-hugging curves never exceed +/-0.72 or kink at corners
+        cur_line = [max(-0.74, min(0.74, x)) for x in raw_line]
+        for _ in range(52):
+            cur_line = [
+                max(
+                    -0.72,
+                    min(
+                        0.72,
+                        0.25 * cur_line[(k - 1) % m]
+                        + 0.50 * cur_line[k]
+                        + 0.25 * cur_line[(k + 1) % m],
+                    ),
+                )
                 for k in range(m)
             ]
-            cur_line = nxt_line
+        for _ in range(8):
+            cur_line = [
+                0.25 * cur_line[(k - 1) % m]
+                + 0.50 * cur_line[k]
+                + 0.25 * cur_line[(k + 1) % m]
+                for k in range(m)
+            ]
 
         for k in range(m):
-            self.stations[k]["racing_line_d"] = round(max(-0.62, min(0.62, cur_line[k])), 4)
+            self.stations[k]["racing_line_d"] = round(max(-0.72, min(0.72, cur_line[k])), 4)
 
     def _build_runoff_zones(self) -> None:
         """Build real-circuit outside runoff pockets (FIA tarmac / gravel traps) clear of pit lane."""

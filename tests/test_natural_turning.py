@@ -312,6 +312,15 @@ class NaturalTurningTests(unittest.TestCase):
         self.assertLessEqual(max_steer_rate, 2.25)
         self.assertLessEqual(max_h_rate, 4.0)
 
+    def test_wider_racing_line_and_faster_corner_speeds(self):
+        max_rl = max(abs(st["racing_line_d"]) for st in self.track.stations)
+        self.assertGreaterEqual(max_rl, 0.64)
+        race_italy = RaceSession(self.track, self.teams_dict, self.drivers[:1], 0, 0, "mclaren")
+        self.assertGreaterEqual(race_italy.v_env[self.track.corners[0]["station"]], 32.0)
+        bahrain = next(t for t in COMPILED_TRACKS if t.id == "bahrain")
+        race_bah = RaceSession(bahrain, self.teams_dict, self.drivers[:1], 0, 0, "mclaren")
+        self.assertGreaterEqual(race_bah.v_env[bahrain.corners[0]["station"]], 40.0)
+
 
 if __name__ == "__main__":
     unittest.main()
