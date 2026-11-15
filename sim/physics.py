@@ -2508,10 +2508,13 @@ class RaceSession:
         else:
             warmup_factor = 1.0
         setup_cfg = SETUP_LEVELS.get(car.setup_df, SETUP_LEVELS[0])
-        pace_grip_mod = {"CONSERVE": 0.982, "BALANCED": 1.000, "PUSH": 1.014, "ATTACK": 1.024}.get(car.pace_mode, 1.0)
+        if car.lift_coast and car.pace_mode in ("PUSH", "ATTACK"):
+            pace_grip_mod = 1.006 if car.pace_mode == "PUSH" else 1.010
+        else:
+            pace_grip_mod = {"CONSERVE": 0.982, "BALANCED": 1.000, "PUSH": 1.014, "ATTACK": 1.024}.get(car.pace_mode, 1.0)
         pace_wear_mod = {"CONSERVE": 0.76, "BALANCED": 1.00, "PUSH": 1.24, "ATTACK": 1.48}.get(car.pace_mode, 1.0)
         if car.lift_coast:
-            pace_wear_mod *= 0.88
+            pace_wear_mod *= {"ATTACK": 0.96, "PUSH": 0.94}.get(car.pace_mode, 0.88)
 
         slipstream_bonus = 0.0
         dirty_air_loss = 0.0
@@ -2638,6 +2641,8 @@ class RaceSession:
         pace_n = (sk.get("pace", 88) - 88.0) / 12.0
         cons_n = (sk.get("consistency", 88) - 88.0) / 12.0
         mode_brake = {"CONSERVE": -0.032, "BALANCED": 0.0, "PUSH": 0.020, "ATTACK": 0.038}.get(car.pace_mode, 0.0)
+        if car.lift_coast:
+            mode_brake = min(0.0, mode_brake) - 0.012
         driver_brake_auth = max(
             0.90,
             min(
@@ -2735,8 +2740,12 @@ class RaceSession:
             elif car.boost_active:
                 target_v *= 1.020 * mguk_eff
 
-        if car.lift_coast and (self.is_braking[st] or smp["straight_mode"]):
-            target_v *= 0.980
+        if car.lift_coast:
+            if self.is_braking[st] or smp["straight_mode"]:
+                lc_v_mult = {"ATTACK": 0.965, "PUSH": 0.972}.get(car.pace_mode, 0.980)
+            else:
+                lc_v_mult = {"ATTACK": 0.984, "PUSH": 0.988}.get(car.pace_mode, 0.994)
+            target_v *= lc_v_mult
         car.fuel_critical = (car.fuel_kg <= 1.0 and not car.finished)
         if car.fuel_critical:
             target_v *= 0.925
@@ -3123,7 +3132,8 @@ class RaceSession:
             "CONSERVE": -0.65,
         }.get(car.pace_mode, 0.0)
         if car.lift_coast:
-            driving_stress = min(driving_stress, -0.35)
+            # Lift & coast relieves peak thermal load slightly rather than erasing PUSH/ATTACK heat
+            driving_stress -= {"ATTACK": 0.18, "PUSH": 0.20}.get(car.pace_mode, 0.35)
 
         base_corner_heat = min(11.0, abs(car.g_lat) * 2.5) if smp["curv"] > 0.0015 else 0.0
         corner_scrub_heat = base_corner_heat * (1.0 + 0.65 * driving_stress)
@@ -3174,11 +3184,12 @@ class RaceSession:
             )
 
         pace_fuel_mult = {"CONSERVE": 0.94, "BALANCED": 1.00, "PUSH": 1.035, "ATTACK": 1.07}.get(car.pace_mode, 1.0)
+        lc_fuel_mult = {"ATTACK": 0.89, "PUSH": 0.85}.get(car.pace_mode, 0.78) if car.lift_coast else 1.0
         fuel_burn_rate = (
             0.31
             * setup_cfg["fuel_mult"]
             * pace_fuel_mult
-            * (0.78 if car.lift_coast else 1.0)
+            * lc_fuel_mult
             * (0.85 if self.flag_state in ("SC", "VSC") else 1.0)
         )
         car.fuel_kg = max(0.1, car.fuel_kg - km_step * fuel_burn_rate)

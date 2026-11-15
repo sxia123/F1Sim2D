@@ -53,7 +53,8 @@ class RivalPitWall:
         setup_wear = SETUP_LEVELS.get(getattr(car, "setup_df", 0), {}).get("wear_mult", 1.0)
         rate *= setup_wear
         if getattr(car, "lift_coast", False):
-            rate *= 0.88
+            pace_mode = getattr(car, "pace_mode", "BALANCED")
+            rate *= 0.96 if pace_mode == "ATTACK" else (0.94 if pace_mode == "PUSH" else 0.88)
         if observed and compound == car.compound:
             rate *= tire_thermal_wear_mult(compound, car.tire_temp)
             if car.tire_age_laps >= 2:

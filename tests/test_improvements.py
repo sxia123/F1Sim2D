@@ -176,6 +176,50 @@ class SimulatorEnhancementsTest(unittest.TestCase):
         self.assertGreater(burn_per_m_lc, 0.0)
         self.assertLess(burn_per_m_lc, burn_per_m_norm * 0.85)
 
+    def test_06b_lift_coast_balanced_for_push_and_attack(self):
+        self.world._start_qualifying()
+        self.world._finish_qualifying_to_grid()
+        self.world._start_race()
+        rs = self.world.race_session
+        rs.lights_out = True
+        rs.flag_state = "GREEN"
+        rs.lights_countdown = 0.0
+
+        def run_mode(pace_mode: str, lift_coast: bool):
+            car = rs.cars_by_id[self.player_drivers[0]["id"]]
+            ref = rs.cars_by_id[self.player_drivers[1]["id"]]
+            car.upgrades = dict(ref.upgrades)
+            car.skills = dict(ref.skills)
+            car.setup_df = 0
+            car.compound = "SOFT"
+            car.pace_mode = pace_mode
+            car.lift_coast = lift_coast
+            car.lift_coast_manual = True
+            car.auto_strategy = False
+            car.tire_wear = 0.05
+            car.tire_temp = 95.0
+            car.fuel_kg = 100.0
+            car.lap = 2
+            corner_s = rs.track.corners[0]["s_m"] if rs.track.corners else 300.0
+            car.s = (corner_s - 45.0) % rs.track.length_m
+            car.total_dist = rs.track.length_m + car.s
+            car.v = 68.0
+            car.g_lat = 0.0
+            start_dist = car.total_dist
+            for _ in range(80):
+                rs._step_car(car, None, None, False, 0.1, lambda k, m: None)
+            burn_per_m = (100.0 - car.fuel_kg) / max(1.0, car.total_dist - start_dist)
+            return car.tire_temp, car.tire_wear - 0.05, burn_per_m
+
+        bal_temp, _bal_wear, _bal_fuel = run_mode("BALANCED", False)
+        blc_temp, blc_wear, blc_fuel = run_mode("BALANCED", True)
+        atk_temp, atk_wear, atk_fuel = run_mode("ATTACK", True)
+
+        self.assertLess(blc_temp, bal_temp)
+        self.assertGreater(atk_temp, bal_temp)
+        self.assertGreater(atk_wear, blc_wear)
+        self.assertGreater(atk_fuel, blc_fuel)
+
     def test_07_garage_based_qualifying_runs(self):
         self.world._start_qualifying()
         qs = self.world.quali_session
