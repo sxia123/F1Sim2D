@@ -457,7 +457,11 @@ class ChampionshipWorld:
             )
             self.hall_of_fame = data.get("hall_of_fame", [])
             self.ledger = data.get("ledger", [])
-            self.event_feed = data.get("event_feed", [])
+            raw_feed = data.get("event_feed", [])
+            self.event_feed = [
+                {**ev, "msg": ev["msg"].replace("â€”", "—")} if isinstance(ev, dict) and isinstance(ev.get("msg"), str) else ev
+                for ev in raw_feed
+            ]
             self._event_seq = int(data.get("event_seq", len(self.event_feed)))
             self.upgrade_round_key = data.get("upgrade_round_key")
             self.upgrades_this_round = data.get("upgrades_this_round", {})
@@ -2260,7 +2264,7 @@ class ChampionshipWorld:
                     car.lift_coast = new_lc
                     self._push_event(
                         "RADIO",
-                        f"PIT WALL (#{car.number} {car.code}): {'Lift-and-Coast ACTIVATED — saving fuel & tyre heat' if new_lc else 'Lift-and-Coast OFF — full throttle zones'}.",
+                        f"PIT WALL ({car.team_short} / #{car.number} {car.code}): '{'Lift-and-Coast ACTIVATED — saving fuel & tyre heat' if new_lc else 'Lift-and-Coast OFF — full throttle zones'}.'",
                     )
             if "prefer_fresh" in cmd:
                 car.prefer_fresh_tyre = bool(cmd["prefer_fresh"])
@@ -2287,7 +2291,7 @@ class ChampionshipWorld:
                     car.next_compound = comp
                     self._push_event(
                         "RADIO",
-                        f"PIT WALL (#{car.number} {car.code}): Strategy updated — queued {comp} tyres for next pit stop.",
+                        f"PIT WALL ({car.team_short} / #{car.number} {car.code}): 'Strategy updated — queued {comp} tyres for next pit stop.'",
                     )
             if "box_this_lap" in cmd:
                 car.box_this_lap = bool(cmd["box_this_lap"])

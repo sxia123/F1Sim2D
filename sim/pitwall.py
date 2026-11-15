@@ -367,12 +367,14 @@ class RivalPitWall:
             car.pace_mode = "BALANCED"
             charge = ratio < 0.35 or (car.ers_mode == "HARVEST" and ratio < 0.60)
             car.ers_mode = "HARVEST" if charge else "AUTO"
-        if old_pace != car.pace_mode:
-            if car.pace_mode == "CONSERVE":
-                race.radio_dispatcher.trigger_conserve_mode(car, event_cb, race.race_clock)
-            elif car.pace_mode in ("PUSH", "ATTACK"):
-                race.radio_dispatcher.trigger_push_mode(car, car.pace_mode, False, event_cb,
-                                                        race.race_clock, flag_state=race.flag_state)
+        if old_pace != car.pace_mode and race.flag_state != "CHEQUERED" and not car.finished:
+            if race.race_clock - getattr(car, "_last_pace_radio_clock", -99.0) >= 25.0:
+                car._last_pace_radio_clock = race.race_clock
+                if car.pace_mode == "CONSERVE":
+                    race.radio_dispatcher.trigger_conserve_mode(car, event_cb, race.race_clock)
+                elif car.pace_mode in ("PUSH", "ATTACK"):
+                    race.radio_dispatcher.trigger_push_mode(car, car.pace_mode, False, event_cb,
+                                                            race.race_clock, flag_state=race.flag_state)
 
     def _team_orders(self, event_cb):
         race = self.race
@@ -431,7 +433,7 @@ class RivalPitWall:
                     self.reverse_order_blocked_until[(other.driver_id, car.driver_id)] = race.race_clock + 540.0
                     if not damaged:
                         self.team_order_count[car.team_id] = self.team_order_count.get(car.team_id, 0) + 1
-                    event_cb("TEAM_ORDER", f"PIT WALL ({car.team_short}): {car.code}, release the faster {other.code}; reassess in clean air.")
+                    event_cb("TEAM_ORDER", f"PIT WALL ({car.team_short} / #{car.number} {car.code}): '{car.code}, release the faster {other.code}; reassess in clean air.'")
                     break
 
     def _review_queued_stop(self, car, event_cb):
@@ -454,7 +456,7 @@ class RivalPitWall:
                     car.box_this_lap = False
                     car.radio_box_announced = False
                     car.inlap_push_announced = False
-                    event_cb("STRATEGY", f"PIT WALL ({car.team_short} / {car.code}): Stay out; the weather crossover no longer justifies a stop.")
+                    event_cb("STRATEGY", f"PIT WALL ({car.team_short} / #{car.number} {car.code}): 'Stay out; the weather crossover no longer justifies a stop.'")
                 else:
                     # A marginal shift in the estimated window is not a weather
                     # reversal. Keep a committed call stable while tyres suit it.
@@ -479,13 +481,13 @@ class RivalPitWall:
                 car.box_this_lap = False
                 car.radio_box_announced = False
                 car.inlap_push_announced = False
-                event_cb("STRATEGY", f"PIT WALL ({car.team_short} / {car.code}): Stay out; rain arriving shortly before pit entry.")
+                event_cb("STRATEGY", f"PIT WALL ({car.team_short} / #{car.number} {car.code}): 'Stay out; rain arriving shortly before pit entry.'")
                 return
             if arrival < 4.0 and not (weather_change and best not in DRY):
                 return
             if queued not in options or (weather_change and (gain > 1.5 or best not in DRY)):
                 car.next_compound = best
-                event_cb("STRATEGY", f"PIT WALL ({car.team_short} / {car.code}): Revised pit tyre order to {best.lower()} for the latest conditions.")
+                event_cb("STRATEGY", f"PIT WALL ({car.team_short} / #{car.number} {car.code}): 'Revised pit tyre order to {best} tyres for the latest conditions.'")
 
     def step(self, event_cb):
         race = self.race
@@ -515,8 +517,8 @@ class RivalPitWall:
             car.strategy_status = f"Box: {call.reason}"
             car.strategy_gain_s = round(call.gain_s, 1)
             instruction = ("Drive through the pit lane to serve the penalty" if car.drive_through_pending else
-                           f"Box for {call.compound.lower()} tyres to {call.reason}")
-            event_cb("STRATEGY", f"PIT WALL ({car.team_short} / {car.code}): {instruction}.")
+                           f"Box this lap for {call.compound} tyres — {call.reason}")
+            event_cb("STRATEGY", f"PIT WALL ({car.team_short} / #{car.number} {car.code}): '{instruction}.'")
         self._team_orders(event_cb)
         for car in race.cars:
             if self.eligible(car):

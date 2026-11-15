@@ -280,6 +280,61 @@ class RadioTests(unittest.TestCase):
                 race._step_car(c, None, c, False, .05, world._push_event)
                 self.assertEqual(len(self.events), 4)
 
+    def test_push_mode_team_swap_and_chequered_flag_radios_are_well_formed(self):
+        # 1) Push mode messages always qualify enum modes with "mode" and never "#" before codes
+        teams = {team["id"]: team for team in INITIAL_TEAMS}
+        drivers = [person for person in INITIAL_DRIVERS if person.get("team_id")]
+        race = RaceSession(COMPILED_TRACKS[0], teams, drivers, 0, 0, "mclaren")
+        c1, c2 = race.cars[0], race.cars[1]
+        race._complete_team_yield(c1, c2, self.cb)
+        swap_radios = [msg for kind, msg in self.events if kind == "RADIO"]
+        self.assertEqual(len(swap_radios), 1)
+        self.assertIn(f"#{c1.number} {c1.code}", swap_radios[0])
+        self.assertNotIn(f"#{c1.code}", swap_radios[0])
+        self.assertNotIn(f"#{c2.code}", swap_radios[0])
+        self.assertIn(": '", swap_radios[0])
+
+        # 2) Push-mode radio phrases read naturally ("ATTACK mode", never raw "ATTACK.")
+        self.events.clear()
+        for team_id in teams:
+            with patch("sim.radio.random.choice", side_effect=lambda options: options[-1]):
+                self.dispatcher._recent.clear()
+                self.dispatcher.trigger_push_mode(
+                    car("norris", team_id, team_short=teams[team_id]["short"]),
+                    "ATTACK",
+                    True,
+                    self.cb,
+                    clock=50.0,
+                )
+        for _, msg in self.events:
+            self.assertIn("ATTACK mode", msg)
+            self.assertIn(": '", msg)
+
+        # 3) No post-chequered pace mode chatter
+        self.events.clear()
+        race.flag_state = "CHEQUERED"
+        c1.pace_mode = "PUSH"
+        c1.tire_temp = 140.0
+        race.pitwall.manage_pace(c1, self.cb)
+        self.assertEqual(c1.pace_mode, "CONSERVE")
+        self.assertEqual(self.events, [])
+
+    def test_mojibake_is_absent_and_sanitized_on_load(self):
+        import json
+        root = Path(__file__).resolve().parents[1] / "sim"
+        for fname in ("physics.py", "radio.py", "radio_messages.py", "pitwall.py"):
+            content = (root / fname).read_text(encoding="utf-8")
+            self.assertNotIn("â€”", content, f"Mojibake found in sim/{fname}")
+
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1] / "scratch") as temp:
+            save_path = Path(temp) / "career.json"
+            w = ChampionshipWorld(save_path=save_path)
+            w._push_event("STEWARDS", "FIA STEWARDS: Turn 1 incident â€” UNDER INVESTIGATION.")
+            w._save_state()
+            w2 = ChampionshipWorld(save_path=save_path)
+            self.assertTrue(any("— UNDER INVESTIGATION." in ev["msg"] for ev in w2.event_feed))
+            self.assertFalse(any("â€”" in ev["msg"] for ev in w2.event_feed))
+
 
 if __name__ == "__main__":
     unittest.main()

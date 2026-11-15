@@ -1223,6 +1223,28 @@ select, input[type="range"] {
   border-color: var(--f1-red);
   color: #ffffff;
 }
+.btn-audio {
+  background: rgba(0, 210, 190, 0.12);
+  border-color: var(--f1-teal);
+  color: var(--f1-teal);
+  font-weight: 900;
+  white-space: nowrap;
+}
+.btn-audio:hover {
+  background: rgba(0, 210, 190, 0.24);
+  border-color: #ffffff;
+  color: #ffffff;
+}
+.btn-audio.active {
+  background: rgba(0, 210, 106, 0.16);
+  border-color: var(--f1-green);
+  color: var(--f1-green);
+}
+.btn-audio.muted {
+  background: var(--bg-panel);
+  border-color: var(--line-bright);
+  color: var(--muted);
+}
 
 .free-agent-list {
   display: flex;

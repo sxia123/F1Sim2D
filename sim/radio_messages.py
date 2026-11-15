@@ -15,11 +15,11 @@ def driver(*lines: str) -> list[str]:
 
 GENERIC_RADIOS = {
     "push": engineer(
-        "{mode} selected, {code}. Push the pace now.",
-        "We are going to {mode}. Give us your best pace.",
-    ) + driver("Copy, {mode}. Pushing now.", "Understood. Giving it everything."),
+        "{mode} mode selected, {code}. Push the pace now.",
+        "Switching to {mode} mode, {code}. Give us your best pace.",
+    ) + driver("Copy, {mode} mode. Pushing now.", "Understood. Giving it everything."),
     "boost": engineer("BOOST selected. Use the extra deployment where available."),
-    "mode_restricted": engineer("{mode} selected, {code}. Respect race-control restrictions until green."),
+    "mode_restricted": engineer("{mode} mode selected, {code}. Respect race-control restrictions until green."),
     "overtake_mode": engineer("OVERTAKE selected. Use it when available."),
     "conserve": engineer(
         "Conserve pace, {code}. Look after the tyres.",
@@ -247,67 +247,67 @@ DRIVER_RADIOS = {
 
 TEAM_RADIOS = {
     "ferrari": {
-        "push": ["Andiamo, {code}. {mode} now. Give it everything."],
+        "push": ["Andiamo, {code}. {mode} mode now. Give it everything."],
         "box": ["Box, box, {code}. {comp} tyres. Confermato."],
         "conserve": ["Manage the tyres, {code}. We take this stint lap by lap."],
         "win": ["P1! Grande, {code}! For everyone at Maranello!"],
     },
     "mercedes": {
-        "push": ["{code}, {mode} confirmed. Let's execute."],
+        "push": ["{code}, {mode} mode confirmed. Let's execute."],
         "box": ["Box this lap, {code}. {comp} tyres. Keep the entry tidy."],
         "conserve": ["Conserve pace, {code}. Keep the tyre management disciplined."],
         "win": ["Get in there, {code}! P1! Brackley will love that one."],
     },
     "redbull": {
-        "push": ["Okay {code}, {mode}. Let's get on with it."],
+        "push": ["Okay {code}, {mode} mode. Let's get on with it."],
         "box": ["Box, box. {comp} tyres, {code}. Nice and tidy on the entry."],
         "conserve": ["Take a little out of the tyres now, {code}. Conserve pace."],
         "win": ["That's P1, {code}. An excellent day's work. Well done, mate."],
     },
     "mclaren": {
-        "push": ["{mode}, {code}. You can push now. Nice and focused."],
+        "push": ["{mode} mode, {code}. You can push now. Nice and focused."],
         "box": ["Box this lap, {code}. {comp} tyres ready. Let's nail the stop."],
         "conserve": ["Conserve pace, {code}. Let's keep this set working for us."],
         "win": ["P1, {code}! A papaya win! Thank you from everyone in Woking."],
     },
     "williams": {
-        "push": ["{code}, {mode}. Let's make this opportunity count."],
+        "push": ["{code}, {mode} mode. Let's make this opportunity count."],
         "box": ["Box, {code}. {comp} tyres ready. Let's put the plan together."],
         "conserve": ["Manage this set, {code}. Keep the race coming to us."],
         "win": ["P1! A Williams victory, {code}! This one's for Grove!"],
     },
     "aston": {
-        "push": ["{mode}, {code}. Let's put the work in now."],
+        "push": ["{mode} mode, {code}. Let's put the work in now."],
         "box": ["Box this lap for {comp}, {code}. Confirm the call."],
         "conserve": ["Conserve pace, {code}. Keep the bigger picture in mind."],
         "win": ["P1! A win in green, {code}! Brilliant work from the whole team."],
     },
     "alpine": {
-        "push": ["Allez, {code}. {mode}. Keep the commitment."],
+        "push": ["Allez, {code}. {mode} mode. Keep the commitment."],
         "box": ["Box this lap, {code}. {comp} tyres. Let's make it count."],
         "conserve": ["Conserve pace, {code}. Protect this stint."],
         "win": ["P1! Magnifique, {code}! What a result for the whole team!"],
     },
     "racingbulls": {
-        "push": ["{mode}, {code}. Stay sharp and commit."],
+        "push": ["{mode} mode, {code}. Stay sharp and commit."],
         "box": ["Box, box, {code}. {comp} tyres; focus on the entry."],
         "conserve": ["Conserve pace, {code}. Stay patient with the tyres."],
         "win": ["P1, {code}! Faenza, you've got a race winner!"],
     },
     "haas": {
-        "push": ["Okay {code}, {mode}. Let's get the job done."],
+        "push": ["Okay {code}, {mode} mode. Let's get the job done."],
         "box": ["Box for {comp}, {code}. In this lap. Keep it clean."],
         "conserve": ["Conserve pace, {code}. Take care of the tyres."],
         "win": ["P1! A Haas victory, {code}! What a day for this team!"],
     },
     "audi": {
-        "push": ["{mode} confirmed, {code}. Precision and commitment."],
+        "push": ["{mode} mode confirmed, {code}. Precision and commitment."],
         "box": ["Box this lap, {code}. {comp} tyres. Execute the stop."],
         "conserve": ["Conserve pace confirmed. Keep the stint controlled, {code}."],
         "win": ["P1, {code}! An Audi win. Excellent execution from everyone."],
     },
     "cadillac": {
-        "push": ["{mode}, {code}. Let's go to work."],
+        "push": ["{mode} mode, {code}. Let's go to work."],
         "box": ["Box this lap, {code}. {comp} tyres ready. Bring it in."],
         "conserve": ["Conserve pace, {code}. Play the long game with this set."],
         "win": ["P1! Cadillac wins, {code}! What a moment for the whole team!"],

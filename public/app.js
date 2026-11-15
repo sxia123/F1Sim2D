@@ -76,6 +76,423 @@ function fmtAdvice(advice) {
   return `${act}${rsn}`;
 }
 
+const GEAR_UPSHIFT_KPH = [98, 138, 174, 208, 242, 274, 306, 360];
+const AUDIO_ACTIVE_PHASES = new Set(["RACE", "SPRINT_RACE", "QUALIFYING", "SPRINT_QUALIFYING"]);
+
+class F1EngineAudio {
+  constructor() {
+    this.enabled = true;
+    this.ctx = null;
+    this.masterGain = null;
+    this.driveGain = null;
+    this.throttleFilter = null;
+    this.formantLow = null;
+    this.formantHigh = null;
+    this.noiseFilter = null;
+    this.noiseGain = null;
+    this.crackleGain = null;
+    this.crackleFilter = null;
+
+    this.subOsc = null;
+    this.fundOsc = null;
+    this.raspOsc = null;
+    this.screamOsc = null;
+    this.subGain = null;
+    this.fundGain = null;
+    this.raspGain = null;
+    this.screamGain = null;
+
+    this.rivalSubOsc = null;
+    this.rivalMainOsc = null;
+    this.rivalGain = null;
+    this.flutterOsc = null;
+
+    this._gear = 1;
+    this._rpm = 5200;
+    this._prevKph = 0;
+    this._prevTickMs = 0;
+    this._shiftCutUntil = 0;
+    this._blipUntil = 0;
+    this._lastCrackleMs = 0;
+    this._lastGridPulse = 0;
+  }
+
+  _makeSaturationCurve(drive = 3.2) {
+    const n = 1024;
+    const curve = new Float32Array(n);
+    const norm = Math.tanh(drive);
+    for (let i = 0; i < n; i++) {
+      const x = (i * 2) / (n - 1) - 1;
+      // Asymmetric saturation yields rich even+odd exhaust manifold harmonics
+      curve[i] = Math.tanh(x * drive + 0.14 * x * x) / norm;
+    }
+    return curve;
+  }
+
+  _createPinkRoarBuffer(ctx, seconds = 2.0) {
+    const len = Math.floor(ctx.sampleRate * seconds);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    let b0 = 0;
+    let b1 = 0;
+    let b2 = 0;
+    for (let i = 0; i < len; i++) {
+      const white = Math.random() * 2 - 1;
+      b0 = 0.996 * b0 + white * 0.09;
+      b1 = 0.97 * b1 + white * 0.18;
+      b2 = 0.85 * b2 + white * 0.32;
+      data[i] = Math.max(-1, Math.min(1, (b0 + b1 + b2 + white * 0.18) * 0.85));
+    }
+    return buf;
+  }
+
+  _ensureInit() {
+    if (this.ctx) return true;
+    const AudioCtx = typeof window !== "undefined" ? (window.AudioContext || window.webkitAudioContext) : null;
+    if (!AudioCtx) return false;
+    try {
+      const ctx = new AudioCtx();
+      this.ctx = ctx;
+
+      this.masterGain = ctx.createGain();
+      this.masterGain.gain.value = 0.0;
+
+      const compressor = ctx.createDynamicsCompressor();
+      compressor.threshold.value = -14;
+      compressor.knee.value = 12;
+      compressor.ratio.value = 6;
+      compressor.attack.value = 0.004;
+      compressor.release.value = 0.12;
+
+      this.throttleFilter = ctx.createBiquadFilter();
+      this.throttleFilter.type = "lowpass";
+      this.throttleFilter.frequency.value = 2400;
+      this.throttleFilter.Q.value = 1.1;
+
+      this.formantLow = ctx.createBiquadFilter();
+      this.formantLow.type = "peaking";
+      this.formantLow.frequency.value = 420;
+      this.formantLow.Q.value = 1.2;
+      this.formantLow.gain.value = 5.5;
+
+      this.formantHigh = ctx.createBiquadFilter();
+      this.formantHigh.type = "peaking";
+      this.formantHigh.frequency.value = 1650;
+      this.formantHigh.Q.value = 1.4;
+      this.formantHigh.gain.value = 3.2;
+
+      const shaper = ctx.createWaveShaper();
+      shaper.curve = this._makeSaturationCurve(3.2);
+      shaper.oversample = "2x";
+
+      this.driveGain = ctx.createGain();
+      this.driveGain.gain.value = 0.85;
+
+      // Primary 4-harmonic power unit oscillator bank
+      this.subOsc = ctx.createOscillator();
+      this.fundOsc = ctx.createOscillator();
+      this.raspOsc = ctx.createOscillator();
+      this.screamOsc = ctx.createOscillator();
+      this.subOsc.type = "sawtooth";
+      this.fundOsc.type = "sawtooth";
+      this.raspOsc.type = "sawtooth";
+      this.screamOsc.type = "triangle";
+
+      this.subGain = ctx.createGain();
+      this.fundGain = ctx.createGain();
+      this.raspGain = ctx.createGain();
+      this.screamGain = ctx.createGain();
+      this.subGain.gain.value = 0.40;
+      this.fundGain.gain.value = 0.28;
+      this.raspGain.gain.value = 0.15;
+      this.screamGain.gain.value = 0.10;
+
+      // Subtle combustion irregularity flutter on harmonic oscillators
+      this.flutterOsc = ctx.createOscillator();
+      this.flutterOsc.type = "sine";
+      this.flutterOsc.frequency.value = 29;
+      const flutterDepth = ctx.createGain();
+      flutterDepth.gain.value = 9.0;
+      this.flutterOsc.connect(flutterDepth);
+      flutterDepth.connect(this.fundOsc.detune);
+      flutterDepth.connect(this.raspOsc.detune);
+
+      // Filtered exhaust combustion roar noise
+      const noiseBuf = this._createPinkRoarBuffer(ctx, 2.0);
+      const noiseSrc = ctx.createBufferSource();
+      noiseSrc.buffer = noiseBuf;
+      noiseSrc.loop = true;
+
+      this.noiseFilter = ctx.createBiquadFilter();
+      this.noiseFilter.type = "bandpass";
+      this.noiseFilter.frequency.value = 480;
+      this.noiseFilter.Q.value = 1.5;
+
+      this.noiseGain = ctx.createGain();
+      this.noiseGain.gain.value = 0.16;
+
+      // Dedicated downshift / overrun exhaust crackle branch
+      const crackleSrc = ctx.createBufferSource();
+      crackleSrc.buffer = noiseBuf;
+      crackleSrc.loop = true;
+
+      this.crackleFilter = ctx.createBiquadFilter();
+      this.crackleFilter.type = "bandpass";
+      this.crackleFilter.frequency.value = 340;
+      this.crackleFilter.Q.value = 2.4;
+
+      this.crackleGain = ctx.createGain();
+      this.crackleGain.gain.value = 0.0;
+
+      // Secondary rival / pack chorus layer for wheel-to-wheel battles & launches
+      this.rivalSubOsc = ctx.createOscillator();
+      this.rivalMainOsc = ctx.createOscillator();
+      this.rivalSubOsc.type = "sawtooth";
+      this.rivalMainOsc.type = "sawtooth";
+      this.rivalGain = ctx.createGain();
+      this.rivalGain.gain.value = 0.0;
+
+      // Wiring
+      this.subOsc.connect(this.subGain);
+      this.fundOsc.connect(this.fundGain);
+      this.raspOsc.connect(this.raspGain);
+      this.screamOsc.connect(this.screamGain);
+      this.subGain.connect(this.driveGain);
+      this.fundGain.connect(this.driveGain);
+      this.raspGain.connect(this.driveGain);
+      this.screamGain.connect(this.driveGain);
+
+      noiseSrc.connect(this.noiseFilter);
+      this.noiseFilter.connect(this.noiseGain);
+      this.noiseGain.connect(this.driveGain);
+
+      this.rivalSubOsc.connect(this.rivalGain);
+      this.rivalMainOsc.connect(this.rivalGain);
+      this.rivalGain.connect(this.driveGain);
+
+      crackleSrc.connect(this.crackleFilter);
+      this.crackleFilter.connect(this.crackleGain);
+      this.crackleGain.connect(this.throttleFilter);
+
+      this.driveGain.connect(shaper);
+      shaper.connect(this.formantLow);
+      this.formantLow.connect(this.formantHigh);
+      this.formantHigh.connect(this.throttleFilter);
+      this.throttleFilter.connect(compressor);
+      compressor.connect(this.masterGain);
+      this.masterGain.connect(ctx.destination);
+
+      this.subOsc.start();
+      this.fundOsc.start();
+      this.raspOsc.start();
+      this.screamOsc.start();
+      this.rivalSubOsc.start();
+      this.rivalMainOsc.start();
+      this.flutterOsc.start();
+      noiseSrc.start();
+      crackleSrc.start();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  unlock() {
+    if (!this.enabled) return;
+    if (!this._ensureInit()) return;
+    if (this.ctx && this.ctx.state === "suspended") {
+      this.ctx.resume().catch(() => {});
+    }
+  }
+
+  toggle() {
+    this.enabled = !this.enabled;
+    if (this.enabled) {
+      this.unlock();
+    } else {
+      this.silence();
+    }
+    return this.enabled;
+  }
+
+  silence() {
+    if (this.ctx && this.masterGain) {
+      const now = this.ctx.currentTime;
+      this.masterGain.gain.setTargetAtTime(0.0, now, 0.05);
+    }
+  }
+
+  _pickFocusCar(tick, selectedDriverId, camMode) {
+    const cars = tick.cars || [];
+    if (cars.length === 0) return null;
+    if (camMode === "leader") {
+      return cars.find((c) => !c.dnf && !c.elim && c.quali_phase !== "GARAGE") || cars[0];
+    }
+    const sel = selectedDriverId ? cars.find((c) => c.id === selectedDriverId) : null;
+    if (sel) {
+      const inactive = sel.dnf || sel.elim || sel.quali_phase === "GARAGE";
+      if (!inactive || camMode === "selected") return sel;
+    }
+    if (camMode === "battle") {
+      const battler = cars.find((c) => c.battle && !c.dnf && !c.elim && c.quali_phase !== "GARAGE");
+      if (battler) return battler;
+    }
+    return cars.find((c) => !c.dnf && !c.elim && c.quali_phase !== "GARAGE") || sel || cars[0];
+  }
+
+  _computeGearAndRpm(kph, isV8, inPit, isBraking, accelKph, isLights) {
+    const minRpm = isV8 ? 6400 : 4800;
+    const maxRpm = isV8 ? 19600 : 13400;
+
+    if (isLights) {
+      const t = performance.now() * 0.001;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 9.5) * Math.cos(t * 3.1);
+      return {
+        gear: 1,
+        rpm: (isV8 ? 13800 : 9800) + pulse * (isV8 ? 2400 : 1400),
+      };
+    }
+
+    if (inPit) {
+      const limiterRpm = isV8 ? 9200 : 6500;
+      const frac = Math.min(1, kph / 82);
+      return {
+        gear: 1,
+        rpm: Math.max(minRpm, limiterRpm * (0.68 + 0.32 * frac)),
+      };
+    }
+
+    let g = this._gear;
+    while (g < 8 && kph > GEAR_UPSHIFT_KPH[g - 1]) {
+      g++;
+    }
+    while (g > 1 && kph < GEAR_UPSHIFT_KPH[g - 2] - 9) {
+      g--;
+    }
+
+    const lowKph = g === 1 ? 15 : GEAR_UPSHIFT_KPH[g - 2] - 9;
+    const highKph = GEAR_UPSHIFT_KPH[g - 1];
+    const ratio = Math.max(0, Math.min(1.03, (kph - lowKph) / Math.max(20, highKph - lowKph)));
+    const floorRpm = g === 1 ? minRpm : minRpm + (maxRpm - minRpm) * (0.56 + 0.03 * g);
+    let rpm = floorRpm + ratio * (maxRpm - floorRpm);
+
+    if (g < this._gear && (isBraking || accelKph < -5)) {
+      this._blipUntil = (this.ctx ? this.ctx.currentTime : 0) + 0.11;
+      this._triggerOverrunCrackle();
+    } else if (g > this._gear && kph > 45) {
+      this._shiftCutUntil = (this.ctx ? this.ctx.currentTime : 0) + 0.048;
+    }
+
+    this._gear = g;
+    return { gear: g, rpm: Math.min(maxRpm, Math.max(minRpm, rpm)) };
+  }
+
+  _triggerOverrunCrackle() {
+    if (!this.ctx || !this.crackleGain || !this.crackleFilter) return;
+    const wallNow = performance.now();
+    if (wallNow - this._lastCrackleMs < 110) return;
+    this._lastCrackleMs = wallNow;
+    const now = this.ctx.currentTime;
+    this.crackleFilter.frequency.setValueAtTime(220 + Math.random() * 260, now);
+    this.crackleGain.gain.cancelScheduledValues(now);
+    this.crackleGain.gain.setValueAtTime(0.01, now);
+    this.crackleGain.gain.linearRampToValueAtTime(0.24, now + 0.015);
+    this.crackleGain.gain.exponentialRampToValueAtTime(0.002, now + 0.14);
+  }
+
+  update(tick, selectedDriverId, camMode = "full") {
+    if (!this.enabled || !tick || !AUDIO_ACTIVE_PHASES.has(tick.phase) || !tick.sim_speed) {
+      this.silence();
+      return;
+    }
+    if (!this.ctx || this.ctx.state !== "running") return;
+
+    const car = this._pickFocusCar(tick, selectedDriverId, camMode);
+    if (!car || car.dnf || car.elim || car.quali_phase === "GARAGE") {
+      this.silence();
+      return;
+    }
+
+    const isLights = tick.flag === "LIGHTS" && tick.lights > 0;
+    if (tick.flag === "CHEQUERED" && car.kph < 18) {
+      this.silence();
+      return;
+    }
+    if (!isLights && car.in_pit && car.pit_ph === "STOPPED" && car.kph < 5) {
+      this.silence();
+      return;
+    }
+
+    const nowMs = performance.now();
+    const dtSec = this._prevTickMs > 0 ? Math.max(0.016, (nowMs - this._prevTickMs) / 1000) : 0.05;
+    this._prevTickMs = nowMs;
+
+    const kph = Math.max(0, Number(car.kph) || 0);
+    const accelKph = (kph - this._prevKph) / dtSec;
+    this._prevKph = kph;
+
+    const isV8 = Boolean(tick.regulations && tick.regulations.era_id === "V8_DRS");
+    const { rpm } = this._computeGearAndRpm(kph, isV8, car.in_pit, car.braking, accelKph, isLights);
+
+    const now = this.ctx.currentTime;
+    const blipActive = now < this._blipUntil ? (this._blipUntil - now) / 0.11 : 0;
+    const effectiveRpm = rpm + blipActive * (isV8 ? 1900 : 1350);
+    this._rpm = effectiveRpm;
+
+    // 4-stroke firing frequency: V6 fires 3/rev, V8 fires 4/rev
+    const cylPerRev = isV8 ? 4.0 : 3.0;
+    const f0 = Math.max(70, (effectiveRpm / 60) * cylPerRev);
+
+    this.subOsc.frequency.setTargetAtTime(f0 * 0.5, now, 0.025);
+    this.fundOsc.frequency.setTargetAtTime(f0, now, 0.025);
+    this.raspOsc.frequency.setTargetAtTime(f0 * 1.5, now, 0.025);
+    this.screamOsc.frequency.setTargetAtTime(f0 * 2.0, now, 0.025);
+
+    const maxRpm = isV8 ? 19600 : 13400;
+    const rpmNorm = Math.min(1, Math.max(0, effectiveRpm / maxRpm));
+    this.subGain.gain.setTargetAtTime(isV8 ? 0.38 : 0.42, now, 0.04);
+    this.fundGain.gain.setTargetAtTime(isV8 ? 0.28 : 0.30, now, 0.04);
+    this.raspGain.gain.setTargetAtTime(isV8 ? 0.11 : 0.16, now, 0.04);
+    this.screamGain.gain.setTargetAtTime((isV8 ? 0.12 : 0.07) + rpmNorm * 0.09, now, 0.04);
+
+    // Throttle load estimation
+    const shiftCut = now < this._shiftCutUntil;
+    let load = isLights ? 0.85 : car.braking ? 0.22 : Math.max(0.32, Math.min(1.0, 0.48 + accelKph * 0.025));
+    if (car.drs || car.ovt || car.boost) load = Math.min(1.0, load + 0.18);
+    if (car.rech || car.lift_coast) load *= 0.84;
+    if (shiftCut) load *= 0.38;
+
+    // Pit-lane speed limiter rhythmic stutter
+    let pitPulse = 1.0;
+    if (car.in_pit && kph > 25 && kph <= 95 && !isLights) {
+      pitPulse = Math.sin(nowMs * 0.11) > 0 ? 1.0 : 0.45;
+    }
+
+    const baseCutoff = isV8 ? 1150 : 880;
+    const maxCutoff = isV8 ? 5200 : 4100;
+    const cutoff = (baseCutoff + (maxCutoff - baseCutoff) * Math.pow(rpmNorm, 0.85) * (0.45 + 0.55 * load)) * pitPulse;
+    this.throttleFilter.frequency.setTargetAtTime(cutoff, now, 0.03);
+
+    this.driveGain.gain.setTargetAtTime((0.68 + 0.34 * load) * pitPulse, now, 0.03);
+    this.noiseFilter.frequency.setTargetAtTime(Math.max(150, Math.min(2400, f0 * (0.9 + 0.85 * load))), now, 0.04);
+    this.noiseGain.gain.setTargetAtTime(0.06 + 0.17 * load * rpmNorm, now, 0.04);
+
+    // Secondary rival / pack chorus layer in close battle or grid launch
+    const inCloseBattle = Boolean(car.battle) || (Number.isFinite(car.intv) && car.intv > 0 && car.intv < 1.2) || isLights;
+    if (inCloseBattle) {
+      const rivalF0 = f0 * (isLights ? 1.045 : 0.965);
+      this.rivalSubOsc.frequency.setTargetAtTime(rivalF0 * 0.5, now, 0.04);
+      this.rivalMainOsc.frequency.setTargetAtTime(rivalF0, now, 0.04);
+      this.rivalGain.gain.setTargetAtTime(isLights ? 0.18 : 0.11, now, 0.06);
+    } else {
+      this.rivalGain.gain.setTargetAtTime(0.0, now, 0.08);
+    }
+
+    const targetVol = isLights ? 0.18 : car.in_pit ? 0.11 : 0.12 + 0.08 * rpmNorm * load;
+    this.masterGain.gain.setTargetAtTime(targetVol, now, 0.05);
+  }
+}
+
 class F1App {
   constructor() {
     this.fullState = null;
@@ -96,6 +513,7 @@ class F1App {
     this._lastHeaderLogoTeam = "";
     this.selectedHofSeason = 2026;
     this.hofViewMode = "races";
+    this.audio = new F1EngineAudio();
 
     const canvas = document.getElementById("track-canvas");
     this.renderer = new CircuitRenderer(canvas, (drvId) => this.selectDriver(drvId));
@@ -178,6 +596,14 @@ class F1App {
     }
   }
 
+  _driverTag(driverId) {
+    const car = this.liveTick?.cars?.find((c) => c.id === driverId);
+    if (car) return `#${car.num} ${car.code}`;
+    const drv = this.fullState?.drivers?.find((d) => d.id === driverId);
+    if (drv) return `#${drv.number} ${drv.code}`;
+    return driverId.slice(0, 3).toUpperCase();
+  }
+
   showToast(msg) {
     const el = document.getElementById("toast");
     el.textContent = msg;
@@ -187,6 +613,22 @@ class F1App {
   }
 
   _bindUI() {
+    const unlockAudio = () => {
+      if (this.audio && this.audio.enabled) this.audio.unlock();
+    };
+    window.addEventListener("pointerdown", unlockAudio, { passive: true });
+    window.addEventListener("keydown", unlockAudio, { passive: true });
+
+    const soundBtn = document.getElementById("btn-sound");
+    if (soundBtn) {
+      soundBtn.addEventListener("click", () => {
+        const isOn = this.audio.toggle();
+        soundBtn.textContent = isOn ? "AUDIO: ON" : "AUDIO: MUTE";
+        soundBtn.classList.toggle("active", isOn);
+        soundBtn.classList.toggle("muted", !isOn);
+      });
+    }
+
     document.querySelectorAll(".nav-tab").forEach((btn) => {
       btn.addEventListener("click", () => {
         document.querySelectorAll(".nav-tab").forEach((b) => b.classList.remove("active"));
@@ -252,7 +694,7 @@ class F1App {
       if (cmd === "setup_df") {
         const res = await this.apiPost("/api/set_setup", { driver_id: driverId, setup_df: Number(val) });
         if (res.ok) {
-          this.showToast(`SETUP CONFIRMED: #${driverId.toUpperCase()} -> ${res.setup_label}`);
+          this.showToast(`SETUP CONFIRMED: ${this._driverTag(driverId)} -> ${res.setup_label}`);
           this.fetchFullState();
           this.lastDomSyncMs = 0;
         }
@@ -265,7 +707,7 @@ class F1App {
       else if (cmd === "start_comp") {
         const res = await this.apiPost("/api/set_starting_compound", { driver_id: driverId, compound: val });
         if (res.ok) {
-          this.showToast(`START TYRE CONFIRMED: #${driverId.toUpperCase()} on ${val} tyres!`);
+          this.showToast(`START TYRE CONFIRMED: ${this._driverTag(driverId)} on ${val} tyres!`);
           if (this.liveTick && this.liveTick.cars) {
             const myCar = this.liveTick.cars.find(c => c.id === driverId);
             if (myCar) {
@@ -291,7 +733,7 @@ class F1App {
       const res = await this.apiPost("/api/pit_wall", payload);
       if (res.ok) {
         if (cmd === "ncomp") {
-          this.showToast(`NEXT TYRE QUEUED: #${driverId.toUpperCase()} on ${val} tyres!`);
+          this.showToast(`NEXT TYRE QUEUED: ${this._driverTag(driverId)} on ${val} tyres!`);
           if (this.liveTick && this.liveTick.cars) {
             const myCar = this.liveTick.cars.find(c => c.id === driverId);
             if (myCar) {
@@ -489,6 +931,9 @@ class F1App {
     const prevPhase = this.liveTick ? this.liveTick.phase : "";
     this.liveTick = tick;
     this.renderer.pushTick(tick);
+    if (this.audio) {
+      this.audio.update(tick, this.selectedDriverId, this.renderer.cameraMode);
+    }
 
     const roundKey = `${tick.season}-${tick.round}-${tick.track_id}`;
     if (

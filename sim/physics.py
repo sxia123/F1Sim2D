@@ -1530,7 +1530,7 @@ class QualifyingSession:
 
             event_cb(
                 "RACE_CONTROL",
-                f"{st_name} CHEQUERED FLAG â€” ELIMINATED: {', '.join(eliminated_codes)}.",
+                f"{st_name} CHEQUERED FLAG — ELIMINATED: {', '.join(eliminated_codes)}.",
             )
 
             self.stage_idx += 1
@@ -1951,7 +1951,7 @@ class RaceSession:
                     c.v = 0.6
                     c.accel = launch * 1.5
                 race_label = "SPRINT" if self.is_sprint else "GRAND PRIX"
-                event_cb("RACE_CONTROL", f"LIGHTS OUT AND AWAY WE GO! {race_label} underway â€” 22 cars charge into Turn 1!")
+                event_cb("RACE_CONTROL", f"LIGHTS OUT AND AWAY WE GO! {race_label} underway — 22 cars charge into Turn 1!")
             return
 
         self.race_clock += dt
@@ -2128,7 +2128,7 @@ class RaceSession:
                     for c in self.cars:
                         c.overtake_eligible = False
                         c.overtake_active = False
-                    event_cb("RACE_CONTROL", "GREEN FLAG! Safety Car peels into the pits â€” full-throttle restart!")
+                    event_cb("RACE_CONTROL", "GREEN FLAG! Safety Car peels into the pits — full-throttle restart!")
 
     def _step_stewards(self, dt: float, event_cb) -> None:
         remaining = []
@@ -2136,7 +2136,7 @@ class RaceSession:
             item["timer"] -= dt
             if item["stage"] == "NOTED" and item["timer"] <= 3.5:
                 item["stage"] = "INVESTIGATING"
-                event_cb("STEWARDS", f"FIA STEWARDS: Turn {item['turn']} incident ({item['summary']}) â€” UNDER INVESTIGATION.")
+                event_cb("STEWARDS", f"FIA STEWARDS: Turn {item['turn']} incident ({item['summary']}) — UNDER INVESTIGATION.")
             if item["timer"] <= 0.0:
                 self._apply_stewards_verdict(item, event_cb)
             else:
@@ -2146,13 +2146,13 @@ class RaceSession:
     def _apply_stewards_verdict(self, item: dict, event_cb) -> None:
         culprit: CarState | None = self.cars_by_id.get(item["culprit_id"])
         if not culprit or culprit.dnf:
-            event_cb("STEWARDS", f"FIA STEWARDS: Turn {item['turn']} incident ({item['summary']}) â€” No Further Action.")
+            event_cb("STEWARDS", f"FIA STEWARDS: Turn {item['turn']} incident ({item['summary']}) — No Further Action.")
             return
 
         verdict = item["verdict"]
         turn = item["turn"]
         if verdict == "NFA":
-            event_cb("STEWARDS", f"FIA STEWARDS: Turn {turn} ({item['summary']}) â€” Racing Incident, No Further Action.")
+            event_cb("STEWARDS", f"FIA STEWARDS: Turn {turn} ({item['summary']}) — Racing Incident, No Further Action.")
         elif verdict == "5S":
             culprit.time_penalty_s += 5
             pts = 1 if item.get("reason", "").startswith(("Causing", "Reckless")) else 0
@@ -2456,7 +2456,7 @@ class RaceSession:
             car.pace_mode = "ATTACK"
             turn = self.track.nearest_corner(car.s) if hasattr(self.track, "nearest_corner") else 1
             self.radio_dispatcher.trigger_push_mode(
-                car, "IN-LAP ATTACK", is_pit_wall=False, event_cb=event_cb, clock=self.race_clock, turn=turn
+                car, "ATTACK", is_pit_wall=False, event_cb=event_cb, clock=self.race_clock, turn=turn
             )
 
         entry_gap=(self.track.pit_entry_s-prev_s)%self.track.length_m
@@ -3180,7 +3180,7 @@ class RaceSession:
             status_str = "BLISTERING" if car.tire_temp >= opt_max + 14.0 else "OVERHEATING"
             event_cb(
                 "RADIO",
-                f"PIT WALL ({car.team_short} / #{car.number} {car.code}): Tyre temps critical ({int(round(car.tire_temp))}°C - {status_str}). Manage the rear traction and look after the carcass.",
+                f"PIT WALL ({car.team_short} / #{car.number} {car.code}): 'Tyre temps critical ({int(round(car.tire_temp))}°C - {status_str}). Manage the rear traction and look after the carcass.'",
             )
 
         pace_fuel_mult = {"CONSERVE": 0.94, "BALANCED": 1.00, "PUSH": 1.035, "ATTACK": 1.07}.get(car.pace_mode, 1.0)
@@ -3564,7 +3564,7 @@ class RaceSession:
                     car.time_penalty_s += 5
                     event_cb(
                         "PENALTY",
-                        f"PENALTY: +5s Time Penalty for #{car.number} {car.code} â€” Exceeding Track Limits (4 strikes).",
+                        f"PENALTY: +5s Time Penalty for #{car.number} {car.code} — Exceeding Track Limits (4 strikes).",
                     )
 
         wet_here = self.wetness if local_wetness is None else float(local_wetness)
@@ -3676,7 +3676,7 @@ class RaceSession:
             self._update_xy(car)
             event_cb(
                 "RETIREMENT",
-                f"MECHANICAL DNF: Smoke from #{car.number} {car.name} ({car.team_short}) near Turn {turn} â€” {failure}!",
+                f"MECHANICAL DNF: Smoke from #{car.number} {car.name} ({car.team_short}) near Turn {turn} — {failure}!",
             )
             if random.random() < 0.65:
                 self.trigger_safety_car("VSC", f"#{car.number} {car.code} stopped trackside ({failure})", event_cb)
@@ -4176,7 +4176,7 @@ class RaceSession:
                     attacker.time_penalty_s += 10
                     event_cb(
                         "PENALTY",
-                        f"PENALTY: +10s Time Penalty for #{attacker.number} {attacker.code} â€” Overtaking under Yellow Flags!",
+                        f"PENALTY: +10s Time Penalty for #{attacker.number} {attacker.code} — Overtaking under Yellow Flags!",
                     )
                 else:
                     if attacker.v > defender.v:
@@ -4577,7 +4577,7 @@ class RaceSession:
         )
         event_cb(
             "RADIO",
-            f"PIT WALL ({car.team_short}): 'Swap completed. Great teamwork #{car.code}. Now #{teammate.code}, push hard!'",
+            f"PIT WALL ({car.team_short} / #{car.number} {car.code}): 'Swap completed, {car.code}. Great teamwork. Now {teammate.code}, push on.'",
         )
 
     def _trigger_side_by_side_contact(self, c1: CarState, c2: CarState, turn: int, event_cb, minor: bool = False) -> None:
