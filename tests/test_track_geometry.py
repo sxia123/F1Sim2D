@@ -340,5 +340,39 @@ class TrackGeometryTests(unittest.TestCase):
             self.assertTrue(entered, f"{tid} car did not enter pit lane")
             self.assertLess(min_v_before_entry, 48.0, f"{tid} car did not brake smoothly for pit entry")
 
+    def test_pit_entry_and_exit_are_one_to_one_replicas_of_circuit_maps(self):
+        def point_to_polyline_dist(px: float, py: float, poly: list[tuple[float, float]]) -> float:
+            best = 1e9
+            for (x1, y1), (x2, y2) in zip(poly, poly[1:]):
+                dx, dy = x2 - x1, y2 - y1
+                seg_sq = dx * dx + dy * dy
+                t_u = 0.0 if seg_sq <= 1e-9 else max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / seg_sq))
+                d = math.hypot(px - (x1 + t_u * dx), py - (y1 + t_u * dy))
+                if d < best:
+                    best = d
+            return best
+
+        for t in COMPILED_TRACKS:
+            with self.subTest(track=t.id):
+                raw_pts = [((x - 500) * t.map_scale + 500, (y - 325) * t.map_scale + 325) for x, y in t.layout["pit_points"]]
+                garage_lo, garage_hi = t.layout.get("garage_u_range", [0.275, 0.725])
+                n_pts = len(t.pit_stations)
+                entry_devs = [
+                    point_to_polyline_dist(t.pit_stations[k]["x"], t.pit_stations[k]["y"], raw_pts)
+                    for k in range(n_pts)
+                    if 0.03 <= k / max(1, n_pts - 1) <= garage_lo
+                ]
+                exit_devs = [
+                    point_to_polyline_dist(t.pit_stations[k]["x"], t.pit_stations[k]["y"], raw_pts)
+                    for k in range(n_pts)
+                    if garage_hi <= k / max(1, n_pts - 1) <= 0.94
+                ]
+                self.assertTrue(entry_devs, f"{t.id} empty pit entry sample window")
+                self.assertTrue(exit_devs, f"{t.id} empty pit exit sample window")
+                self.assertLessEqual(sum(entry_devs) / len(entry_devs), 2.5, f"{t.id} entry mean dev")
+                self.assertLessEqual(max(entry_devs), 6.0, f"{t.id} entry max dev")
+                self.assertLessEqual(sum(exit_devs) / len(exit_devs), 2.5, f"{t.id} exit mean dev")
+                self.assertLessEqual(max(exit_devs), 6.0, f"{t.id} exit max dev")
+
 
 if __name__=='__main__':unittest.main()

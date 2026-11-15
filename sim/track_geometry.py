@@ -144,14 +144,14 @@ def build_pit_geometry(track):
     track.pit_apron_offset_px = 3.0 * WORLD_UNITS_PER_M
     entry = track.sample(track.pit_entry_s)
     exit = track.sample(track.pit_exit_s)
-    points[0] = (entry['x'], entry['y'])
-    exit_offset = track.lateral_to_px(.76 * track.pit_side,track.pit_exit_s)
-    points[-1] = (exit['x']+exit['nx']*exit_offset, exit['y']+exit['ny']*exit_offset)
+    entry_pt = (entry['x'], entry['y'])
+    exit_offset = track.lateral_to_px(.76 * track.pit_side, track.pit_exit_s)
+    exit_pt = (exit['x'] + exit['nx'] * exit_offset, exit['y'] + exit['ny'] * exit_offset)
 
-    # Mild smoothing removes digitizing corners; the endpoints remain exact.
+    # Mild smoothing removes digitizing corners while preserving the exact geographic shape.
     for _ in range(3):
         points = [points[0]] + [tuple(.2*points[k-1][j]+.6*points[k][j]+.2*points[k+1][j]
-                    for j in (0, 1)) for k in range(1,len(points)-1)] + [points[-1]]
+                    for j in (0, 1)) for k in range(1, len(points)-1)] + [points[-1]]
     points, raw_len = resample(points, 241)
     track.pit_tunnel_u = layout.get('pit_tunnel_u')
     if track.id == 'abudhabi' and not track.pit_tunnel_u:
@@ -160,16 +160,26 @@ def build_pit_geometry(track):
                     (s['y'] - points[k][1]) ** 2 for s in track.stations))
         u = cross / (len(points) - 1)
         track.pit_tunnel_u = [max(.6, u - .04), min(.98, u + .04)]
-    garage_lo,garage_hi=layout.get('garage_u_range',[.275,.725])
-    pad_u = 18.0 * WORLD_UNITS_PER_M / max(raw_len, 1.0)
-    clear_lo = max(0.03, min(0.75, garage_lo - pad_u * 0.45))
-    clear_hi = max(0.88, min(0.955, garage_hi + 22.0 * WORLD_UNITS_PER_M / max(raw_len, 1.0)))
-    entry_hold = max(0.015, clear_lo - min(0.16, garage_lo * 0.55))
-    exit_hold = min(0.985, clear_hi + min(0.10, max(0.03, (1.0 - clear_hi) * 0.65)))
+    garage_lo, garage_hi = layout.get('garage_u_range', [.275, .725])
+    # Clear only the working garage zone so pit entry and pit exit follow the real-circuit maps 1:1.
+    min_garage_clear_px = max(2.4, 2.0 * 6.4 + 4.4 - track.pit_width_px * 0.5)
+    if garage_hi > 0.75:
+        for k, (px, py) in enumerate(points):
+            u = k / max(1, len(points) - 1)
+            if max(0.75, garage_lo + 0.38) <= u <= garage_hi:
+                near = min(track.stations, key=lambda s: (s['x'] - px) ** 2 + (s['y'] - py) ** 2)
+                if math.hypot(px - near['x'], py - near['y']) - near['width_px'] * 0.5 < min_garage_clear_px:
+                    garage_hi = max(0.75, garage_lo + 0.38, u - 0.025)
+                    layout['garage_u_range'] = [garage_lo, garage_hi]
+                    break
+    clear_lo = max(0.02, min(0.85, garage_lo))
+    clear_hi = max(clear_lo + 0.05, min(0.96, garage_hi))
+    entry_hold = max(0.005, clear_lo - 0.06)
+    exit_hold = min(0.995, clear_hi + 0.06)
     points = _clear_close_parallel_pit(
         track,
         points,
-        track.pit_width_px * 0.5 + 2.5,
+        min_garage_clear_px,
         clear_lo,
         clear_hi,
         entry_hold=entry_hold,
@@ -180,16 +190,26 @@ def build_pit_geometry(track):
     for a, b in zip(points, points[1:]):
         cum.append(cum[-1] + math.dist(a, b))
     tot = max(cum[-1], 1e-6)
-    # Keep pit-entry bridge short (~20m / 7.5%) so the real traced pit-entry shape dominates.
-    in_target = min(20.0 * WORLD_UNITS_PER_M, tot * 0.075)
-    out_target = min(50.0 * WORLD_UNITS_PER_M, tot * 0.16)
+    # Keep bridges strictly localized to the join (~10m entry, ~20m exit) so 94%+ of pit entry/exit stays 1:1.
+    in_target = min(10.0 * WORLD_UNITS_PER_M, tot * 0.04)
+    out_target = min(20.0 * WORLD_UNITS_PER_M, tot * 0.065)
     i_in = next((k for k, d in enumerate(cum) if d >= in_target), 4)
-    i_in = max(4, min(i_in, int(max(0.025, garage_lo - 0.012) * (len(points) - 1)), len(points) // 6))
+    i_in = max(4, min(i_in, int(max(0.02, garage_lo - 0.01) * (len(points) - 1)), len(points) // 10))
     i_out_len = next((k for k in range(len(cum) - 1, -1, -1) if tot - cum[k] >= out_target), len(points) - 6)
-    i_out = max(i_out_len, int((garage_hi + 0.015) * (len(points) - 1)), 3 * len(points) // 4)
+    i_out = max(i_out_len, int((garage_hi + 0.01) * (len(points) - 1)), int(len(points) * 0.91))
     i_out = min(len(points) - 6, i_out)
-    first = _bridge(points[0], points[i_in], (entry['tx'], entry['ty']), _unit(points[i_in - 2], points[min(len(points) - 1, i_in + 2)]))
-    last = _bridge(points[i_out], points[-1], _unit(points[max(0, i_out - 2)], points[i_out + 2]), (exit['tx'], exit['ty']))
+    first = _bridge(
+        entry_pt,
+        points[i_in],
+        (entry['tx'], entry['ty']),
+        _unit(points[i_in - 2], points[min(len(points) - 1, i_in + 2)]),
+    )
+    last = _bridge(
+        points[i_out],
+        exit_pt,
+        _unit(points[max(0, i_out - 2)], points[i_out + 2]),
+        (exit['tx'], exit['ty']),
+    )
     points = first[:-1] + points[i_in:i_out] + last
     points, track.pit_canvas_len = resample(points, 241)
     track.pit_length_m = track.pit_canvas_len / track.px_per_m

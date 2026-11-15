@@ -534,6 +534,57 @@ class WheelToWheelTests(unittest.TestCase):
         self.assertGreater(getattr(atk, "_sep_lane_timer", 0.0), 0.5)
         self.assertFalse(any(k == "INCIDENT" for k, _ in events))
 
+    def test_glancing_and_substep_physical_contacts_always_register(self):
+        # 1. Substep side-by-side glancing overlap reliably triggers sparks, damage, and incident event
+        race = self.race("bahrain", count=2)
+        race.lights_out = True
+        race.lights_countdown = 0.0
+        race.flag_state = "GREEN"
+        race.race_clock = 35.0
+        a, b = race.cars
+        s = self.straight(race.track)
+        self.place(race, a, s, -0.18)
+        self.place(race, b, s, 0.18)
+        a.v = b.v = 72.0
+        a.target_d = b.target_d = 0.0
+        a.lateral_velocity = 0.9
+        b.lateral_velocity = -0.9
+        race.standings = [a, b]
+        events = []
+        with patch.object(race, "_resolve_battles_and_incidents"), patch.object(race, "_check_solo_incidents"):
+            race.step(0.05, lambda k, m: events.append((k, m)))
+        self.assertTrue(a.sparks and b.sparks)
+        self.assertGreater(a.wing_damage, 0.0)
+        self.assertGreater(b.wing_damage, 0.0)
+        self.assertTrue(any(k in ("INCIDENT", "CRASH") for k, _ in events))
+
+        # 2. Moderate nose-to-tail closing speed (~4.2 m/s) in race.step registers contact without silent separation
+        race2 = self.race("bahrain", count=2)
+        race2.lights_out = True
+        race2.lights_countdown = 0.0
+        race2.flag_state = "GREEN"
+        race2.race_clock = 42.0
+        ahead, behind = race2.cars
+        car_len_m = CAR_LEN_PX / race2.track.px_per_m
+        self.place(race2, ahead, s + car_len_m + 0.05, 0.0)
+        self.place(race2, behind, s, 0.0)
+        ahead.v = 56.0
+        behind.v = 60.5
+        ahead.free_air_target_v = 56.0
+        behind.free_air_target_v = 60.5
+        race2.standings = [ahead, behind]
+        events2 = []
+        saw_sparks = False
+        with patch.object(race2, "_resolve_battles_and_incidents"), patch.object(race2, "_check_solo_incidents"):
+            for _ in range(4):
+                race2.step(0.05, lambda k, m: events2.append((k, m)))
+                if ahead.sparks and behind.sparks:
+                    saw_sparks = True
+        self.assertTrue(saw_sparks)
+        self.assertGreater(ahead.wing_damage, 0.0)
+        self.assertGreater(behind.wing_damage, 0.0)
+        self.assertTrue(any(k in ("INCIDENT", "CRASH") for k, _ in events2))
+
 
 if __name__ == "__main__":
     unittest.main()

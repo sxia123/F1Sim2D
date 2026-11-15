@@ -387,10 +387,12 @@ def enforce_2d_car_separation(
     min_pit_long_m = (CAR_LEN_PX * 1.06) / track.pit_px_per_m
     half_usable = track.track_width_px * 0.39
 
-    # 0. Sync world (x, y, heading) for all cars
+    # 0. Sync world (x, y, heading) and snapshot pre-separation closing velocities
     for c in cars:
         c._tick_lat_shift = 0.0
         c._tick_long_shift = 0.0
+        c._pre_sep_v = c.v
+        c._pre_sep_lat_v = getattr(c, "lateral_velocity", 0.0)
         update_xy_fn(c)
 
     # 1. Pit Fast-Lane longitudinal queue spacing (STOPPED cars sit in the separate garage apron)
@@ -572,7 +574,7 @@ def enforce_2d_car_separation(
                             continue
 
                     deficit = min_long_m - ds_m
-                    if deficit > 0:
+                    if deficit > 0 and _sat_obb_penetration(c, o) is None:
                         if c.v > o.v:
                             if c.accel > -22.0:
                                 c.v = max(o.v * 0.98, c.v - 12.0 * dt)
@@ -629,14 +631,20 @@ def enforce_2d_car_separation(
                 min_pen_w = min(pen_w1, pen_w2)
                 min_pen_l = min(pen_l1, pen_l2)
                 is_lateral = (min_pen_w <= min_pen_l) or (abs(c1.d - c2.d) > 0.14)
-                closing_long_v = behind.v - ahead.v
-                lat_dir = 1.0 if c1.d < c2.d else -1.0
-                closing_lat_v = (getattr(c1, "lateral_velocity", 0.0) - getattr(c2, "lateral_velocity", 0.0)) * lat_dir
-                is_contact = (
-                    (is_lateral and min_pen_w > 0.55 and (closing_lat_v > 0.70 or min_pen_w > 1.20))
-                    or ((not is_lateral) and min_pen_l > 0.90 and (closing_long_v > 2.6 or (min_pen_l > 1.85 and closing_long_v > 1.0)))
+                closing_long_v = max(
+                    behind.v - ahead.v,
+                    getattr(behind, "_pre_sep_v", behind.v) - getattr(ahead, "_pre_sep_v", ahead.v),
                 )
-                if pass_idx == 0 and is_contact and collision_cb is not None and not c1.in_pits and not c2.in_pits and not c1.dnf and not c2.dnf:
+                lat_dir = 1.0 if c1.d < c2.d else -1.0
+                closing_lat_v = max(
+                    (getattr(c1, "lateral_velocity", 0.0) - getattr(c2, "lateral_velocity", 0.0)) * lat_dir,
+                    (getattr(c1, "_pre_sep_lat_v", 0.0) - getattr(c2, "_pre_sep_lat_v", 0.0)) * lat_dir,
+                )
+                is_contact = (
+                    (is_lateral and min_pen_w > 0.08 and (closing_lat_v > 0.14 or closing_long_v > 0.55 or min_pen_w > 0.28))
+                    or ((not is_lateral) and min_pen_l > 0.10 and (closing_long_v > 0.35 or closing_lat_v > 0.18 or min_pen_l > 0.38))
+                )
+                if is_contact and collision_cb is not None and not c1.in_pits and not c2.in_pits and not c1.dnf and not c2.dnf:
                     collision_cb(c1, c2, sat)
 
                 any_overlap = True
@@ -4487,10 +4495,10 @@ class RaceSession:
         if self._pair_contact_until.get(pair_key, -1.0) > self.race_clock:
             return
 
-        cd = 5.0 if minor else 8.0
+        cd = 2.8 if minor else 5.5
         self._pair_contact_until[pair_key] = self.race_clock + cd
-        c1.contact_cooldown = max(c1.contact_cooldown, cd)
-        c2.contact_cooldown = max(c2.contact_cooldown, cd)
+        c1.contact_cooldown = max(c1.contact_cooldown, 2.4 if minor else 5.0)
+        c2.contact_cooldown = max(c2.contact_cooldown, 2.4 if minor else 5.0)
         c1.sparks = True
         c2.sparks = True
         if not minor:
@@ -4503,6 +4511,10 @@ class RaceSession:
         nudge = 0.12 if minor else 0.18
         c1.target_d = max(-1.05, min(1.05, c1.d + side_norm * nudge))
         c2.target_d = max(-1.05, min(1.05, c2.d - side_norm * nudge))
+        c1._sep_lane_d = c1.target_d
+        c2._sep_lane_d = c2.target_d
+        c1._sep_lane_timer = max(getattr(c1, "_sep_lane_timer", 0.0), 1.1)
+        c2._sep_lane_timer = max(getattr(c2, "_sep_lane_timer", 0.0), 1.1)
 
         # Speed scrub from physical tire/bodywork collision
         scrub_lo, scrub_hi = (0.35, 0.90) if minor else (0.8, 1.8)
@@ -4530,6 +4542,10 @@ class RaceSession:
         self._maybe_schedule_damage_pit(c2)
 
         if minor:
+            event_cb(
+                "INCIDENT",
+                f"WHEEL BANGING! #{c1.number} {c1.code} and #{c2.number} {c2.code} rub wheels side-by-side at Turn {turn}!",
+            )
             return
 
         spin_p = min(0.28, 0.14 * (_car_risk_scale(c1, 1.25) + _car_risk_scale(c2, 1.25)) * 0.5)
@@ -4602,14 +4618,20 @@ class RaceSession:
         is_side_by_side = min_pen_w < 3.2 and abs(c1.d - c2.d) > 0.16
 
         if is_side_by_side:
-            is_minor = (min_pen_w <= 1.25) or ((c1.lap == 1 or c2.lap == 1) and min_pen_w <= 1.85)
+            lat_dir = 1.0 if c1.d < c2.d else -1.0
+            closing_lat_v = max(
+                (getattr(c1, "lateral_velocity", 0.0) - getattr(c2, "lateral_velocity", 0.0)) * lat_dir,
+                (getattr(c1, "_pre_sep_lat_v", 0.0) - getattr(c2, "_pre_sep_lat_v", 0.0)) * lat_dir,
+            )
+            is_minor = (min_pen_w <= 0.45 and closing_lat_v <= 0.55) or ((c1.lap == 1 or c2.lap == 1) and min_pen_w <= 1.25 and closing_lat_v <= 0.75)
             self._trigger_side_by_side_contact(c1, c2, turn, event_cb, minor=is_minor)
         else:
+            delta_v = max(delta_v, getattr(behind, "_pre_sep_v", behind.v) - getattr(ahead, "_pre_sep_v", ahead.v))
             is_light_tap = (delta_v < 5.0 and min_pen_l <= 2.15) or ((c1.lap == 1 or c2.lap == 1) and delta_v < 7.5)
-            cd = 5.0 if is_light_tap else 7.5
+            cd = 2.8 if is_light_tap else 5.5
             self._pair_contact_until[pair_key] = self.race_clock + cd
-            c1.contact_cooldown = max(c1.contact_cooldown, cd)
-            c2.contact_cooldown = max(c2.contact_cooldown, cd)
+            c1.contact_cooldown = max(c1.contact_cooldown, 2.4 if is_light_tap else 5.0)
+            c2.contact_cooldown = max(c2.contact_cooldown, 2.4 if is_light_tap else 5.0)
             # Physical longitudinal impulse
             behind.v = max(8.0, ahead.v - (0.6 if is_light_tap else 1.4))
             ahead.v = min(ahead.v + (0.4 if is_light_tap else 0.8), 95.0)
@@ -4691,6 +4713,11 @@ class RaceSession:
                         "reason": "Causing a Collision",
                         "verdict": random.choice(["NFA", "5S", "10S"]),
                     }
+                )
+            else:
+                event_cb(
+                    "INCIDENT",
+                    f"CONTACT! #{behind.number} {behind.code} taps the rear of #{ahead.number} {ahead.code} at Turn {turn} — front wing endplate damage!",
                 )
 
     def _update_standings(self, dt: float, event_cb) -> None:
