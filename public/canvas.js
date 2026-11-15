@@ -796,19 +796,20 @@ export class CircuitRenderer {
     const ppts = this.track.pit_points || [];
     const pitWidth = this.track.pit_width_px || 32;
     if (ppts.length > 1) {
+      const accessWidth = Math.max(14.0, pitWidth * 0.50);
       this._traceSmoothOpenPoints(ctx, ppts);
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.strokeStyle = "#060609";
-      ctx.lineWidth = pitWidth + 5.2;
+      ctx.lineWidth = accessWidth + 4.4;
       ctx.stroke();
 
-      // 2. Dual-lane FIA Pit Road (white borders + dark asphalt + fast-lane/apron divider)
-      ctx.strokeStyle = "rgba(255,255,255,.45)";
-      ctx.lineWidth = pitWidth + 1.6;
+      // 1b. Single-lane Pit Entry / Exit Access Roads
+      ctx.strokeStyle = "rgba(255,255,255,.42)";
+      ctx.lineWidth = accessWidth + 1.4;
       ctx.stroke();
       ctx.strokeStyle = "#161b26";
-      ctx.lineWidth = pitWidth;
+      ctx.lineWidth = accessWidth;
       ctx.stroke();
 
       const side = this.track.pit_side || 1;
@@ -823,6 +824,22 @@ export class CircuitRenderer {
       const uSpeedOut = this.track.pit_speed_exit_u ?? 0.9;
       const iDiv0 = Math.max(0, Math.floor(uSpeedIn * (ppts.length - 1)));
       const iDiv1 = Math.min(ppts.length - 1, Math.ceil(uSpeedOut * (ppts.length - 1)));
+      const workingPts = ppts.slice(iDiv0, iDiv1 + 1);
+      if (workingPts.length > 1) {
+        // 2. Dual-lane FIA Working Pit Complex & Speed-Limit Zone
+        this._traceSmoothOpenPoints(ctx, workingPts);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "#060609";
+        ctx.lineWidth = pitWidth + 5.2;
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(255,255,255,.45)";
+        ctx.lineWidth = pitWidth + 1.6;
+        ctx.stroke();
+        ctx.strokeStyle = "#161b26";
+        ctx.lineWidth = pitWidth;
+        ctx.stroke();
+      }
       if (iDiv1 > iDiv0 + 1) {
         ctx.save();
         ctx.strokeStyle = "rgba(255, 255, 255, 0.36)";

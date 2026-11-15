@@ -682,6 +682,7 @@ class CompiledTrack:
             "pit_fast_offset_px": getattr(self, "pit_fast_offset_px", -5.12),
             "pit_apron_offset_px": getattr(self, "pit_apron_offset_px", 9.60),
             "pit_length_m": round(self.pit_length_m, 2),
+            "fia_pit_length_m": round(self.fia_pit_length_m, 1),
             "pit_garages": self.pit_garages,
             "pit_speed_entry_u": self.pit_speed_entry_u,
             "pit_speed_exit_u": self.pit_speed_exit_u,

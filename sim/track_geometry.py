@@ -15,8 +15,39 @@ from statistics import median
 
 WORLD_UNITS_PER_M = 3.2
 _LAYOUT_BYTES=Path(__file__).with_name('track_layouts.json').read_bytes()
-GEOMETRY_REVISION=hashlib.sha256(_LAYOUT_BYTES).hexdigest()[:12]
+GEOMETRY_REVISION = "fia-pit-" + hashlib.sha256(_LAYOUT_BYTES).hexdigest()[:12]
 LAYOUTS = json.loads(_LAYOUT_BYTES)
+
+# Official real-world FIA pit-lane speed-limit lengths (meters between Pit-In and Pit-Out timing lines)
+REAL_FIA_PIT_LENGTH_M = {
+    "australia": 281.0,
+    "china": 380.0,
+    "japan": 395.0,
+    "bahrain": 421.0,
+    "saudi": 348.0,
+    "miami": 368.0,
+    "canada": 342.0,
+    "monaco": 246.0,
+    "barcelona": 369.0,
+    "austria": 355.0,
+    "britain": 328.0,
+    "belgium": 386.0,
+    "hungary": 364.0,
+    "netherlands": 235.0,
+    "italy": 415.0,
+    "madrid": 380.0,
+    "azerbaijan": 305.0,
+    "singapore": 367.0,
+    "usa": 404.0,
+    "mexico": 378.0,
+    "brazil": 385.0,
+    "vegas": 296.0,
+    "qatar": 422.0,
+    "abudhabi": 362.0,
+    "portugal": 430.0,
+    "turkey": 378.0,
+    "malaysia": 412.0,
+}
 
 
 def resample(points, count, closed=False):
@@ -268,17 +299,25 @@ def build_pit_geometry(track):
         else:
             tx,ty = _unit(points[max(0,k-1)],points[min(len(points)-1,k+1)])
         track.pit_stations.append({'x':x,'y':y,'tx':tx,'ty':ty})
-    garage_middle=(garage_lo+garage_hi)*.5
-    spacing_px = min(24.0*track.px_per_m, track.pit_canvas_len*(garage_hi-garage_lo)/10)
+    fia_pit_m = float(layout.get('fia_pit_length_m', REAL_FIA_PIT_LENGTH_M.get(track.id, 360.0)))
+    track.fia_pit_length_m = min(fia_pit_m, track.pit_length_m * 0.88)
+    du_fia = track.fia_pit_length_m / max(1.0, track.pit_length_m)
+    garage_middle = (garage_lo + garage_hi) * 0.5
+    u_in = max(0.04, min(0.93 - du_fia, garage_middle - 0.5 * du_fia))
+    u_out = u_in + du_fia
+    track.pit_speed_entry_u = u_in
+    track.pit_speed_exit_u = u_out
+    box_lo = u_in + 18.0 / max(1.0, track.pit_length_m)
+    box_hi = max(box_lo + 0.08, u_out - 24.0 / max(1.0, track.pit_length_m))
+    box_mid = 0.5 * (box_lo + box_hi)
+    spacing_px = min(19.0 * track.px_per_m, track.pit_canvas_len * (box_hi - box_lo) / 10.0)
     track.pit_garage_spacing_s = spacing_px / track.pit_px_per_m
-    track.pit_box_s = (track.pit_entry_s + garage_middle*track.pit_span_m + 5*track.pit_garage_spacing_s) % L
+    track.pit_box_s = (track.pit_entry_s + box_mid * track.pit_span_m + 5.0 * track.pit_garage_spacing_s) % L
     track.pit_garages = []
     for i in range(11):
-        s = (track.pit_box_s-i*track.pit_garage_spacing_s) % L
+        s = (track.pit_box_s - i * track.pit_garage_spacing_s) % L
         p = track.sample_pit(s)
-        track.pit_garages.append({'index':i,'s_m':s,'x':p['x'],'y':p['y'],'tx':p['tx'],'ty':p['ty']})
-    track.pit_speed_entry_u = max(.02,garage_lo-20/track.pit_length_m)
-    track.pit_speed_exit_u = min(.98,garage_hi+30/track.pit_length_m)
+        track.pit_garages.append({'index': i, 's_m': s, 'x': p['x'], 'y': p['y'], 'tx': p['tx'], 'ty': p['ty']})
     track.pit_entry_blend_dist_m = min(105.0, max(62.0, L * 0.072))
     fwd_corners = sorted(((c['s_m'] - track.pit_exit_s) % L) for c in getattr(track, 'corners', []))
     next_corner_m = fwd_corners[0] if fwd_corners else 140.0

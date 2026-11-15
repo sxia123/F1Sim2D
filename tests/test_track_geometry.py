@@ -410,5 +410,58 @@ class TrackGeometryTests(unittest.TestCase):
                 self.assertAlmostEqual(math.hypot(mid["tx"], mid["ty"]), 1.0, places=5)
                 self.assertAlmostEqual(math.hypot(mid["nx"], mid["ny"]), 1.0, places=5)
 
+    def test_pit_speed_limit_zone_matches_real_fia_pit_lengths(self):
+        from sim.data import clone_initial_roster
+        from sim.physics import PIT_SPEED_LIMIT_MS, RaceSession
+        from sim.track_geometry import REAL_FIA_PIT_LENGTH_M
+
+        by_id = {t.id: t for t in COMPILED_TRACKS}
+        for t in COMPILED_TRACKS:
+            with self.subTest(track=t.id):
+                self.assertIn(t.id, REAL_FIA_PIT_LENGTH_M)
+                lim_m = (t.pit_speed_exit_u - t.pit_speed_entry_u) * t.pit_length_m
+                self.assertLessEqual(abs(lim_m - REAL_FIA_PIT_LENGTH_M[t.id]), 0.5, f"{t.id} limiter zone {lim_m:.2f}m")
+                for g in t.pit_garages:
+                    rel_u = ((g["s_m"] - t.pit_entry_s) % t.length_m) / max(1.0, t.pit_span_m)
+                    self.assertGreater(rel_u, t.pit_speed_entry_u, f"{t.id} garage {g['index']} before speed-in")
+                    self.assertLess(rel_u, t.pit_speed_exit_u, f"{t.id} garage {g['index']} after speed-out")
+
+        teams, all_drivers = clone_initial_roster()
+        teams_by_id = {tm["id"]: tm for tm in teams}
+        drivers = [d for d in all_drivers if d.get("team_id")][:1]
+        for tid in ("brazil", "britain", "abudhabi"):
+            t = by_id[tid]
+            race = RaceSession(t, teams_by_id, drivers, 0.0, 0.0, drivers[0]["team_id"])
+            race.lights_out = True
+            race.flag_state = "GREEN"
+            car = race.cars[0]
+            car.s = (t.pit_entry_s + 5.0) % t.length_m
+            car.total_dist = car.s
+            car.v = 36.0
+            car.in_pits = True
+            car.pit_phase = "ENTRY"
+
+            entry_ramp_speeds = []
+            limiter_speeds = []
+            exit_ramp_speeds = []
+            for _ in range(2500):
+                if not car.in_pits:
+                    break
+                rel = (car.s - t.pit_entry_s) % t.length_m
+                u_pit = rel / max(1.0, t.pit_span_m)
+                race._step_pit_lane(car, False, 0.05, lambda *_: None)
+                if car.in_pits and car.pit_phase in ("ENTRY", "EXIT"):
+                    if u_pit < t.pit_speed_entry_u - 0.02:
+                        entry_ramp_speeds.append(car.v)
+                    elif t.pit_speed_entry_u + 0.02 <= u_pit <= t.pit_speed_exit_u - 0.02:
+                        limiter_speeds.append(car.v)
+                    elif u_pit > t.pit_speed_exit_u + 0.03:
+                        exit_ramp_speeds.append(car.v)
+
+            self.assertFalse(car.in_pits, f"{tid} pit visit did not exit pit lane")
+            self.assertTrue(entry_ramp_speeds and max(entry_ramp_speeds) > PIT_SPEED_LIMIT_MS + 2.0, f"{tid} entry ramp too slow")
+            self.assertTrue(limiter_speeds and all(abs(v - PIT_SPEED_LIMIT_MS) <= 1e-6 for v in limiter_speeds), f"{tid} limiter zone speed mismatch")
+            self.assertTrue(exit_ramp_speeds and max(exit_ramp_speeds) > PIT_SPEED_LIMIT_MS + 2.0, f"{tid} exit ramp did not accelerate")
+
 
 if __name__=='__main__':unittest.main()

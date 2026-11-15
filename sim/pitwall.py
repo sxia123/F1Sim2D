@@ -82,7 +82,14 @@ class RivalPitWall:
         neutral = 1.65 if flag == "SC" else 1.40 if flag == "VSC" else 1.0
         stop = 2.9 - car.upgrades["pit_crew"] * 0.098
         repairs = 7.4 if car.wing_damage >= 0.20 else 0.0
-        return max(4.0, race.track.pit_length_m / 22.22 + stop + repairs
+        lim_m = getattr(
+            race.track,
+            "fia_pit_length_m",
+            (race.track.pit_speed_exit_u - race.track.pit_speed_entry_u) * race.track.pit_length_m,
+        )
+        ramp_m = max(0.0, race.track.pit_length_m - lim_m)
+        pit_drive_s = lim_m / 22.22 + ramp_m / 33.5
+        return max(4.0, pit_drive_s + stop + repairs
                    + min(10.0, car.time_penalty_s) - self.mainline_pit_s * neutral)
 
     def _lap_cost(self, compound, wear, wetness, damage=0.0):

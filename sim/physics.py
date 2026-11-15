@@ -3345,9 +3345,7 @@ class RaceSession:
         min_pit_long_m = (CAR_LEN_PX * 1.10) / self.track.pit_px_per_m
 
         if car.pit_phase == "ENTRY":
-            car.v = max(PIT_SPEED_LIMIT_MS, car.v - 35.0 * dt)
             prev_s = car.s
-            ds = car.v * dt * self.track.pit_distance_scale
             L = self.track.length_m
             span = self.track.pit_span_m
 
@@ -3355,6 +3353,14 @@ class RaceSession:
             rel = (prev_s - self.track.pit_entry_s) % L
             if rel > L - 150.0:
                 rel -= L
+            u_pit = max(0.0, min(1.0, rel / max(1.0, span)))
+            if u_pit < self.track.pit_speed_entry_u:
+                dist_to_lim_m = max(0.0, (self.track.pit_speed_entry_u - u_pit) * self.track.pit_length_m)
+                v_ramp_cap = min(38.0, math.sqrt(PIT_SPEED_LIMIT_MS ** 2 + 2.0 * 14.0 * dist_to_lim_m))
+                car.v = max(PIT_SPEED_LIMIT_MS, min(car.v, v_ramp_cap))
+            else:
+                car.v = max(PIT_SPEED_LIMIT_MS, car.v - 35.0 * dt)
+            ds = car.v * dt * self.track.pit_distance_scale
             rel_box = (team_box_s - self.track.pit_entry_s) % L
 
             teammate_stopped = any(
@@ -3372,7 +3378,7 @@ class RaceSession:
                 car.pit_apron = max(0.0, car.pit_apron - dt * 2.8)
                 car._pit_apron_vel = -2.8 if prev_apron > 0.0 else 0.0
 
-            if not car.pit_speed_checked and rel >= 0.0:
+            if not car.pit_speed_checked and u_pit >= self.track.pit_speed_entry_u:
                 car.pit_speed_checked = True
                 if random.random() < 0.038 * (1.20 - car.skills["consistency"] / 100.0):
                     car.time_penalty_s += 5
@@ -3510,9 +3516,13 @@ class RaceSession:
             prev_apron = car.pit_apron
             car.pit_apron = max(0.0, car.pit_apron - dt * 2.4)
             car._pit_apron_vel = -2.4 if prev_apron > 0.0 else 0.0
-            car.v = PIT_SPEED_LIMIT_MS
             L_ex = self.track.length_m
             rel_ex = (car.s - self.track.pit_entry_s) % L_ex
+            u_ex = max(0.0, min(1.0, rel_ex / max(1.0, self.track.pit_span_m)))
+            if u_ex <= self.track.pit_speed_exit_u:
+                car.v = PIT_SPEED_LIMIT_MS
+            else:
+                car.v = min(35.0, car.v + 12.0 * dt)
             ds = car.v*dt*self.track.pit_distance_scale
             remaining=max(0,self.track.pit_span_m-rel_ex)
             travelled=min(ds,remaining)
