@@ -76,18 +76,26 @@ def _smoothstep(u: float) -> float:
     return u * u * (3.0 - 2.0 * u)
 
 
-def _clear_close_parallel_pit(track, points, min_clearance_px: float, clear_lo: float = 0.08, clear_hi: float = 0.92):
+def _clear_close_parallel_pit(
+    track,
+    points,
+    min_clearance_px: float,
+    clear_lo: float = 0.08,
+    clear_hi: float = 0.92,
+    entry_hold: float = 0.0,
+    exit_hold: float = 1.0,
+):
     """Smoothly keep close-parallel working pit sections outside main track asphalt/verge."""
     n = len(points)
     tun = track.pit_tunnel_u
     nudges = []
     for k, (x, y) in enumerate(points):
         u = k / max(1, n - 1)
-        if tun and (tun[0] - 0.12 <= u <= tun[1] + 0.12):
+        if u <= entry_hold or u >= exit_hold or (tun and (tun[0] - 0.12 <= u <= tun[1] + 0.12)):
             nudges.append((0.0, 0.0))
             continue
-        w_in = _smoothstep(u / max(clear_lo, 0.03)) if u < clear_lo else 1.0
-        w_out = _smoothstep((1.0 - u) / max(1.0 - clear_hi, 0.03)) if u > clear_hi else 1.0
+        w_in = _smoothstep((u - entry_hold) / max(clear_lo - entry_hold, 0.03)) if u < clear_lo else 1.0
+        w_out = _smoothstep((exit_hold - u) / max(exit_hold - clear_hi, 0.03)) if u > clear_hi else 1.0
         edge_w = min(w_in, w_out)
         near = min(track.stations, key=lambda s: (s['x'] - x) ** 2 + (s['y'] - y) ** 2)
         tx, ty = _unit(points[max(0, k - 1)], points[min(n - 1, k + 1)])
@@ -101,7 +109,7 @@ def _clear_close_parallel_pit(track, points, min_clearance_px: float, clear_lo: 
             nudges.append((near['nx'] * track.pit_side * push, near['ny'] * track.pit_side * push))
         else:
             nudges.append((0.0, 0.0))
-    for _ in range(6):
+    for _ in range(8):
         nxt = [(0.0, 0.0)]
         for k in range(1, n - 1):
             nxt.append((
@@ -153,18 +161,30 @@ def build_pit_geometry(track):
         u = cross / (len(points) - 1)
         track.pit_tunnel_u = [max(.6, u - .04), min(.98, u + .04)]
     garage_lo,garage_hi=layout.get('garage_u_range',[.275,.725])
-    clear_lo = min(0.08, max(0.03, garage_lo * 0.65))
+    pad_u = 18.0 * WORLD_UNITS_PER_M / max(raw_len, 1.0)
+    clear_lo = max(0.03, min(0.75, garage_lo - pad_u * 0.45))
     clear_hi = max(0.88, min(0.955, garage_hi + 22.0 * WORLD_UNITS_PER_M / max(raw_len, 1.0)))
-    points = _clear_close_parallel_pit(track, points, track.pit_width_px * 0.5 + 2.5, clear_lo, clear_hi)
+    entry_hold = max(0.015, clear_lo - min(0.16, garage_lo * 0.55))
+    exit_hold = min(0.985, clear_hi + min(0.10, max(0.03, (1.0 - clear_hi) * 0.65)))
+    points = _clear_close_parallel_pit(
+        track,
+        points,
+        track.pit_width_px * 0.5 + 2.5,
+        clear_lo,
+        clear_hi,
+        entry_hold=entry_hold,
+        exit_hold=exit_hold,
+    )
 
     cum = [0.0]
     for a, b in zip(points, points[1:]):
         cum.append(cum[-1] + math.dist(a, b))
     tot = max(cum[-1], 1e-6)
-    in_target = min(40.0 * WORLD_UNITS_PER_M, tot * 0.14)
+    # Keep pit-entry bridge short (~20m / 7.5%) so the real traced pit-entry shape dominates.
+    in_target = min(20.0 * WORLD_UNITS_PER_M, tot * 0.075)
     out_target = min(50.0 * WORLD_UNITS_PER_M, tot * 0.16)
-    i_in = next((k for k, d in enumerate(cum) if d >= in_target), 5)
-    i_in = max(5, min(i_in, int(max(0.04, garage_lo - 0.015) * (len(points) - 1)), len(points) // 4))
+    i_in = next((k for k, d in enumerate(cum) if d >= in_target), 4)
+    i_in = max(4, min(i_in, int(max(0.025, garage_lo - 0.012) * (len(points) - 1)), len(points) // 6))
     i_out_len = next((k for k in range(len(cum) - 1, -1, -1) if tot - cum[k] >= out_target), len(points) - 6)
     i_out = max(i_out_len, int((garage_hi + 0.015) * (len(points) - 1)), 3 * len(points) // 4)
     i_out = min(len(points) - 6, i_out)
@@ -197,6 +217,7 @@ def build_pit_geometry(track):
         track.pit_garages.append({'index':i,'s_m':s,'x':p['x'],'y':p['y'],'tx':p['tx'],'ty':p['ty']})
     track.pit_speed_entry_u = max(.02,garage_lo-20/track.pit_length_m)
     track.pit_speed_exit_u = min(.98,garage_hi+30/track.pit_length_m)
+    track.pit_entry_blend_dist_m = min(105.0, max(62.0, L * 0.072))
     fwd_corners = sorted(((c['s_m'] - track.pit_exit_s) % L) for c in getattr(track, 'corners', []))
     next_corner_m = fwd_corners[0] if fwd_corners else 140.0
     track.pit_exit_blend_dist_m = min(115.0, max(58.0, next_corner_m * 0.78))
@@ -205,15 +226,16 @@ def build_pit_geometry(track):
     track.pit_blend_line = []
     for k in range(25):
         u = k / 24.0
-        s_in = track.pit_entry_s - 100.0 + 100.0 * u
+        s_in = track.pit_entry_s - track.pit_entry_blend_dist_m * (1.0 - u)
         p_in = track.sample(s_in)
-        off_in = track.lateral_to_px(.62 * track.pit_side, s_in)
-        track.pit_entry_blend_line.append([p_in['x'] + p_in['nx'] * off_in, p_in['y'] + p_in['ny'] * off_in])
+        d_in = (1.0 - _smoothstep(u)) * (0.94 * track.pit_side) + _smoothstep(u) * (0.50 * track.pit_side)
+        off_in = track.lateral_to_px(d_in, s_in)
+        track.pit_entry_blend_line.append([round(p_in['x'] + p_in['nx'] * off_in, 2), round(p_in['y'] + p_in['ny'] * off_in, 2)])
         s_out = track.pit_exit_s + track.pit_exit_blend_dist_m * u
         p_out = track.sample(s_out)
         d_out = (1.0 - _smoothstep(u)) * (0.76 * track.pit_side) + _smoothstep(u) * p_out.get('racing_line_d', 0.0)
         off_out = track.lateral_to_px(d_out, s_out)
-        track.pit_blend_line.append([p_out['x'] + p_out['nx'] * off_out, p_out['y'] + p_out['ny'] * off_out])
+        track.pit_blend_line.append([round(p_out['x'] + p_out['nx'] * off_out, 2), round(p_out['y'] + p_out['ny'] * off_out, 2)])
     all_points = [(s['x'],s['y']) for s in track.stations+track.pit_stations]
     margin = max(track.track_width_px, track.pit_width_px) + 40
     track.bounds = {'min_x':min(p[0] for p in all_points)-margin,

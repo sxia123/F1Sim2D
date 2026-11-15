@@ -487,6 +487,53 @@ class WheelToWheelTests(unittest.TestCase):
             street_race._handle_collision(a, b, 1, ignore_event)
         self.assertTrue(b.dnf)
 
+    def test_runoff_allows_outside_room_and_saves_failed_lunge_from_crash(self):
+        race = self.race("bahrain", count=2)
+        race.lights_out = True
+        race.lights_countdown = 0.0
+        race.flag_state = "GREEN"
+        race.race_clock = 45.0
+        dfn, atk = race.cars
+        corner = max(
+            (c for c in race.track.corners if race.track.sample(c["s_m"])["curv"] > 0.0082),
+            key=lambda c: race.track.sample(c["s_m"]).get("runoff_width_m", 0.0),
+        )
+        s = corner["s_m"]
+        smp = race.track.sample(s)
+        self.assertGreater(smp["curv"], 0.0078)
+        self.assertGreaterEqual(smp["runoff_width_m"], 4.0)
+        rside = smp["runoff_side"]
+        self.assertNotEqual(rside, 0)
+        race.standings = [dfn, atk]
+
+        # Outside neighbor alongside inside car gains extra runoff margin beyond 0.88
+        self.place(race, dfn, s, rside * 0.48)
+        self.place(race, atk, s, rside * 0.96)
+        atk.maneuver_pass_timer = 1.0
+        atk.maneuver_target_id = dfn.driver_id
+        clamped = race._clamp_lane_for_alongside(atk, rside * 0.98, smp)
+        self.assertGreater(abs(clamped), 0.88)
+
+        # Failed lunge into a runoff corner uses runoff escape instead of barrier contact
+        self.place(race, dfn, s + 6.0, -rside * 0.25)
+        self.place(race, atk, s, rside * 0.20)
+        dfn.v = 32.0
+        atk.v = 36.0
+        atk.maneuver_pass_timer = 0.0
+        atk.maneuver_attempt_cooldown = 0.0
+        atk.contact_cooldown = 0.0
+        dfn.contact_cooldown = 0.0
+        events = []
+        with patch("sim.physics.random.random", return_value=0.001):
+            with patch.object(race, "select_and_evaluate_maneuver", return_value=("DIVEBOMB", 0.0, -rside * 0.65)):
+                race._resolve_battles_and_incidents(0.05, lambda k, m: events.append((k, m)))
+
+        self.assertFalse(atk.dnf)
+        self.assertFalse(dfn.dnf)
+        self.assertGreater(atk.target_d * rside, 0.90)
+        self.assertGreater(getattr(atk, "_sep_lane_timer", 0.0), 0.5)
+        self.assertFalse(any(k == "INCIDENT" for k, _ in events))
+
 
 if __name__ == "__main__":
     unittest.main()

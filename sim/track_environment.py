@@ -361,5 +361,17 @@ def get_track_environment(track):
         from sim.jeddah_environment import enrich_jeddah
         enrich_jeddah(track,env,_SCENERY[track.id],road,areas,free,rng,bounds,world_paths,
                       inside_feature,feature_bounds,rectangle)
+    for rz in getattr(track, "runoff_zones", []):
+        if rz.get("surface") == "gravel" and rz.get("polygon"):
+            paths = [rz["polygon"]]
+            env["gravel_traps"].append(
+                dict(
+                    id=f"gravel_turn_{rz['turn']}",
+                    kind="gravel",
+                    turn=rz["turn"],
+                    paths=paths,
+                    bounds=feature_bounds(paths),
+                )
+            )
     _ENV_CACHE[track] = fingerprint,env
     return env

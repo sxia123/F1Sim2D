@@ -153,6 +153,36 @@ class NaturalTurningTests(unittest.TestCase):
         # Single-tick heading steps remain smoothly bounded through lateral turn-in
         self.assertLessEqual(max(dh_steps), 0.22)
 
+    def test_smooth_racing_line_following_and_no_battle_swerving(self):
+        race = RaceSession(self.track, self.teams_dict, self.drivers[:2], 0, 0, "mclaren")
+        race.lights_out = True
+        race.lights_countdown = 0.0
+        race.flag_state = "GREEN"
+        lead, trail = race.cars
+        start_s = self.track.corners[0]["s_m"] if self.track.corners else 320.0
+        for idx, c in enumerate((lead, trail)):
+            c.s = (start_s - 45.0 - idx * 24.0) % self.track.length_m
+            c.lap = 2
+            c.total_dist = self.track.length_m + c.s
+            c.v = 66.0
+            c.free_air_target_v = 72.0
+            c.d = self.track.sample(c.s)["racing_line_d"]
+            c.target_d = c.d
+            c._heading_tick = -1
+            c._has_initial_heading = False
+            race._update_xy(c)
+
+        prev_td = trail.target_d
+        max_td_step = 0.0
+        for _ in range(70):
+            race.step(0.05, ignore_event)
+            if trail.maneuver_pass_timer <= 0.0 and trail.maneuver_timer <= 0.0:
+                max_td_step = max(max_td_step, abs(trail.target_d - prev_td))
+            prev_td = trail.target_d
+            self.assertLessEqual(abs(trail.lateral_velocity), 4.2)
+
+        self.assertLessEqual(max_td_step, 0.22, f"Unexpected target_d swerve step {max_td_step:.3f}")
+
 
 if __name__ == "__main__":
     unittest.main()

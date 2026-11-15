@@ -255,5 +255,90 @@ class TrackGeometryTests(unittest.TestCase):
         self.assertEqual(exiting._pit_blend_u, 0.25)
         self.assertAlmostEqual(tgt, (1.0 - (0.25 ** 2 * (3.0 - 2.0 * 0.25))) * (0.76 * t.pit_side) + (0.25 ** 2 * (3.0 - 2.0 * 0.25)) * (-0.66 * t.pit_side))
 
+    def test_pit_entry_reference_fidelity_runoff_zones_and_smooth_racing_line(self):
+        from sim.data import clone_initial_roster
+        from sim.physics import RaceSession
+
+        def point_to_polyline_dist(px: float, py: float, poly: list[tuple[float, float]]) -> float:
+            best = 1e9
+            for (x1, y1), (x2, y2) in zip(poly, poly[1:]):
+                dx, dy = x2 - x1, y2 - y1
+                seg_sq = dx * dx + dy * dy
+                t_u = 0.0 if seg_sq <= 1e-9 else max(0.0, min(1.0, ((px - x1) * dx + (py - y1) * dy) / seg_sq))
+                d = math.hypot(px - (x1 + t_u * dx), py - (y1 + t_u * dy))
+                if d < best:
+                    best = d
+            return best
+
+        by_id = {t.id: t for t in COMPILED_TRACKS}
+        for t in COMPILED_TRACKS:
+            with self.subTest(track=t.id):
+                self.assertEqual(len(t.pit_entry_blend_line), 25)
+                self.assertEqual(t.to_client_payload()["pit_entry_blend_points"], t.pit_entry_blend_line)
+                for pt in t.pit_entry_blend_line:
+                    self.assertTrue(all(math.isfinite(v) for v in pt))
+                rl = [st["racing_line_d"] for st in t.stations]
+                n = len(rl)
+                max_d1 = max(abs(rl[(k + 1) % n] - rl[k]) for k in range(n))
+                max_d2 = max(abs(rl[(k + 1) % n] - 2.0 * rl[k] + rl[(k - 1) % n]) for k in range(n))
+                self.assertLessEqual(max_d1, 0.11, f"{t.id} steep racing_line_d slope {max_d1:.4f}")
+                self.assertLessEqual(max_d2, 0.035, f"{t.id} sharp racing_line_d accel {max_d2:.4f}")
+
+        self.assertTrue(all(z["surface"] != "gravel" for z in by_id["monaco"].runoff_zones))
+        for perm_id in ("australia", "britain", "italy", "japan", "belgium"):
+            zones = by_id[perm_id].runoff_zones
+            self.assertGreater(len(zones), 0, f"{perm_id} missing runoff_zones")
+            self.assertTrue(any(z["surface"] == "gravel" for z in zones), f"{perm_id} missing gravel runoff")
+
+        for tid in ("azerbaijan", "usa", "australia", "britain"):
+            t = by_id[tid]
+            raw_pts = [((x - 500) * t.map_scale + 500, (y - 325) * t.map_scale + 325) for x, y in t.layout["pit_points"]]
+            max_dev = max(point_to_polyline_dist(p["x"], p["y"], raw_pts) for p in t.pit_stations[5:26])
+            self.assertLessEqual(max_dev, 6.5, f"{tid} pit entry strayed {max_dev:.2f}px from reference map")
+
+        teams, drivers = clone_initial_roster()
+        teams_by_id = {tm["id"]: tm for tm in teams}
+        for tid in ("azerbaijan", "usa", "australia", "monaco"):
+            t = by_id[tid]
+            race = RaceSession(t, teams_by_id, drivers[:1], 0.0, 0.0, drivers[0]["team_id"])
+            race.lights_out = True
+            race.lights_countdown = 0.0
+            race.flag_state = "GREEN"
+            car = race.cars[0]
+            L = t.length_m
+            car.s = (t.pit_entry_s - 125.0) % L
+            car.total_dist = L + car.s
+            car.lap = 2
+            car.v = 72.0
+            car.box_this_lap = True
+            car.auto_strategy = False
+            car.d = -0.35 * t.pit_side
+            car.target_d = car.d
+            race._update_xy(car)
+
+            peeled = False
+            entered = False
+            min_v_before_entry = car.v
+            prev_x, prev_y = car.x, car.y
+            for _ in range(180):
+                was_in_pits = car.in_pits
+                v_before = car.v
+                race.step(0.05, lambda *_: None)
+                if not car.in_pits:
+                    min_v_before_entry = min(min_v_before_entry, car.v)
+                    if abs(car.target_d - 0.72 * t.pit_side) < 0.25:
+                        peeled = True
+                elif not was_in_pits:
+                    entered = True
+                    jump_px = math.hypot(car.x - prev_x, car.y - prev_y)
+                    max_allowed_px = max(4.5, v_before * 0.05 * t.px_per_m + 1.5)
+                    self.assertLessEqual(jump_px, max_allowed_px, f"{tid} pit entry jump {jump_px:.2f}px")
+                    break
+                prev_x, prev_y = car.x, car.y
+
+            self.assertTrue(peeled, f"{tid} car never peeled toward pit entry lane")
+            self.assertTrue(entered, f"{tid} car did not enter pit lane")
+            self.assertLess(min_v_before_entry, 48.0, f"{tid} car did not brake smoothly for pit entry")
+
 
 if __name__=='__main__':unittest.main()

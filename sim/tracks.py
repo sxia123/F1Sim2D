@@ -8,6 +8,10 @@ from sim.car_geometry import client_car_geometry
 from sim.track_geometry import WORLD_UNITS_PER_M, GEOMETRY_REVISION, compile_centerline, build_pit_geometry, build_start_grid
 from sim.track_environment import get_track_environment
 
+_WALLED_STREET_CIRCUITS = {"monaco", "saudi", "azerbaijan", "singapore", "vegas"}
+_SEMI_STREET_CIRCUITS = {"australia", "canada", "miami", "madrid"}
+_MODERN_TARMAC_CIRCUITS = {"bahrain", "usa", "mexico", "qatar", "abudhabi", "turkey"}
+
 # Official 2026 FIA Formula 1 Calendar including the 6 official 2026 Sprint Rounds:
 # Shanghai (R2), Miami (R6), Montreal (R7), Silverstone (R11), Zandvoort (R14), Singapore (R18).
 CALENDAR_2026 = [
@@ -221,98 +225,258 @@ class CompiledTrack:
 
         self.detection_station = self.drs_zones[0]["detection_station"]
         self.detection_s_m = self.drs_zones[0]["detection_s_m"]
+        self._build_racing_line()
         build_pit_geometry(self)
+        self._build_runoff_zones()
+        build_start_grid(self)
 
-        # Build ultra-smooth continuous geometric racing line (outside entry -> apex kerb -> exit kerb)
-        if self.corners:
-            n_c = len(self.corners)
-            waypoints: list[tuple[float, float]] = []
-            for i in range(n_c):
-                c_cur = self.corners[i]
-                c_prev = self.corners[(i - 1) % n_c]
-                c_next = self.corners[(i + 1) % n_c]
-
-                k_cur = c_cur["station"]
-                ins_cur = self.stations[k_cur]["inside_sign"]
-
-                d_prev = (k_cur - c_prev["station"]) % m
-                d_next = (c_next["station"] - k_cur) % m
-
-                # Apex is clipped tightly on the inside kerb
-                waypoints.append((float(k_cur), 0.58 * ins_cur))
-
-                # Wide outside setup on entry if coming off a straight
-                if d_prev >= 18:
-                    lead = min(d_prev * 0.35, 12.0)
-                    k_entry = (k_cur - lead) % m
-                    waypoints.append((float(k_entry), -0.60 * ins_cur))
-
-                # Wide outside track-out on exit if heading onto a straight
-                if d_next >= 18:
-                    trail = min(d_next * 0.35, 12.0)
-                    k_exit = (k_cur + trail) % m
-                    waypoints.append((float(k_exit), -0.60 * ins_cur))
-
-            waypoints.sort(key=lambda wp: wp[0])
-            n_wp = len(waypoints)
-
-            raw_line = [0.0] * m
-            for k in range(m):
-                target_s = float(k)
-                idx = n_wp - 1
-                for i in range(n_wp):
-                    s_curr = waypoints[i][0]
-                    s_nxt = waypoints[(i + 1) % n_wp][0]
-                    if s_curr <= s_nxt:
-                        if s_curr <= target_s < s_nxt:
-                            idx = i
-                            break
-                    else:
-                        if target_s >= s_curr or target_s < s_nxt:
-                            idx = i
-                            break
-
-                w0 = waypoints[(idx - 1) % n_wp]
-                w1 = waypoints[idx]
-                w2 = waypoints[(idx + 1) % n_wp]
-                w3 = waypoints[(idx + 2) % n_wp]
-
-                span = (w2[0] - w1[0]) % m
-                if span < 1e-4:
-                    raw_line[k] = w1[1]
-                    continue
-                rel = (target_s - w1[0]) % m
-                t = min(1.0, max(0.0, rel / span))
-
-                h00 = (1.0 + 2.0 * t) * (1.0 - t) ** 2
-                h10 = t * (1.0 - t) ** 2
-                h01 = (t ** 2) * (3.0 - 2.0 * t)
-                h11 = (t ** 2) * (t - 1.0)
-
-                span_prev = max((w1[0] - w0[0]) % m, 1.0)
-                span_next = max((w3[0] - w2[0]) % m, 1.0)
-                m1 = 0.5 * (w2[1] - w0[1]) * (span / (span + span_prev)) * 2.0
-                m2 = 0.5 * (w3[1] - w1[1]) * (span / (span + span_next)) * 2.0
-                raw_line[k] = h00 * w1[1] + h10 * m1 + h01 * w2[1] + h11 * m2
-
-            # 18-pass Laplacian smoothing for whisper-quiet C2 continuity
-            cur_line = list(raw_line)
-            for _ in range(18):
-                nxt_line = list(cur_line)
-                for k in range(m):
-                    p = cur_line[(k - 1) % m]
-                    c = cur_line[k]
-                    n = cur_line[(k + 1) % m]
-                    nxt_line[k] = 0.25 * p + 0.50 * c + 0.25 * n
-                cur_line = nxt_line
-
-            for k in range(m):
-                self.stations[k]["racing_line_d"] = round(max(-0.66, min(0.66, cur_line[k])), 4)
-        else:
+    def _build_racing_line(self) -> None:
+        """Synthesize a smooth, curvature-scaled geometric racing line free of chicane/straight S-swerves."""
+        m = self.NUM_STATIONS
+        if not self.corners:
             for k in range(m):
                 self.stations[k]["racing_line_d"] = 0.0
+            return
 
-        build_start_grid(self)
+        n_c = len(self.corners)
+        raw_wps: list[tuple[float, float]] = []
+        for i in range(n_c):
+            c_cur = self.corners[i]
+            c_prev = self.corners[(i - 1) % n_c]
+            c_next = self.corners[(i + 1) % n_c]
+
+            k_cur = c_cur["station"]
+            ins_cur = self.stations[k_cur]["inside_sign"]
+            peak_curv = max(self.stations[(k_cur + off) % m]["curv"] for off in range(-3, 4))
+
+            d_prev = (k_cur - c_prev["station"]) % m
+            d_next = (c_next["station"] - k_cur) % m
+
+            # Scale lateral amplitude by corner severity so minor sweepers stay fluid
+            severity = min(1.0, max(0.26, (peak_curv - 0.0030) / 0.011))
+            apex_mag = 0.56 * severity
+            out_mag = 0.52 * severity
+            raw_wps.append((float(k_cur), apex_mag * ins_cur))
+
+            if d_prev >= 26:
+                lead = min(d_prev * 0.34, 15.0)
+                ins_prev = self.stations[c_prev["station"]]["inside_sign"]
+                entry_scale = 0.72 if (d_prev < 42 and ins_prev == ins_cur) else 1.0
+                k_entry = (k_cur - lead) % m
+                raw_wps.append((float(k_entry), -out_mag * entry_scale * ins_cur))
+
+            if d_next >= 26:
+                trail = min(d_next * 0.34, 15.0)
+                ins_next = self.stations[c_next["station"]]["inside_sign"]
+                exit_scale = 0.72 if (d_next < 42 and ins_next == ins_cur) else 1.0
+                k_exit = (k_cur + trail) % m
+                raw_wps.append((float(k_exit), -out_mag * exit_scale * ins_cur))
+
+                if d_next >= 58:
+                    k_nxt_st = c_next["station"]
+                    nxt_curv = max(self.stations[(k_nxt_st + off) % m]["curv"] for off in range(-3, 4))
+                    nxt_out = 0.52 * min(1.0, max(0.26, (nxt_curv - 0.0030) / 0.011))
+                    k_mid = (k_cur + d_next * 0.50) % m
+                    raw_wps.append((float(k_mid), 0.5 * (-out_mag * ins_cur - nxt_out * ins_next)))
+
+        raw_wps.sort(key=lambda wp: wp[0])
+        waypoints: list[tuple[float, float]] = []
+        for s_wp, d_wp in raw_wps:
+            if waypoints and (s_wp - waypoints[-1][0]) < 4.0:
+                ps, pd = waypoints[-1]
+                waypoints[-1] = (0.5 * (ps + s_wp), 0.5 * (pd + d_wp))
+            else:
+                waypoints.append((s_wp, d_wp))
+        if len(waypoints) >= 2 and ((waypoints[0][0] + m) - waypoints[-1][0]) < 4.0:
+            s0, d0 = waypoints[0]
+            s1, d1 = waypoints.pop()
+            waypoints[0] = (((0.5 * (s0 + m + s1)) % m), 0.5 * (d0 + d1))
+            waypoints.sort(key=lambda wp: wp[0])
+
+        n_wp = len(waypoints)
+        raw_line = [0.0] * m
+        for k in range(m):
+            target_s = float(k)
+            idx = n_wp - 1
+            for i in range(n_wp):
+                s_curr = waypoints[i][0]
+                s_nxt = waypoints[(i + 1) % n_wp][0]
+                if s_curr <= s_nxt:
+                    if s_curr <= target_s < s_nxt:
+                        idx = i
+                        break
+                else:
+                    if target_s >= s_curr or target_s < s_nxt:
+                        idx = i
+                        break
+
+            w0 = waypoints[(idx - 1) % n_wp]
+            w1 = waypoints[idx]
+            w2 = waypoints[(idx + 1) % n_wp]
+            w3 = waypoints[(idx + 2) % n_wp]
+
+            span = (w2[0] - w1[0]) % m
+            if span < 1e-4:
+                raw_line[k] = w1[1]
+                continue
+            rel = (target_s - w1[0]) % m
+            t = min(1.0, max(0.0, rel / span))
+
+            h00 = (1.0 + 2.0 * t) * (1.0 - t) ** 2
+            h10 = t * (1.0 - t) ** 2
+            h01 = (t ** 2) * (3.0 - 2.0 * t)
+            h11 = (t ** 2) * (t - 1.0)
+
+            span_prev = max((w1[0] - w0[0]) % m, 1.0)
+            span_next = max((w3[0] - w2[0]) % m, 1.0)
+            m1 = 0.5 * (w2[1] - w0[1]) * (span / (span + span_prev)) * 2.0
+            m2 = 0.5 * (w3[1] - w1[1]) * (span / (span + span_next)) * 2.0
+            raw_line[k] = h00 * w1[1] + h10 * m1 + h01 * w2[1] + h11 * m2
+
+        # 44-pass circular Laplacian filter removes inflection kinks without delaying apex timing
+        cur_line = list(raw_line)
+        for _ in range(44):
+            nxt_line = [
+                0.25 * cur_line[(k - 1) % m] + 0.50 * cur_line[k] + 0.25 * cur_line[(k + 1) % m]
+                for k in range(m)
+            ]
+            cur_line = nxt_line
+
+        for k in range(m):
+            self.stations[k]["racing_line_d"] = round(max(-0.62, min(0.62, cur_line[k])), 4)
+
+    def _build_runoff_zones(self) -> None:
+        """Build real-circuit outside runoff pockets (FIA tarmac / gravel traps) clear of pit lane."""
+        m = self.NUM_STATIONS
+        for st in self.stations:
+            st["runoff_width_m"] = 0.0
+            st["runoff_side"] = 0
+            st["runoff_surface"] = 0
+
+        self.runoff_zones: list[dict] = []
+        if not self.corners:
+            return
+
+        is_walled = self.id in _WALLED_STREET_CIRCUITS
+        is_semi = self.id in _SEMI_STREET_CIRCUITS
+        is_modern_tarmac = self.id in _MODERN_TARMAC_CIRCUITS
+
+        scored_corners = []
+        n_c = len(self.corners)
+        for idx, c in enumerate(self.corners):
+            k_c = c["station"]
+            peak_curv = max(self.stations[(k_c + o) % m]["curv"] for o in range(-3, 4))
+            pre_low = sum(
+                1 for o in range(1, 20)
+                if self.stations[(k_c - o) % m]["curv"] < 0.0045
+            )
+            scored_corners.append((idx, c, peak_curv, pre_low))
+
+        street_escape_turns: set[int] = set()
+        if is_walled:
+            ranked = sorted(scored_corners, key=lambda item: (item[2] + item[3] * 0.0009), reverse=True)
+            for idx, c, peak_curv, pre_low in ranked[:3]:
+                if peak_curv >= 0.0095 or pre_low >= 8:
+                    street_escape_turns.add(c["number"])
+
+        pit_pts = getattr(self, "pit_stations", [])
+        pit_buf_px = getattr(self, "pit_width_px", 32.0) * 0.5 + 4.0
+
+        for i, c, peak_curv, pre_low in scored_corners:
+            k_c = c["station"]
+            if is_walled:
+                if c["number"] not in street_escape_turns:
+                    continue
+                max_w_m = min(7.8, max(5.2, 4.8 + peak_curv * 95.0))
+                surface = "tarmac"
+            elif is_semi:
+                if peak_curv < 0.0068 and pre_low < 7:
+                    continue
+                max_w_m = min(12.2, max(7.2, 6.2 + peak_curv * 185.0 + pre_low * 0.14))
+                surface = "gravel" if (self.id == "australia" and pre_low < 10 and peak_curv < 0.015) else "tarmac"
+            elif is_modern_tarmac:
+                if peak_curv < 0.0050:
+                    continue
+                max_w_m = min(16.0, max(9.5, 8.2 + peak_curv * 220.0 + pre_low * 0.18))
+                surface = "tarmac"
+            else:
+                if peak_curv < 0.0052:
+                    continue
+                max_w_m = min(15.2, max(8.8, 7.6 + peak_curv * 210.0 + pre_low * 0.16))
+                surface = "tarmac" if (pre_low >= 11 and peak_curv >= 0.0145) else "gravel"
+
+            outside_sign = -self.stations[k_c]["inside_sign"]
+            d_prev = (k_c - self.corners[(i - 1) % n_c]["station"]) % m
+            d_next = (self.corners[(i + 1) % n_c]["station"] - k_c) % m
+
+            pre_st = min(int(34.0 / self.ds_m), max(3, int(d_prev * 0.42)))
+            post_st = min(int(48.0 / self.ds_m), max(4, int(d_next * 0.46)))
+
+            while pre_st > 2 and self.stations[(k_c - pre_st) % m]["inside_sign"] != -outside_sign:
+                pre_st -= 1
+            while post_st > 2 and self.stations[(k_c + post_st) % m]["inside_sign"] != -outside_sign:
+                post_st -= 1
+
+            span_st = pre_st + post_st
+            if span_st < 5:
+                continue
+
+            inner_pts: list[list[float]] = []
+            outer_pts: list[list[float]] = []
+            peak_local_w = 0.0
+            for step_i in range(span_st + 1):
+                k = (k_c - pre_st + step_i) % m
+                u = step_i / span_st
+                shape = min(1.0, math.sin(math.pi * u) * 1.38) ** 0.85
+                local_w_m = max_w_m * shape
+
+                st = self.stations[k]
+                verge_off = outside_sign * (st["width_px"] * 0.5 + 1.0)
+                ix = st["x"] + st["nx"] * verge_off
+                iy = st["y"] + st["ny"] * verge_off
+
+                if pit_pts:
+                    ox_try = ix + st["nx"] * (outside_sign * local_w_m * WORLD_UNITS_PER_M)
+                    oy_try = iy + st["ny"] * (outside_sign * local_w_m * WORLD_UNITS_PER_M)
+                    min_p_d = min(math.hypot(ox_try - pp["x"], oy_try - pp["y"]) for pp in pit_pts)
+                    if min_p_d < pit_buf_px + 3.0:
+                        mid_p_d = min(math.hypot(ix - pp["x"], iy - pp["y"]) for pp in pit_pts)
+                        safe_px = max(0.0, mid_p_d - pit_buf_px - 3.0)
+                        local_w_m = min(local_w_m, safe_px / WORLD_UNITS_PER_M)
+
+                for step_j in range(0, m, 6):
+                    arc = min((k - step_j) % m, (step_j - k) % m)
+                    if arc < 30:
+                        continue
+                    other = self.stations[step_j]
+                    clr = math.hypot(ix - other["x"], iy - other["y"]) - other["width_px"] * 0.5 - 3.5
+                    if clr < local_w_m * WORLD_UNITS_PER_M:
+                        local_w_m = min(local_w_m, max(0.0, clr / WORLD_UNITS_PER_M))
+
+                ox = ix + st["nx"] * (outside_sign * local_w_m * WORLD_UNITS_PER_M)
+                oy = iy + st["ny"] * (outside_sign * local_w_m * WORLD_UNITS_PER_M)
+                inner_pts.append([round(ix, 1), round(iy, 1)])
+                outer_pts.append([round(ox, 1), round(oy, 1)])
+                peak_local_w = max(peak_local_w, local_w_m)
+
+                if local_w_m > st["runoff_width_m"] and local_w_m >= 1.2:
+                    st["runoff_width_m"] = round(local_w_m, 2)
+                    st["runoff_side"] = outside_sign
+                    st["runoff_surface"] = 2 if surface == "gravel" else 1
+
+            if peak_local_w >= 2.2 and len(inner_pts) >= 4:
+                poly = inner_pts + list(reversed(outer_pts))
+                self.runoff_zones.append(
+                    {
+                        "turn": c["number"],
+                        "surface": surface,
+                        "side": outside_sign,
+                        "width_m": round(peak_local_w, 1),
+                        "points": inner_pts,
+                        "outer_points": outer_pts,
+                        "polygon": poly,
+                    }
+                )
 
     def width_px_at(self,s_m:float) -> float:
         f=(s_m%self.length_m)/self.ds_m
@@ -356,6 +520,8 @@ class CompiledTrack:
         t = f - int(f)
         a = self.stations[i0]
         b = self.stations[i1]
+        surf_code = a.get("runoff_surface", 0) or b.get("runoff_surface", 0)
+        runoff_type = "gravel" if surf_code == 2 else ("tarmac" if surf_code == 1 else "none")
         return {
             "x": a["x"] + (b["x"] - a["x"]) * t,
             "y": a["y"] + (b["y"] - a["y"]) * t,
@@ -367,6 +533,9 @@ class CompiledTrack:
             "straight_mode": a["straight_mode"],
             "inside_sign": a["inside_sign"],
             "racing_line_d": a.get("racing_line_d", 0.0) + (b.get("racing_line_d", 0.0) - a.get("racing_line_d", 0.0)) * t,
+            "runoff_width_m": a.get("runoff_width_m", 0.0) + (b.get("runoff_width_m", 0.0) - a.get("runoff_width_m", 0.0)) * t,
+            "runoff_side": a.get("runoff_side", 0) or b.get("runoff_side", 0),
+            "runoff_type": runoff_type,
             "sector": a["sector"],
             "station": i0,
             "width_m":a['width_m']+(b['width_m']-a['width_m'])*t,
@@ -418,6 +587,17 @@ class CompiledTrack:
             "pit_exit_blend_s": self.pit_exit_blend_s,
             "pit_entry_blend_points": self.pit_entry_blend_line,
             "pit_blend_points": self.pit_blend_line,
+            "runoff_zones": [
+                {
+                    "turn": z["turn"],
+                    "surface": z["surface"],
+                    "side": z["side"],
+                    "width_m": z["width_m"],
+                    "points": z["points"],
+                    "outer_points": z["outer_points"],
+                }
+                for z in getattr(self, "runoff_zones", [])
+            ],
             "racing_line_points": [
                 [
                     round(self.stations[k]["x"] + self.stations[k]["nx"] * self.lateral_to_px(self.stations[k].get("racing_line_d", 0.0),k*self.ds_m), 1),

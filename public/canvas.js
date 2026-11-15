@@ -701,10 +701,85 @@ export class CircuitRenderer {
     this.scenery.draw(ctx, this.track, this._viewTransform, this.width, this.height, this.dpr);
   }
 
+  _drawRunoffZones(ctx) {
+    const zones = this.track.runoff_zones;
+    if (!zones || !zones.length) return;
+    ctx.save();
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    for (const z of zones) {
+      const inner = z.points;
+      const outer = z.outer_points;
+      if (!inner || !outer || inner.length < 3 || outer.length < 3) continue;
+
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      ctx.beginPath();
+      ctx.moveTo(inner[0][0], inner[0][1]);
+      for (let i = 0; i < inner.length; i++) {
+        const ix = inner[i][0], iy = inner[i][1];
+        if (ix < minX) minX = ix;
+        if (ix > maxX) maxX = ix;
+        if (iy < minY) minY = iy;
+        if (iy > maxY) maxY = iy;
+        if (i > 0) ctx.lineTo(ix, iy);
+      }
+      for (let i = outer.length - 1; i >= 0; i--) {
+        const ox = outer[i][0], oy = outer[i][1];
+        if (ox < minX) minX = ox;
+        if (ox > maxX) maxX = ox;
+        if (oy < minY) minY = oy;
+        if (oy > maxY) maxY = oy;
+        ctx.lineTo(ox, oy);
+      }
+      ctx.closePath();
+
+      if (z.surface === "gravel") {
+        ctx.fillStyle = "#6f6250";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(42, 34, 24, 0.72)";
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = "#1a1f28";
+        ctx.fill();
+        ctx.save();
+        ctx.clip();
+        const span = (maxX - minX) + (maxY - minY);
+        const startC = minX + minY - 4;
+        const endC = startC + span + 8;
+        ctx.lineWidth = 2.4;
+        for (let idx = 0, c = startC; c <= endC; c += 6.5, idx++) {
+          ctx.beginPath();
+          ctx.moveTo(minX - 4, c - (minX - 4));
+          ctx.lineTo(maxX + 4, c - (maxX + 4));
+          ctx.strokeStyle = idx % 2 === 0 ? "rgba(56, 130, 246, 0.20)" : "rgba(225, 6, 0, 0.14)";
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(outer[0][0], outer[0][1]);
+      for (let i = 1; i < outer.length; i++) {
+        ctx.lineTo(outer[i][0], outer[i][1]);
+      }
+      ctx.strokeStyle = "rgba(18, 22, 30, 0.88)";
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+      ctx.strokeStyle = z.surface === "gravel" ? "rgba(225, 40, 30, 0.45)" : "rgba(235, 240, 250, 0.28)";
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   _drawTrack(ctx, now) {
     const sts = this.track.stations;
     const n = sts.length;
     const wPx = this.track.track_width_px || 24.5;
+
+    // 0. Real-Circuit Gravel & Tarmac Runoff Aprons underneath track verges
+    this._drawRunoffZones(ctx);
 
     // 1. Track & Pit Outer Verge Shadows first so verges never overlap adjacent asphalt or pit joins
     this._traceRoadRibbon(ctx, sts, 7.6);
@@ -904,6 +979,23 @@ export class CircuitRenderer {
       ctx.strokeStyle = "rgba(10, 10, 14, 0.32)";
       ctx.lineWidth = Math.max(6.0, wPx * 0.34);
       ctx.stroke();
+    }
+
+    // 4a-bis. FIA White Dashed Pit Entry / Exit Lane Blend Markings
+    for (const bpts of [this.track.pit_entry_blend_points, this.track.pit_blend_points]) {
+      if (bpts && bpts.length >= 2) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(bpts[0][0], bpts[0][1]);
+        for (let i = 1; i < bpts.length; i++) {
+          ctx.lineTo(bpts[i][0], bpts[i][1]);
+        }
+        ctx.strokeStyle = "rgba(245, 247, 252, 0.65)";
+        ctx.lineWidth = 1.0;
+        ctx.setLineDash([4.5, 3.5]);
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     // 4b. Drying Racing Groove Contrast (dry/drier line vs wet offline marbles)
