@@ -560,8 +560,8 @@ def enforce_2d_car_separation(
                         or is_team_swap
                     )
                     if (lat_sep >= req_lat or is_passing) and allow_passing:
-                        if lat_sep < CAR_WID_PX:
-                            need_d = min(0.12, (CAR_WID_PX - lat_sep) / half_usable)
+                        if lat_sep < CAR_WID_PX * 1.16:
+                            need_d = min(0.18, (CAR_WID_PX * 1.18 - lat_sep) / half_usable)
                             if c.d >= o.d:
                                 c.target_d = min(0.92, c.target_d + need_d * 0.40)
                                 o.target_d = max(-0.92, o.target_d - need_d * 0.40)
@@ -570,17 +570,21 @@ def enforce_2d_car_separation(
                                 o.target_d = min(0.92, o.target_d + need_d * 0.40)
                             c._sep_lane_timer = max(getattr(c, "_sep_lane_timer", 0.0), 0.35)
                             o._sep_lane_timer = max(getattr(o, "_sep_lane_timer", 0.0), 0.35)
-                        if lat_sep >= CAR_WID_PX * 0.82 or (is_passing and ds_m < min_long_m * 0.50):
+                        if lat_sep >= CAR_WID_PX * 0.86 or (is_blue_yield and lat_sep >= req_lat):
                             continue
 
                     deficit = min_long_m - ds_m
-                    if deficit > 0 and _sat_obb_penetration(c, o) is None:
+                    pre_dv = getattr(c, "_pre_sep_v", c.v) - getattr(o, "_pre_sep_v", o.v)
+                    in_curve_queue = track.sample(c.s)["curv"] > 0.004 and max(c.v - o.v, pre_dv) <= 3.5
+                    if deficit > 0 and (_sat_obb_penetration(c, o) is None or in_curve_queue):
                         if c.v > o.v:
                             if c.accel > -22.0:
-                                c.v = max(o.v * 0.98, c.v - 12.0 * dt)
+                                c.v = max(o.v * 0.98, c.v - 16.0 * dt)
+                        if in_curve_queue:
+                            c._pre_sep_v = min(getattr(c, "_pre_sep_v", c.v), c.v)
                         # Strict budget guarantee: cumulative shift never causes negative forward displacement
                         budget_long = max(0.0, c.v * dt * 0.60 - getattr(c, "_tick_long_shift", 0.0))
-                        soft_shift = min(deficit * 0.20, budget_long)
+                        soft_shift = min(deficit * 0.45, budget_long)
                         c._tick_long_shift = getattr(c, "_tick_long_shift", 0.0) + soft_shift
                         c.total_dist -= soft_shift
                         c.s = c.total_dist % L
@@ -640,10 +644,18 @@ def enforce_2d_car_separation(
                     (getattr(c1, "lateral_velocity", 0.0) - getattr(c2, "lateral_velocity", 0.0)) * lat_dir,
                     (getattr(c1, "_pre_sep_lat_v", 0.0) - getattr(c2, "_pre_sep_lat_v", 0.0)) * lat_dir,
                 )
-                is_contact = (
-                    (is_lateral and min_pen_w > 0.08 and (closing_lat_v > 0.14 or closing_long_v > 0.55 or min_pen_w > 0.28))
-                    or ((not is_lateral) and min_pen_l > 0.10 and (closing_long_v > 0.35 or closing_lat_v > 0.18 or min_pen_l > 0.38))
-                )
+                lat_sep_px = abs(compute_lateral_screen_px(track, c1.d, c1.s) - compute_lateral_screen_px(track, c2.d, c2.s))
+                curv_pair = track.sample(c1.s)["curv"]
+                if curv_pair > 0.004:
+                    is_contact = (
+                        (is_lateral and lat_sep_px < CAR_WID_PX * 0.88 and min_pen_w > 0.12 and (closing_lat_v > 0.65 or (min_pen_w > 1.05 and closing_lat_v > 0.22)))
+                        or ((not is_lateral) and min_pen_l > 0.14 and (closing_long_v > 2.2 or (min_pen_l > 0.85 and closing_long_v > 0.80)))
+                    )
+                else:
+                    is_contact = (
+                        (is_lateral and lat_sep_px < CAR_WID_PX * 0.96 and min_pen_w > 0.12 and (closing_lat_v > 0.45 or min_pen_w > 0.40))
+                        or ((not is_lateral) and min_pen_l > 0.14 and (closing_long_v > 1.85 or (min_pen_l > 0.55 and closing_long_v > 0.35)))
+                    )
                 if is_contact and collision_cb is not None and not c1.in_pits and not c2.in_pits and not c1.dnf and not c2.dnf:
                     collision_cb(c1, c2, sat)
 
@@ -2506,11 +2518,16 @@ class RaceSession:
                 else:
                     car.tailing_timer = max(0.0, car.tailing_timer - dt * 0.4)
 
+                lat_wake_sep = abs(car.d - car_ahead.d)
+                wake_cone = max(0.0, 1.0 - (lat_wake_sep / 0.38) ** 1.6)
                 slipstream_bonus = self._tow_strength(car, car_ahead, smp) * 0.008
+                if gap_ahead_s < 0.65 and smp["curv"] < 0.0038 and not self.is_braking[st]:
+                    slipstream_bonus += 0.0035 * wake_cone * (1.0 - gap_ahead_s / 0.65)
 
-                # Dirty air downforce deficit in cornering wake
-                if gap_ahead_s < 0.85 and smp["curv"] > 0.0065:
-                    dirty_air_loss = (1.0 - gap_ahead_s / 0.85) * 0.032
+                # Dirty air downforce deficit in cornering wake (scales with lateral wake alignment)
+                if gap_ahead_s < 0.85 and smp["curv"] > 0.0050:
+                    wake_align = max(0.18, 1.0 - min(1.0, lat_wake_sep / 0.52) * 0.82)
+                    dirty_air_loss = (1.0 - gap_ahead_s / 0.85) * 0.036 * wake_align
         else:
             car.tailing_timer = max(0.0, car.tailing_timer - dt * 0.4)
 
@@ -2599,7 +2616,38 @@ class RaceSession:
         else:
             car.aero_mode = "CORNER"
 
-        target_v = self.v_env[st] * math.sqrt(grip_mult)
+        inside_sign = float(smp.get("inside_sign", 1))
+        inside_d = car.d * inside_sign
+        opt_inside_d = racing_line_d * inside_sign
+        corner_line_mod = 1.0
+        if smp["curv"] > 0.0035:
+            if inside_d > max(0.15, opt_inside_d + 0.12):
+                pinch_excess = inside_d - max(0.15, opt_inside_d)
+                corner_line_mod = max(0.92, 1.0 - pinch_excess * min(0.10, smp["curv"] * 4.0))
+            elif abs(car.d - racing_line_d) < 0.18:
+                corner_line_mod = 1.006
+        risk_n = _car_risk_norm(car)
+        pace_n = (sk.get("pace", 88) - 88.0) / 12.0
+        cons_n = (sk.get("consistency", 88) - 88.0) / 12.0
+        mode_brake = {"CONSERVE": -0.032, "BALANCED": 0.0, "PUSH": 0.020, "ATTACK": 0.038}.get(car.pace_mode, 0.0)
+        driver_brake_auth = max(
+            0.90,
+            min(
+                1.12,
+                1.0
+                + risk_n * 0.028
+                + pace_n * 0.016
+                + cons_n * 0.008
+                + mode_brake
+                + (u["chassis"] - 5) * 0.0035
+                + (u["suspension"] - 5) * 0.0025
+                - dirty_air_loss * 0.45,
+            ),
+        )
+        brake_env_mod = math.sqrt(driver_brake_auth) if self.is_braking[st] else 1.0
+        car._last_dirty_air_loss = dirty_air_loss
+        car._last_driver_brake_auth = driver_brake_auth
+        target_v = self.v_env[st] * math.sqrt(grip_mult) * corner_line_mod * brake_env_mod
 
         car.overtake_active = False
         car.boost_active = False
@@ -2650,7 +2698,7 @@ class RaceSession:
                     corner_drain = (0.12 if is_v8_era else 0.22) * dt
                     car.battery_mj = max(0.0, car.battery_mj - corner_drain)
 
-        target_v = self.v_env[st] * math.sqrt(grip_mult)
+        target_v = self.v_env[st] * math.sqrt(grip_mult) * corner_line_mod * brake_env_mod
         straight_setup = 1.0 + setup_cfg["straight_spd"]
         if has_active_aero and car.aero_mode == "STRAIGHT":
             pu_top = (1.0 + (u["power_unit"] - 5) * 0.0024 + (u["active_aero"] - 5) * 0.0018) * straight_setup * pu_power_health
@@ -2749,11 +2797,10 @@ class RaceSession:
                     or is_alongside
                     or (car.team_id == obs.team_id and getattr(obs, "team_order", "") == "YIELD")
                 )
-                if in_active_pass:
-                    # During pullout, avoid driving straight into the rear wing before clearing laterally
-                    if lane_offset < min_d_w * 0.65 and dist_ahead_m < min_long_car * 1.02 and car.v > obs.v:
-                        target_v = min(target_v, max(4.0, obs.v))
+                if in_active_pass and lane_offset >= min_d_w * 0.88:
                     continue
+                if in_active_pass and dist_ahead_m < min_long_car * 1.05 and car.v > obs.v:
+                    target_v = min(target_v, max(4.0, obs.v))
                 if dist_ahead_m < nearest_dist_m:
                     nearest_dist_m = dist_ahead_m
                     nearest_obs = obs
@@ -2764,7 +2811,7 @@ class RaceSession:
                 dist_ahead_m = nearest_dist_m
                 lateral_overlap = nearest_overlap
                 st_ahead = self.track.sample(obs.s)["station"]
-                is_ahead_braking = self.is_braking[st_ahead]
+                is_ahead_braking = self.is_braking[st_ahead] or self.is_braking[st] or (obs.v < car.v - 1.5 and smp["curv"] > 0.0045)
                 brake_dist_req = max(0.0, car.v * car.v - obs.v * obs.v) / 84.0
                 obs_gap_s = dist_ahead_m / max(car.v, 25.0)
                 if is_ahead_braking and dist_ahead_m < brake_dist_req + 27.0:
@@ -2784,6 +2831,10 @@ class RaceSession:
                     follow_v = obs.v + (obs_gap_s - desired_gap) * 12.0
                     target_follow = max(4.0, follow_v)
                     target_v = min(target_v, (1.0 - blend) * base_free_v + blend * target_follow)
+                if (smp["curv"] > 0.004 or is_ahead_braking) and dist_ahead_m < min_long_car * 1.60 and lateral_overlap > 0.22 and car.v > obs.v:
+                    close_prox = max(0.0, min(1.0, (min_long_car * 1.60 - dist_ahead_m) / max(1.0, min_long_car * 0.52))) * lateral_overlap
+                    safe_match_v = max(4.0, obs.v - 0.6 * close_prox)
+                    target_v = min(target_v, (1.0 - close_prox) * target_v + close_prox * safe_match_v)
 
         # Blue Flag AI: lapped cars yield off-line and lift throttle
         car.blue_flag_timer = max(0.0, car.blue_flag_timer - dt)
@@ -2825,6 +2876,8 @@ class RaceSession:
             v_pit_approach = math.sqrt((PIT_SPEED_LIMIT_MS * 1.15) ** 2 + 2.0 * 32.0 * max(0.0, entry_gap))
             target_v = min(target_v, v_pit_approach)
 
+        g_lat_max = max(2.2, 5.2 * grip_mult)
+        lat_load_ratio = min(0.92, abs(getattr(car, "g_lat", 0.0)) / g_lat_max)
         if car.v < target_v:
             pu_acc = 13.8 * ice_power_mult * fuel_mass_accel * (1.0 + (u["power_unit"] - 5) * 0.022) * (1.0 - car.wing_damage * 0.08)
             if car.drs_active:
@@ -2840,6 +2893,10 @@ class RaceSession:
             drag_fade = max(0.18, 1.0 - (max(0.0, car.v) / 104.0) ** 1.85)
             v_deficit = target_v - car.v
             max_acc = pu_acc * drag_fade
+            if car.v < 58.0 and smp["curv"] > 0.0025:
+                traction_circle = math.sqrt(max(0.32, 1.0 - 0.68 * (lat_load_ratio ** 2)))
+                max_acc *= traction_circle
+            car._trail_brake_wash = 0.0
             if car.lift_coast:
                 max_acc *= 0.96
             in_braking_or_apex = (smp["curv"] > 0.003 or self.is_braking[st])
@@ -2856,7 +2913,14 @@ class RaceSession:
                 car.sparks = True
         else:
             v_diff = car.v - target_v
-            max_brake = 42.0 * (0.85 + 0.15 * grip_mult) * (1.02 - (car.fuel_kg / 100.0) * 0.05)
+            max_brake = 42.0 * (0.85 + 0.15 * grip_mult) * (1.02 - (car.fuel_kg / 100.0) * 0.05) * driver_brake_auth
+            if lat_load_ratio > 0.25 and smp["curv"] > 0.003:
+                trail_brake_circle = math.sqrt(max(0.48, 1.0 - 0.52 * (lat_load_ratio ** 2)))
+                max_brake *= trail_brake_circle
+            if v_diff > 6.5 and lat_load_ratio > 0.62 and smp["curv"] > 0.004:
+                car._trail_brake_wash = min(0.12, (v_diff - 6.5) * 0.014)
+            else:
+                car._trail_brake_wash = max(0.0, getattr(car, "_trail_brake_wash", 0.0) - dt * 0.4)
             if car.lift_coast:
                 max_brake *= 0.90
             if v_diff <= 1.5:
@@ -2873,7 +2937,11 @@ class RaceSession:
             car.braking = v_diff > 4.5
             car.v = max(target_v, car.v - brake_decel * dt)
 
-        ds = car.v * dt
+        v_lat_c = min(car.v * 0.32, abs(getattr(car, "_smooth_lat_v", car.lateral_velocity)))
+        v_tan = math.sqrt(max(0.0, car.v * car.v - v_lat_c * v_lat_c))
+        lat_offset_m = inside_d * (self.track.track_width_m * 0.39)
+        curv_metric = max(0.90, min(1.10, 1.0 - smp["curv"] * lat_offset_m * 0.55))
+        ds = (v_tan / curv_metric) * dt
         new_s = prev_s + ds
 
         # Multi-DRS Zones Detection & Activation
@@ -2949,9 +3017,9 @@ class RaceSession:
         smp_mid = self.track.sample(car.s + look_mid)
         smp_far = self.track.sample(car.s + look_far)
         base_line_d = (
-            0.50 * smp.get("racing_line_d", 0.0)
-            + 0.30 * smp_mid.get("racing_line_d", 0.0)
-            + 0.20 * smp_far.get("racing_line_d", 0.0)
+            0.62 * smp.get("racing_line_d", 0.0)
+            + 0.26 * smp_mid.get("racing_line_d", 0.0)
+            + 0.12 * smp_far.get("racing_line_d", 0.0)
             + car.driver_line_bias
         )
         # Front wing damage induces push/understeer: car washes wide in turns
@@ -2959,6 +3027,9 @@ class RaceSession:
             understeer_wash = car.wing_damage * 0.36 * (-smp["inside_sign"])
             if car.wing_damage_side == "BOTH" or (car.wing_damage_side == "RIGHT" and smp["inside_sign"] == -1) or (car.wing_damage_side == "LEFT" and smp["inside_sign"] == 1):
                 base_line_d += understeer_wash
+        if smp["curv"] > 0.0045:
+            wash_out = (dirty_air_loss * 1.8 + getattr(car, "_trail_brake_wash", 0.0)) * (-smp["inside_sign"])
+            base_line_d += wash_out
         # In damp crossover (drying groove, wet edges), Inter/Wet drivers drift onto wet patches down straights to cool rubber
         if (
             not is_slick
@@ -2983,8 +3054,8 @@ class RaceSession:
                 _pit_exit_blend_target(self.track, car, clamped_line_d, self.cars)
         elif car.pit_blend_active:
             car.target_d = _pit_exit_blend_target(self.track, car, clamped_line_d, self.cars)
-        elif car.maneuver_pass_timer > 0.0 or getattr(car, "_sep_lane_timer", 0.0) > 0.0:
-            pass
+        elif car.maneuver_pass_timer > 0.0 or car.maneuver_timer > 0.0 or getattr(car, "_sep_lane_timer", 0.0) > 0.0:
+            car.target_d = self._clamp_lane_for_alongside(car, car.target_d, smp)
         elif car.defense_moves > 0 or car.defense_timer > 0.0:
             # Defending car: STRICT ONE-MOVE RULE (cars must NOT move more than once)
             car.target_d = self._clamp_lane_for_alongside(car, car.defending_side, smp)
@@ -2995,7 +3066,7 @@ class RaceSession:
                 desired_line = car.grid_start_d
             elif car.lap == 1 and car.pit_stops == 0 and car.total_dist < t1_s:
                 blend = min(1.0, max(0.0, (car.total_dist - t1_s * 0.72) / max(t1_s * 0.28, 1.0)))
-                desired_line = (1.0 - blend) * car.grid_start_d + blend * clamped_line_d
+                desired_line = self._clamp_lane_for_alongside(car, (1.0 - blend) * car.grid_start_d + blend * clamped_line_d, smp)
             else:
                 desired_line = self._clamp_lane_for_alongside(car, clamped_line_d, smp)
             car.target_d = desired_line
@@ -3119,9 +3190,10 @@ class RaceSession:
         """Return usable half-width (m) and safe lateral d bounds around side-by-side cars."""
         half_width_m = self.track.width_px_at(car.s) * 0.39 / self.track.px_per_m
         length = self.track.length_m
-        overlap_distance = CAR_LEN_PX / self.track.px_per_m * 1.15
+        overlap_distance = CAR_LEN_PX / self.track.px_per_m * 1.35
         current_lat = compute_lateral_screen_px(self.track, car.d, car.s)
-        clearance_d = CAR_WID_PX * 1.06 / (half_width_m * self.track.px_per_m)
+        curv = self.track.sample(car.s)["curv"]
+        clearance_d = (CAR_WID_PX * 1.26 + min(2.0, curv * 95.0)) / (half_width_m * self.track.px_per_m)
         bound_lo = -10.0
         bound_hi = 10.0
         for other in self.cars:
@@ -4011,7 +4083,7 @@ class RaceSession:
                             tgt_cons = tgt.skills.get("consistency", 90)
                             push_mult = 1.6 if (c.pace_mode in ("PUSH", "ATTACK") or tgt.pace_mode in ("PUSH", "ATTACK")) else 1.0
                             risk_mult = max(0.62, min(1.85, (_car_risk_scale(c, 1.35) + _car_risk_scale(tgt, 1.35)) * 0.5))
-                            contact_risk = 0.024 * push_mult * risk_mult * max(0.20, 1.20 - (c_cons + tgt_cons) / 230.0) * dt
+                            contact_risk = 0.0018 * push_mult * risk_mult * max(0.20, 1.20 - (c_cons + tgt_cons) / 230.0) * dt
                             if random.random() < contact_risk:
                                 turn = self.track.nearest_corner(c.s)
                                 self._trigger_side_by_side_contact(c, tgt, turn, event_cb)
@@ -4591,8 +4663,11 @@ class RaceSession:
         if c1.dnf or c2.dnf or c1.in_pits or c2.in_pits:
             return
 
-        # Cushion only the standing start launch shuffle; once racing, Lap 1 contacts must deal damage too.
-        if (c1.lap == 1 or c2.lap == 1) and self.race_clock < 5.5:
+        # Cushion the standing start launch & crowded Lap 1 Turn-1 funnel for minor rubs; real shunts still register.
+        if (c1.lap == 1 or c2.lap == 1) and (
+            self.race_clock < 5.5
+            or (self.race_clock < 14.0 and min(sat[1], sat[3]) < 1.10 and min(sat[0], sat[2]) < 1.35)
+        ):
             return
 
         # Per-pair cooldown stops consecutive-frame spam while still allowing chain hits against a 3rd car.
@@ -4623,7 +4698,7 @@ class RaceSession:
                 (getattr(c1, "lateral_velocity", 0.0) - getattr(c2, "lateral_velocity", 0.0)) * lat_dir,
                 (getattr(c1, "_pre_sep_lat_v", 0.0) - getattr(c2, "_pre_sep_lat_v", 0.0)) * lat_dir,
             )
-            is_minor = (min_pen_w <= 0.45 and closing_lat_v <= 0.55) or ((c1.lap == 1 or c2.lap == 1) and min_pen_w <= 1.25 and closing_lat_v <= 0.75)
+            is_minor = (min_pen_w <= 0.95 and closing_lat_v <= 1.15) or ((c1.lap == 1 or c2.lap == 1) and min_pen_w <= 1.45 and closing_lat_v <= 1.35)
             self._trigger_side_by_side_contact(c1, c2, turn, event_cb, minor=is_minor)
         else:
             delta_v = max(delta_v, getattr(behind, "_pre_sep_v", behind.v) - getattr(ahead, "_pre_sep_v", ahead.v))

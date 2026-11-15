@@ -183,6 +183,98 @@ class NaturalTurningTests(unittest.TestCase):
 
         self.assertLessEqual(max_td_step, 0.22, f"Unexpected target_d swerve step {max_td_step:.3f}")
 
+    def test_six_driving_realism_mechanics(self):
+        # 1. Path-curvature inside pinch slows target speed while inside radius shortens spline arc length
+        corner_st = max(range(self.track.NUM_STATIONS), key=lambda i: self.track.stations[i]["curv"])
+        corner_s = corner_st * self.track.ds_m
+        smp_c = self.track.sample(corner_s)
+        ins = float(smp_c["inside_sign"])
+
+        def run_line_step(d_val: float, v_val: float = 34.0, g_lat_val: float = 0.2):
+            race = RaceSession(self.track, self.teams_dict, self.drivers[:1], 0, 0, "mclaren")
+            race.lights_out = True
+            race.flag_state = "GREEN"
+            c = race.cars[0]
+            c.s = corner_s
+            c.total_dist = self.track.length_m + corner_s
+            c.lap = 2
+            c.v = v_val
+            c.d = c.target_d = d_val
+            c.g_lat = g_lat_val
+            c.lateral_velocity = 0.0
+            race._step_car(c, None, None, False, 0.05, ignore_event)
+            return c
+
+        c_pinch = run_line_step(0.80 * ins, v_val=34.0)
+        c_opt = run_line_step(smp_c["racing_line_d"], v_val=34.0)
+        c_out = run_line_step(-0.78 * ins, v_val=34.0)
+        self.assertLess(c_pinch.free_air_target_v, c_opt.free_air_target_v)
+        self.assertGreater(c_pinch.total_dist, c_out.total_dist)
+
+        # 2. Combined friction-circle limits corner-exit acceleration and trail braking under high lateral G
+        c_low_g = run_line_step(smp_c["racing_line_d"], v_val=20.0, g_lat_val=0.2)
+        c_high_g = run_line_step(smp_c["racing_line_d"], v_val=20.0, g_lat_val=4.5)
+        self.assertLess(c_high_g.accel, c_low_g.accel)
+
+        c_brake_low = run_line_step(smp_c["racing_line_d"], v_val=82.0, g_lat_val=0.2)
+        c_brake_high = run_line_step(smp_c["racing_line_d"], v_val=82.0, g_lat_val=4.5)
+        self.assertLess(abs(c_brake_high.accel), abs(c_brake_low.accel))
+
+        # 3. Per-driver braking authority varies with risk & pace mode in braking zones
+        ref_race = RaceSession(self.track, self.teams_dict, self.drivers[:1], 0, 0, "mclaren")
+        braking_st = max(
+            (i for i, b in enumerate(ref_race.is_braking) if b),
+            key=lambda i: 88.0 - ref_race.v_env[i],
+        )
+        brake_s = braking_st * self.track.ds_m
+
+        def run_brake_step(risk_val: int, mode: str):
+            race = RaceSession(self.track, self.teams_dict, self.drivers[:1], 0, 0, "mclaren")
+            race.lights_out = True
+            race.flag_state = "GREEN"
+            c = race.cars[0]
+            c.s = brake_s
+            c.total_dist = self.track.length_m + brake_s
+            c.lap = 2
+            c.v = ref_race.v_env[braking_st] + 15.0
+            c.skills["risk"] = risk_val
+            c.pace_mode = mode
+            c.g_lat = 0.0
+            race._step_car(c, None, None, False, 0.05, ignore_event)
+            return c
+
+        c_late = run_brake_step(95, "ATTACK")
+        c_early = run_brake_step(45, "CONSERVE")
+        self.assertGreater(c_late._last_driver_brake_auth, c_early._last_driver_brake_auth)
+        self.assertGreater(abs(c_late.accel), abs(c_early.accel))
+        self.assertGreater(c_late.free_air_target_v, c_early.free_air_target_v)
+
+        # 4. Asymmetric late-apex racing line places inside apex slightly downstream of corner peak
+        peak_offset = max(range(-1, 5), key=lambda off: self.track.stations[(corner_st + off) % self.track.NUM_STATIONS]["racing_line_d"] * ins)
+        self.assertGreaterEqual(peak_offset, 0)
+
+        # 5. Lateral wake cone sharply reduces dirty-air downforce loss when stepping out of the wake
+        def run_wake_step(offset_d: float) -> float:
+            race = RaceSession(self.track, self.teams_dict, self.drivers[:2], 0, 0, "mclaren")
+            race.lights_out = True
+            race.flag_state = "GREEN"
+            lead, trail = race.cars
+            lead.s = corner_s + 22.0
+            lead.total_dist = self.track.length_m + lead.s
+            lead.lap = 2
+            lead.d = 0.0
+            lead.v = 45.0
+            trail.s = corner_s
+            trail.total_dist = self.track.length_m + trail.s
+            trail.lap = 2
+            trail.d = offset_d
+            trail.target_d = offset_d
+            trail.v = 45.0
+            race._step_car(trail, lead, lead, False, 0.05, ignore_event)
+            return trail._last_dirty_air_loss
+
+        self.assertGreater(run_wake_step(0.0), run_wake_step(0.65) * 2.0)
+
 
 if __name__ == "__main__":
     unittest.main()

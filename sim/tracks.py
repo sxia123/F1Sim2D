@@ -256,7 +256,10 @@ class CompiledTrack:
             severity = min(1.0, max(0.26, (peak_curv - 0.0030) / 0.011))
             apex_mag = 0.56 * severity
             out_mag = 0.52 * severity
-            raw_wps.append((float(k_cur), apex_mag * ins_cur))
+            # True late-apex geometry: clip the inside kerb slightly past the geometric corner midpoint
+            late_shift = min(2.2, max(0.6, 9.0 / max(self.ds_m, 1.0)), d_next * 0.22)
+            k_apex = (k_cur + late_shift) % m
+            raw_wps.append((float(k_apex), apex_mag * ins_cur))
 
             if d_prev >= 26:
                 lead = min(d_prev * 0.34, 15.0)
@@ -268,9 +271,13 @@ class CompiledTrack:
             if d_next >= 26:
                 trail = min(d_next * 0.34, 15.0)
                 ins_next = self.stations[c_next["station"]]["inside_sign"]
-                exit_scale = 0.72 if (d_next < 42 and ins_next == ins_cur) else 1.0
-                k_exit = (k_cur + trail) % m
-                raw_wps.append((float(k_exit), -out_mag * exit_scale * ins_cur))
+                if d_next < 36 and ins_next != ins_cur:
+                    # Linked chicane / S-bend: align exit directly toward outside entry of the next turn
+                    raw_wps.append((float((k_cur + d_next * 0.48) % m), -out_mag * 0.78 * ins_next))
+                else:
+                    exit_scale = 0.72 if (d_next < 42 and ins_next == ins_cur) else 1.0
+                    k_exit = (k_cur + trail) % m
+                    raw_wps.append((float(k_exit), -out_mag * exit_scale * ins_cur))
 
                 if d_next >= 58:
                     k_nxt_st = c_next["station"]
