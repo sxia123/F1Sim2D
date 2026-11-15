@@ -416,6 +416,10 @@ class TrackGeometryTests(unittest.TestCase):
         from sim.track_geometry import REAL_FIA_PIT_LENGTH_M
 
         by_id = {t.id: t for t in COMPILED_TRACKS}
+        for tid in ("barcelona", "portugal"):
+            tr = by_id[tid]
+            last_corner = max(tr.layout["corner_markers"], key=lambda c: c["number"])
+            self.assertGreater(tr.pit_entry_s / tr.length_m, last_corner["fraction"], f"{tid} entry must follow final corner")
         for t in COMPILED_TRACKS:
             with self.subTest(track=t.id):
                 self.assertIn(t.id, REAL_FIA_PIT_LENGTH_M)

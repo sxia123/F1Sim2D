@@ -303,7 +303,17 @@ def build_pit_geometry(track):
     track.fia_pit_length_m = min(fia_pit_m, track.pit_length_m * 0.88)
     du_fia = track.fia_pit_length_m / max(1.0, track.pit_length_m)
     garage_middle = (garage_lo + garage_hi) * 0.5
-    u_in = max(0.04, min(0.93 - du_fia, garage_middle - 0.5 * du_fia))
+    sf = track.stations[0]
+    sf_idx = min(
+        range(len(track.pit_stations)),
+        key=lambda k: (track.pit_stations[k]['x'] - sf['x']) ** 2 + (track.pit_stations[k]['y'] - sf['y']) ** 2,
+    )
+    sf_u = sf_idx / max(1, len(track.pit_stations) - 1)
+    target_u_in = min(garage_middle - 0.5 * du_fia, sf_u - 0.28 * du_fia)
+    if track.id == 'monaco':
+        u_in = max(0.04, min(0.93 - du_fia, garage_middle - 0.5 * du_fia))
+    else:
+        u_in = max(0.04, min(0.93 - du_fia, max(garage_lo - 20.0 / max(1.0, track.pit_length_m), target_u_in)))
     u_out = u_in + du_fia
     track.pit_speed_entry_u = u_in
     track.pit_speed_exit_u = u_out
