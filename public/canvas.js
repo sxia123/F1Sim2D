@@ -1367,34 +1367,235 @@ export class CircuitRenderer {
     ctx.save();
     ctx.translate(sc.cx, sc.cy);
     ctx.rotate(sc.ch);
-    const geom=this.track.car_geometry,ppm=geom.world_units_per_m;
-    ctx.scale(geom.safety_car_length_m*ppm/14.4,geom.safety_car_width_m*ppm/7.6);
+    const geom = this.track.car_geometry;
+    const ppm = geom.world_units_per_m;
+    ctx.scale(geom.safety_car_length_m * ppm / 14.4, geom.safety_car_width_m * ppm / 7.6);
 
-    // Mercedes/Aston Safety Car GT silhouette
-    ctx.fillStyle = "#0b0d12";
+    // 1. Ground shadow & subtle LED headlight beams
+    ctx.fillStyle = "rgba(0, 0, 0, 0.46)";
     ctx.beginPath();
-    ctx.roundRect(-7.2, -3.8, 14.4, 7.6, 2);
+    ctx.ellipse(-0.1, 0, 7.6, 4.35, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "#dce2ec";
+    for (const side of [-1, 1]) {
+      const beamGrad = ctx.createLinearGradient(6.7, 0, 12.6, 0);
+      beamGrad.addColorStop(0, "rgba(235, 245, 255, 0.20)");
+      beamGrad.addColorStop(1, "rgba(235, 245, 255, 0)");
+      ctx.fillStyle = beamGrad;
+      ctx.beginPath();
+      ctx.moveTo(6.7, side * 2.35);
+      ctx.lineTo(12.6, side * 4.1);
+      ctx.lineTo(12.6, side * 1.15);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Carbon-fiber front splitter + corner aero canards & rear diffuser with quad AMG exhausts
+    ctx.fillStyle = "#11141c";
     ctx.beginPath();
-    ctx.roundRect(-6.6, -3.2, 13.2, 6.4, 1.8);
+    ctx.roundRect(6.25, -3.45, 1.10, 6.90, 0.65);
+    ctx.roundRect(-7.30, -3.35, 1.50, 6.70, 0.55);
     ctx.fill();
 
-    // Windshield & rear glass
-    ctx.fillStyle = "#111622";
-    ctx.fillRect(-3.0, -2.5, 6.2, 5.0);
+    for (const side of [-1, 1]) {
+      // Front bumper corner aero flicks
+      ctx.fillStyle = "#1a1f2b";
+      ctx.beginPath();
+      ctx.moveTo(6.45, side * 3.25);
+      ctx.lineTo(7.15, side * 3.72);
+      ctx.lineTo(6.05, side * 3.65);
+      ctx.closePath();
+      ctx.fill();
 
-    // Amber FIA Safety Car roof light bar
-    const flash = Math.floor(now / 110) % 2 === 0;
+      // Rear quad exhaust tips + diffuser strakes
+      ctx.fillStyle = "#c9d1dc";
+      ctx.fillRect(-7.35, side * 1.65 - 0.24, 0.36, 0.48);
+      ctx.fillRect(-7.35, side * 2.35 - 0.24, 0.36, 0.48);
+      ctx.fillStyle = "#262c3a";
+      ctx.fillRect(-7.22, side * 0.75 - 0.08, 0.65, 0.16);
+    }
+
+    // 2. Forged AMG wheels tucked inside front (x=+4.25) and rear (x=-4.15) arches
+    const scWheels = [
+      [4.25, -3.55], [4.25, 3.55],
+      [-4.15, -3.62], [-4.15, 3.62],
+    ];
+    for (const [wx, wy] of scWheels) {
+      ctx.fillStyle = "#0a0c10";
+      ctx.beginPath();
+      ctx.roundRect(wx - 1.12, wy - 0.46, 2.24, 0.92, 0.32);
+      ctx.fill();
+      ctx.fillStyle = "#2b3242";
+      ctx.fillRect(wx - 0.55, wy + (wy < 0 ? -0.44 : 0.28), 1.10, 0.16);
+    }
+
+    // 3. Sculpted Mercedes-AMG GT 63 Coke-bottle fastback silhouette & side skirts
+    const bodyGrad = ctx.createLinearGradient(-7.0, -3.8, 7.1, 3.8);
+    bodyGrad.addColorStop(0.00, "#8c0b15");
+    bodyGrad.addColorStop(0.28, "#d91424");
+    bodyGrad.addColorStop(0.54, "#ff3847");
+    bodyGrad.addColorStop(0.82, "#d91424");
+    bodyGrad.addColorStop(1.00, "#990d18");
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.moveTo(7.15, 0);
+    ctx.bezierCurveTo(7.12, -1.65, 6.75, -3.20, 5.45, -3.62);
+    ctx.bezierCurveTo(3.95, -3.76, 2.55, -3.40, 1.05, -3.38);
+    ctx.bezierCurveTo(-0.55, -3.38, -2.05, -3.82, -3.95, -3.80);
+    ctx.bezierCurveTo(-5.75, -3.78, -6.78, -3.15, -7.05, -1.95);
+    ctx.lineTo(-7.05, 1.95);
+    ctx.bezierCurveTo(-6.78, 3.15, -5.75, 3.78, -3.95, 3.80);
+    ctx.bezierCurveTo(-2.05, 3.82, -0.55, 3.38, 1.05, 3.38);
+    ctx.bezierCurveTo(2.55, 3.40, 3.95, 3.76, 5.45, 3.62);
+    ctx.bezierCurveTo(6.75, 3.20, 7.12, 1.65, 7.15, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.24)";
+    ctx.lineWidth = 0.28;
+    ctx.stroke();
+
+    // Carbon side skirts & aerodynamic side mirrors
+    ctx.fillStyle = "#141821";
+    ctx.fillRect(-2.8, -3.50, 5.6, 0.34);
+    ctx.fillRect(-2.8, 3.16, 5.6, 0.34);
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = "#b8101d";
+      ctx.beginPath();
+      ctx.ellipse(1.35, side * 3.88, 0.52, 0.28, side * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 4. Panamericana vertical-slat grille, sculpted V8 bonnet powerdomes & LED headlights
+    ctx.fillStyle = "#0e1118";
+    ctx.beginPath();
+    ctx.roundRect(6.65, -1.95, 0.56, 3.90, 0.28);
+    ctx.fill();
+    ctx.fillStyle = "#dce3ef";
+    for (let gy = -1.55; gy <= 1.551; gy += 0.44) {
+      ctx.fillRect(6.72, gy - 0.05, 0.44, 0.10);
+    }
+
+    // Bonnet powerdomes, heat-extractor vents & FIA nose crest
+    ctx.fillStyle = "rgba(255, 115, 125, 0.34)";
+    ctx.beginPath();
+    ctx.roundRect(2.15, -0.92, 3.75, 0.48, 0.22);
+    ctx.roundRect(2.15, 0.44, 3.75, 0.48, 0.22);
+    ctx.fill();
+    ctx.fillStyle = "#141821";
+    ctx.beginPath();
+    ctx.roundRect(3.55, -1.85, 1.45, 0.62, 0.18);
+    ctx.roundRect(3.55, 1.23, 1.45, 0.62, 0.18);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+    ctx.beginPath();
+    ctx.arc(5.80, 0, 0.42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#00a2ff";
+    ctx.beginPath();
+    ctx.arc(5.80, 0, 0.22, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Angular swept-back LED headlights
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = "#eef6ff";
+      ctx.beginPath();
+      ctx.moveTo(6.92, side * 2.32);
+      ctx.lineTo(6.22, side * 3.32);
+      ctx.lineTo(5.95, side * 2.95);
+      ctx.lineTo(6.62, side * 2.08);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // 5. Wraparound fastback greenhouse, carbon roof & flashing FIA light bar
+    ctx.fillStyle = "#10141d";
+    ctx.beginPath();
+    ctx.moveTo(2.05, 0);
+    ctx.bezierCurveTo(1.98, -1.65, 1.45, -2.68, 0.55, -2.72);
+    ctx.lineTo(-2.35, -2.52);
+    ctx.bezierCurveTo(-3.65, -2.42, -4.65, -1.85, -5.05, 0);
+    ctx.bezierCurveTo(-4.65, 1.85, -3.65, 2.42, -2.35, 2.52);
+    ctx.lineTo(0.55, 2.72);
+    ctx.bezierCurveTo(1.45, 2.68, 1.98, 1.65, 2.05, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    // Windshield glossy tint & carbon coupe roof panel
+    ctx.fillStyle = "#1c2434";
+    ctx.beginPath();
+    ctx.moveTo(1.88, 0);
+    ctx.bezierCurveTo(1.80, -1.42, 1.32, -2.36, 0.55, -2.42);
+    ctx.lineTo(-0.08, -2.26);
+    ctx.lineTo(-0.08, 2.26);
+    ctx.lineTo(0.55, 2.42);
+    ctx.bezierCurveTo(1.32, 2.36, 1.80, 1.42, 1.88, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#141821";
+    ctx.beginPath();
+    ctx.roundRect(-2.15, -2.18, 2.15, 4.36, 0.45);
+    ctx.fill();
+
+    // Fastback rear hatch glass
+    ctx.fillStyle = "#182030";
+    ctx.beginPath();
+    ctx.moveTo(-2.25, -2.02);
+    ctx.lineTo(-4.72, -1.35);
+    ctx.quadraticCurveTo(-4.95, 0, -4.72, 1.35);
+    ctx.lineTo(-2.25, 2.02);
+    ctx.closePath();
+    ctx.fill();
+
+    // FIA Roof Light Bar Pod with alternating amber/orange/green LEDs & glow
+    const flash = Math.floor(now / 95) % 2 === 0;
+    const glowGrad = ctx.createRadialGradient(-0.7, 0, 0.5, -0.7, 0, 5.2);
+    glowGrad.addColorStop(0, "rgba(255, 196, 0, 0.30)");
+    glowGrad.addColorStop(1, "rgba(255, 196, 0, 0)");
+    ctx.fillStyle = glowGrad;
+    ctx.beginPath();
+    ctx.arc(-0.7, 0, 5.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#171c26";
+    ctx.beginPath();
+    ctx.roundRect(-1.25, -3.00, 1.10, 6.00, 0.40);
+    ctx.fill();
     ctx.fillStyle = flash ? "#ffd000" : "#ff6a00";
-    ctx.fillRect(-0.9, -2.9, 1.8, 5.8);
+    ctx.fillRect(-1.08, -2.85, 0.76, 1.95);
+    ctx.fillStyle = flash ? "#ff6a00" : "#ffd000";
+    ctx.fillRect(-1.08, 0.90, 0.76, 1.95);
+    ctx.fillStyle = flash ? "#00e676" : "#fff7cc";
+    ctx.fillRect(-1.05, -0.75, 0.70, 1.50);
+
+    // 6. Slim LED taillights & fixed swan-neck carbon GT rear wing
+    for (const side of [-1, 1]) {
+      ctx.fillStyle = "#ff2a36";
+      ctx.beginPath();
+      ctx.roundRect(-7.05, side * 2.25 - 0.85, 0.35, 1.70, 0.14);
+      ctx.fill();
+    }
+
+    // Swan-neck wing pylons & carbon airfoil
+    ctx.fillStyle = "#151924";
+    ctx.fillRect(-6.45, -1.35, 1.15, 0.28);
+    ctx.fillRect(-6.45, 1.07, 1.15, 0.28);
+    ctx.fillStyle = "#11141c";
+    ctx.beginPath();
+    ctx.roundRect(-6.85, -3.55, 1.00, 7.10, 0.22);
+    ctx.fill();
+    ctx.fillStyle = "#2b3242";
+    ctx.fillRect(-6.92, -3.65, 1.25, 0.24);
+    ctx.fillRect(-6.92, 3.41, 1.25, 0.24);
+
     ctx.restore();
 
     ctx.save();
     ctx.font = "800 7.5px 'Titillium Web', Inter, sans-serif";
     ctx.fillStyle = "#ffd000";
-    ctx.fillText("SC", sc.cx - 5, sc.cy - 8.5);
+    ctx.textAlign = "center";
+    ctx.fillText("SC", sc.cx, sc.cy - 9.0);
     ctx.restore();
   }
 
