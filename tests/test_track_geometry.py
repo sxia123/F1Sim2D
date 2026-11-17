@@ -467,5 +467,25 @@ class TrackGeometryTests(unittest.TestCase):
             self.assertTrue(limiter_speeds and all(abs(v - PIT_SPEED_LIMIT_MS) <= 1e-6 for v in limiter_speeds), f"{tid} limiter zone speed mismatch")
             self.assertTrue(exit_ramp_speeds and max(exit_ramp_speeds) > PIT_SPEED_LIMIT_MS + 2.0, f"{tid} exit ramp did not accelerate")
 
+    def test_all_pit_entries_are_smooth_and_on_pit_side(self):
+        for t in COMPILED_TRACKS:
+            with self.subTest(track=t.id):
+                pst = t.pit_stations
+                e0 = t.sample(t.pit_entry_s)
+                join_ang = math.degrees(
+                    math.acos(max(-1.0, min(1.0, e0["tx"] * pst[3]["tx"] + e0["ty"] * pst[3]["ty"])))
+                )
+                self.assertLessEqual(join_ang, 25.0, f"{t.id} steep pit entry join {join_ang:.1f} deg")
+                for k in range(1, max(2, int(0.08 * len(pst)))):
+                    kink = math.degrees(
+                        math.acos(max(-1.0, min(1.0, pst[k - 1]["tx"] * pst[k + 1]["tx"] + pst[k - 1]["ty"] * pst[k + 1]["ty"])))
+                    )
+                    self.assertLessEqual(kink, 22.0, f"{t.id} entry kink {kink:.1f} deg at k={k}")
+                for k in range(int(0.12 * len(pst))):
+                    px, py = pst[k]["x"], pst[k]["y"]
+                    near = min(t.stations, key=lambda st: (st["x"] - px) ** 2 + (st["y"] - py) ** 2)
+                    sd_m = ((px - near["x"]) * near["nx"] + (py - near["y"]) * near["ny"]) / t.px_per_m
+                    self.assertGreaterEqual(t.pit_side * sd_m, -1.5, f"{t.id} crosses to wrong side {sd_m:.1f}m at k={k}")
+
 
 if __name__=='__main__':unittest.main()
