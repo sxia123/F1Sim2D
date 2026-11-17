@@ -2666,50 +2666,36 @@ class RaceSession:
         car.boost_active = False
         car.recharging = False
 
-        if self.flag_state == "GREEN" and not in_yellow:
-            if self.is_braking[st]:
-                base_harvest = 0.22 if is_v8_era else 0.35
-                harvest = base_harvest * mguk_eff * dt * (1.0 + (u["power_unit"] - 5) * 0.03)
-                car.battery_mj = max(0.0, min(car.max_battery_mj, car.battery_mj + harvest))
+        pu_regen_bonus = 1.0 + (u["power_unit"] - 5) * 0.03
+        green_active = (self.flag_state == "GREEN" and not in_yellow)
+        likely_braking = bool(car.braking or (self.is_braking[st] and car.v >= target_v - 1.5))
+
+        # Determine active-deployment / straight-clipping flags before straight top-speed caps
+        if green_active and not likely_braking and (car.aero_mode in ("STRAIGHT", "DRS") or smp["curv"] < 0.0065):
+            threshold_low = 0.20 if is_v8_era else 0.35
+            threshold_bst = 0.30 if is_v8_era else 0.55
+            want_overtake = (
+                car.overtake_eligible
+                and car.battery_mj > threshold_low
+                and car.ers_mode != "HARVEST"
+                and (gap_ahead_s < 1.35 or car.ers_mode in ("OVERTAKE", "BOOST"))
+            )
+            want_boost = (
+                not want_overtake
+                and car.battery_mj > threshold_bst
+                and (
+                    car.ers_mode == "BOOST"
+                    or (car.ers_mode == "AUTO" and (gap_ahead_s < 0.85 or car.pace_mode in ("PUSH", "ATTACK")))
+                )
+            )
+            if want_overtake:
+                car.overtake_active = True
+            elif want_boost:
+                car.boost_active = True
+            elif car.ers_mode == "HARVEST" or car.battery_mj <= threshold_low:
                 car.recharging = True
-            elif car.aero_mode in ("STRAIGHT", "DRS") or smp["curv"] < 0.0065:
-                threshold_low = 0.15 if is_v8_era else 0.20
-                threshold_bst = 0.25 if is_v8_era else 0.35
-                want_overtake = (
-                    car.overtake_eligible
-                    and car.battery_mj > threshold_low
-                    and car.ers_mode != "HARVEST"
-                    and (gap_ahead_s < 1.35 or car.ers_mode in ("OVERTAKE", "BOOST"))
-                )
-                want_boost = (
-                    not want_overtake
-                    and car.battery_mj > threshold_bst
-                    and (
-                        car.ers_mode == "BOOST"
-                        or (car.ers_mode == "AUTO" and (gap_ahead_s < 0.85 or car.pace_mode in ("PUSH", "ATTACK")))
-                    )
-                )
-                if want_overtake:
-                    car.overtake_active = True
-                    drain_rate = 0.45 if is_v8_era else 0.85
-                    drain = drain_rate * dt * (1.0 - (u["power_unit"] - 5) * 0.025)
-                    car.battery_mj = max(0.0, car.battery_mj - drain)
-                elif want_boost:
-                    car.boost_active = True
-                    drain_rate = 0.35 if is_v8_era else 0.55
-                    drain = drain_rate * dt
-                    car.battery_mj = max(0.0, car.battery_mj - drain)
-                elif car.ers_mode != "HARVEST" and car.battery_mj > 0.30:
-                    drain_rate = 0.15 if is_v8_era else 0.28
-                    drain = drain_rate * dt
-                    car.battery_mj = max(0.0, car.battery_mj - drain)
-                elif car.ers_mode == "HARVEST" or car.battery_mj <= threshold_low:
-                    car.recharging = True
-                    car.battery_mj = max(0.0, min(car.max_battery_mj, car.battery_mj + (0.08 if is_v8_era else 0.12) * mguk_eff * dt))
-            else:
-                if car.v < target_v and car.ers_mode != "HARVEST" and car.battery_mj > 0.25:
-                    corner_drain = (0.12 if is_v8_era else 0.22) * dt
-                    car.battery_mj = max(0.0, car.battery_mj - corner_drain)
+        elif not green_active and car.ers_mode == "HARVEST" and car.v > 10.0:
+            car.recharging = True
 
         target_v = self.v_env[st] * math.sqrt(grip_mult) * corner_line_mod * brake_env_mod
         straight_setup = 1.0 + setup_cfg["straight_spd"]
@@ -2953,6 +2939,66 @@ class RaceSession:
             car.accel = -brake_decel
             car.braking = v_diff > 4.5
             car.v = max(target_v, car.v - brake_decel * dt)
+
+        # Unified ERS energy accounting after current-tick acceleration/braking is resolved
+        decel_now = max(0.0, -car.accel)
+        is_braking_ers = bool(car.braking or decel_now > 11.5 or (self.is_braking[st] and car.accel <= 0.0))
+        is_coast_ers = bool(
+            car.lift_coast
+            and not is_braking_ers
+            and (self.is_braking[st] or decel_now > 1.0)
+            and car.accel <= 0.0
+        )
+        if is_braking_ers:
+            car.overtake_active = False
+            car.boost_active = False
+            car.recharging = True
+            decel_ref = decel_now if decel_now > 2.0 else (26.0 if car.braking else 18.0)
+            decel_factor = min(1.32, 0.68 + decel_ref / 48.0)
+            base_harvest = (0.34 if is_v8_era else 0.64) * decel_factor
+            if not green_active:
+                base_harvest *= 0.70
+            elif car.ers_mode == "HARVEST":
+                base_harvest *= 1.25
+            elif car.pace_mode == "CONSERVE":
+                base_harvest *= 1.12
+            if car.lift_coast:
+                base_harvest *= 1.15
+            harvest = base_harvest * mguk_eff * dt * pu_regen_bonus
+            car.battery_mj = max(0.0, min(car.max_battery_mj, car.battery_mj + harvest))
+        elif is_coast_ers:
+            car.overtake_active = False
+            car.boost_active = False
+            car.recharging = True
+            harvest = (0.13 if is_v8_era else 0.24) * mguk_eff * dt * pu_regen_bonus
+            car.battery_mj = max(0.0, min(car.max_battery_mj, car.battery_mj + harvest))
+        elif car.overtake_active:
+            drain_rate = 0.42 if is_v8_era else 0.78
+            drain = drain_rate * dt * (1.0 - (u["power_unit"] - 5) * 0.025)
+            car.battery_mj = max(0.0, car.battery_mj - drain)
+        elif car.boost_active:
+            drain_rate = 0.28 if is_v8_era else 0.52
+            car.battery_mj = max(0.0, car.battery_mj - drain_rate * dt)
+        elif car.recharging:
+            clip_rate = (0.10 if is_v8_era else 0.18) if not green_active else (0.13 if is_v8_era else 0.22)
+            car.battery_mj = max(0.0, min(car.max_battery_mj, car.battery_mj + clip_rate * mguk_eff * dt * pu_regen_bonus))
+        elif green_active:
+            is_straight_zone = (car.aero_mode in ("STRAIGHT", "DRS") or smp["curv"] < 0.0065)
+            cruise_floor = 0.45 if is_v8_era else 0.85
+            if is_straight_zone:
+                if car.ers_mode != "HARVEST" and car.battery_mj > cruise_floor:
+                    base_cruise = 0.07 if is_v8_era else 0.13
+                    if car.pace_mode == "CONSERVE":
+                        base_cruise *= 0.45
+                    if car.lift_coast:
+                        base_cruise *= 0.65
+                    car.battery_mj = max(0.0, car.battery_mj - base_cruise * dt)
+            elif car.v < target_v - 1.2 and car.ers_mode != "HARVEST":
+                if car.pace_mode in ("PUSH", "ATTACK") or car.ers_mode in ("BOOST", "OVERTAKE"):
+                    if car.battery_mj > (0.25 if is_v8_era else 0.45):
+                        car.battery_mj = max(0.0, car.battery_mj - (0.12 if is_v8_era else 0.22) * dt)
+                elif car.battery_mj > cruise_floor and car.pace_mode != "CONSERVE":
+                    car.battery_mj = max(0.0, car.battery_mj - (0.045 if is_v8_era else 0.085) * dt)
 
         v_lat_c = min(car.v * 0.32, abs(getattr(car, "_smooth_lat_v", car.lateral_velocity)))
         v_tan = math.sqrt(max(0.0, car.v * car.v - v_lat_c * v_lat_c))

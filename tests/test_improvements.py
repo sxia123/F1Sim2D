@@ -220,6 +220,56 @@ class SimulatorEnhancementsTest(unittest.TestCase):
         self.assertGreater(atk_wear, blc_wear)
         self.assertGreater(atk_fuel, blc_fuel)
 
+    def test_06c_ers_braking_harvest_and_cruise_balance(self):
+        from sim.tracks import TRACK_BY_ID
+        from sim.physics import RaceSession
+        from sim.data import clone_initial_roster
+
+        teams, drivers = clone_initial_roster()
+        teams_by_id = {t["id"]: t for t in teams}
+        dlist = [d for d in drivers if d.get("team_id")][:2]
+        monza = TRACK_BY_ID["italy"]
+        race = RaceSession(monza, teams_by_id, dlist, 0.0, 0.0, dlist[0]["team_id"])
+        race.lights_out = True
+        race.lights_countdown = 0.0
+        race.flag_state = "GREEN"
+
+        car = race.cars[0]
+        race.cars[1].dnf = True
+        car.auto_strategy = False
+        car.pace_mode = "BALANCED"
+        car.ers_mode = "AUTO"
+
+        # 1. Heavy Monza T1 braking zone recovers meaningful battery (>= 0.90 MJ) and recharges while car.braking is active
+        car.battery_mj = 1.0
+        car.s = 805.0
+        car.total_dist = 805.0
+        car.v = 92.0
+        braking_recharge_ticks = 0
+        braking_ticks = 0
+        for _ in range(30):
+            race.step(0.1, lambda *_: None)
+            if car.braking:
+                braking_ticks += 1
+                if car.recharging:
+                    braking_recharge_ticks += 1
+            if car.v < 35.0:
+                break
+        self.assertGreater(braking_ticks, 4)
+        self.assertEqual(braking_recharge_ticks, braking_ticks, "Car must keep harvesting throughout active braking")
+        self.assertGreaterEqual(car.battery_mj - 1.0, 0.90, f"Monza T1 braking only recharged {car.battery_mj - 1.0:.2f} MJ")
+
+        # 2. Full lap in AUTO/BALANCED holds a healthy mid/high state of charge instead of pinning near 6%
+        car.battery_mj = 2.0
+        car.s = 0.0
+        car.total_dist = monza.length_m
+        car.lap = 2
+        for _ in range(1500):
+            race.step(0.1, lambda *_: None)
+            if car.lap >= 3:
+                break
+        self.assertGreaterEqual(car.battery_mj, 1.5, f"AUTO BALANCED drained battery too low: {car.battery_mj:.2f} MJ")
+
     def test_07_garage_based_qualifying_runs(self):
         self.world._start_qualifying()
         qs = self.world.quali_session
