@@ -769,6 +769,10 @@ export class CircuitRenderer {
 
     this._drawEnvironment(ctx, now);
     this._drawTrack(ctx, now);
+    const lightingPhase = this.tick?.lighting_phase || 0;
+    if (lightingPhase > 0.05) {
+      this._drawNightAtmosphere(ctx, lightingPhase);
+    }
     this._drawParticles(ctx);
     this._drawCars(ctx, now);
     if (this.tick && this.tick.wetness >= 15) {
@@ -776,6 +780,10 @@ export class CircuitRenderer {
     }
 
     ctx.restore();
+
+    if (this.cameraMode !== "full" || this.camZoom > 1.25) {
+      this._drawMiniMapPiP(ctx);
+    }
   }
 
   _drawEnvironment(ctx, now) {
@@ -954,8 +962,10 @@ export class CircuitRenderer {
       // Team Pit Stall locations with Constructor Logos & Gantry Graphics
       for (const g of this.track.pit_garages || []) {
         const teamId = GARAGE_TEAM_IDS[g.index] || "williams";
-        const teamCode = GARAGE_TEAM_CODES[g.index] || "F1";
-        const teamColor = TEAM_LIVERY[teamId]?.stripe || "#00d2be";
+        const cMeta = this.tick?.custom_team_meta;
+        const isCust = cMeta && cMeta.id === teamId;
+        const teamCode = isCust ? (cMeta.code || "MY") : (GARAGE_TEAM_CODES[g.index] || "F1");
+        const teamColor = isCust ? (cMeta.secondary || cMeta.color || "#00d2be") : (TEAM_LIVERY[teamId]?.stripe || "#00d2be");
 
         const nx = -g.ty * side, ny = g.tx * side;
         const gx = g.x + nx * apronOff, gy = g.y + ny * apronOff;
@@ -1430,12 +1440,16 @@ export class CircuitRenderer {
 
     this._drawRejoinGhost(ctx, now);
 
+    const lightPhase = this.tick?.lighting_phase || 0;
     // Pass 1: Draw all visible 2026 F1 chassis (back-to-front so leaders sit cleanly on top of wakes)
     const ordered = [...this.tick.cars].reverse();
     for (const c of ordered) {
       if (!c.vis || c.pit_tunnel) continue;
       const st = this.carInterp.get(c.id);
       if (!st) continue;
+      if (lightPhase > 0.25 && !c.dnf) {
+        this._drawCarNightLights(ctx, st.cx, st.cy, st.ch);
+      }
       this._drawSingleCar(ctx, st.cx, st.cy, st.ch, c, now, st.steer);
       if (c.in_pit && c.pit_ph === "STOPPED" && c.pit_tot > 0 && c.pit_rem > 0) {
         const frac = Math.max(0, Math.min(1, 1 - c.pit_rem / c.pit_tot));
@@ -1770,10 +1784,13 @@ export class CircuitRenderer {
   _drawSingleCar(ctx, x, y, heading, c, now, steerInterp) {
     const isMyTeam = this.tick && c.tid === this.tick.player_team_id;
     const isSelected = c.id === this.selectedDriverId;
-    const liv = TEAM_LIVERY[c.tid] || { body: c.tcol, pod: c.tcol, noseTip: c.tcol, stripe: c.scol };
+    const liv = c.custom_team
+      ? { body: c.tcol, pod: c.tcol, noseTip: c.scol || c.tcol, stripe: c.scol || c.tcol }
+      : (TEAM_LIVERY[c.tid] || { body: c.tcol, pod: c.tcol, noseTip: c.tcol, stripe: c.scol });
+    const livKey = c.custom_team ? `${c.tid}_${c.tcol}_${c.scol}` : c.tid;
     const viewTransform = ctx.getTransform();
     const pixelScale = Math.max(Math.hypot(viewTransform.a,viewTransform.b),Math.hypot(viewTransform.c,viewTransform.d));
-    const surfaces = getCarSurfaces(liv, c.tid, c.num, c.dnf, c.comp, c.wear, pixelScale);
+    const surfaces = getCarSurfaces(liv, livKey, c.num, c.dnf, c.comp, c.wear, pixelScale);
     const carbonPaint = getCarbonPaint(ctx,surfaces.carbon);
 
     ctx.save();
@@ -2241,6 +2258,147 @@ export class CircuitRenderer {
       ctx.lineTo(r.x - 4, r.y + 10);
       ctx.stroke();
     }
+    ctx.restore();
+  }
+
+  _drawNightAtmosphere(ctx, phase) {
+    const b = this.track?.bounds;
+    if (!b) return;
+    const p = Math.max(0, Math.min(1, phase));
+    ctx.save();
+    // Twilight warm-to-midnight indigo atmospheric wash over track surface & runoff
+    const r = Math.round(28 - p * 22);
+    const g = Math.round(16 - p * 4);
+    const bl = Math.round(38 - p * 10);
+    ctx.fillStyle = `rgba(${r}, ${g}, ${bl}, ${(p * 0.42).toFixed(3)})`;
+    ctx.fillRect(b.min_x - 350, b.min_y - 350, (b.max_x - b.min_x) + 700, (b.max_y - b.min_y) + 700);
+
+    // Trackside floodlight illumination pools when darkness sets in
+    if (p > 0.25 && this.track?.stations?.length) {
+      const step = Math.max(1, Math.floor(this.track.stations.length / 18));
+      const glowAlpha = Math.min(0.18, (p - 0.25) * 0.22);
+      for (let i = 0; i < this.track.stations.length; i += step) {
+        const s = this.track.stations[i];
+        const grad = ctx.createRadialGradient(s.x, s.y, 4, s.x, s.y, 58);
+        grad.addColorStop(0, `rgba(255, 244, 214, ${glowAlpha.toFixed(3)})`);
+        grad.addColorStop(1, "rgba(255, 244, 214, 0)");
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 58, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  _drawCarNightLights(ctx, x, y, heading) {
+    const geom = this.track?.car_geometry;
+    if (!geom) return;
+    const ppm = geom.world_units_per_m || 2.0;
+    const scaleX = (geom.length_m * ppm) / 17.45;
+    const scaleY = (geom.width_m * ppm) / 8.4;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(heading);
+    ctx.scale(scaleX, scaleY);
+    for (const side of [-1, 1]) {
+      const cone = ctx.createLinearGradient(7.5, 0, 26, 0);
+      cone.addColorStop(0, "rgba(240, 248, 255, 0.28)");
+      cone.addColorStop(1, "rgba(240, 248, 255, 0)");
+      ctx.fillStyle = cone;
+      ctx.beginPath();
+      ctx.moveTo(7.5, side * 1.6);
+      ctx.lineTo(26, side * 4.8);
+      ctx.lineTo(26, side * 0.4);
+      ctx.closePath();
+      ctx.fill();
+    }
+    // Bright crimson FIA rain / rear light bloom
+    const rearGlow = ctx.createRadialGradient(-8.4, 0, 0.5, -9.2, 0, 5.2);
+    rearGlow.addColorStop(0, "rgba(255, 36, 48, 0.65)");
+    rearGlow.addColorStop(1, "rgba(255, 36, 48, 0)");
+    ctx.fillStyle = rearGlow;
+    ctx.beginPath();
+    ctx.arc(-9.2, 0, 5.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  _drawMiniMapPiP(ctx) {
+    if (!this.track?.bounds || !this.track?.stations?.length) return;
+    const b = this.track.bounds;
+    const bw = Math.max(1, b.max_x - b.min_x);
+    const bh = Math.max(1, b.max_y - b.min_y);
+    const boxW = 166;
+    const boxH = 116;
+    const pad = 12;
+    const x0 = 12;
+    const y0 = Math.max(14, this.height - boxH - 12);
+    const sc = Math.min((boxW - pad * 2) / bw, (boxH - pad * 2) / bh);
+    const cxOff = x0 + (boxW - bw * sc) * 0.5 - b.min_x * sc;
+    const cyOff = y0 + (boxH - bh * sc) * 0.5 - b.min_y * sc;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(10, 12, 18, 0.82)";
+    ctx.fillRect(x0, y0, boxW, boxH);
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.16)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x0, y0, boxW, boxH);
+
+    // Track silhouette
+    const sts = this.track.stations;
+    ctx.beginPath();
+    for (let i = 0; i < sts.length; i += 2) {
+      const px = sts[i].x * sc + cxOff;
+      const py = sts[i].y * sc + cyOff;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.strokeStyle = "rgba(200, 210, 228, 0.45)";
+    ctx.lineWidth = 2.6;
+    ctx.stroke();
+
+    // Start/Finish tick
+    const sf = sts[0];
+    if (sf) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(sf.x * sc + cxOff - 2, sf.y * sc + cyOff - 2, 4, 4);
+    }
+
+    // All active cars & player rejoin ghost
+    if (this.tick?.cars) {
+      for (const c of this.tick.cars) {
+        if (c.dnf) continue;
+        const interp = this.carInterp.get(c.id);
+        const wx = interp ? interp.cx : c.x;
+        const wy = interp ? interp.cy : c.y;
+        const px = wx * sc + cxOff;
+        const py = wy * sc + cyOff;
+        const isPlayer = c.tid === this.tick.player_team_id;
+        ctx.beginPath();
+        ctx.arc(px, py, isPlayer ? 3.2 : 2.1, 0, Math.PI * 2);
+        ctx.fillStyle = c.tcol || "#ffffff";
+        ctx.fill();
+        if (isPlayer) {
+          ctx.strokeStyle = "#ffffff";
+          ctx.lineWidth = 1.1;
+          ctx.stroke();
+        }
+        if (isPlayer && c.rejoin_x != null && c.rejoin_y != null && !c.in_pit) {
+          const rx = c.rejoin_x * sc + cxOff;
+          const ry = c.rejoin_y * sc + cyOff;
+          ctx.strokeStyle = "rgba(0, 210, 190, 0.85)";
+          ctx.lineWidth = 1.0;
+          ctx.beginPath();
+          ctx.arc(rx, ry, 3.0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.font = "800 9px 'Titillium Web', sans-serif";
+    ctx.fillText("TRACK MAP", x0 + 6, y0 + 11);
     ctx.restore();
   }
 }

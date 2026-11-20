@@ -35,6 +35,15 @@ WALLED_CIRCUITS = frozenset({
     "madrid",
 })
 
+NIGHT_CIRCUITS: dict[str, tuple[float, float]] = {
+    "bahrain": (0.42, 0.92),
+    "abudhabi": (0.42, 0.94),
+    "saudi": (0.86, 0.96),
+    "singapore": (0.88, 0.96),
+    "vegas": (0.90, 0.98),
+    "qatar": (0.82, 0.94),
+}
+
 
 def _car_risk_norm(car: "CarState") -> float:
     """Normalized driver risk appetite around 70 (-1.20 cautious .. +1.16 attack)."""
@@ -1020,6 +1029,19 @@ class CarState:
 
         self.planned_pit_lap: int = max(5, int(total_laps * random.uniform(0.38, 0.56)))
 
+        # Tactical 1-lap burst, recoverable gremlins, strategy plans & pit-lane start
+        self.tactical_burst: str = ""
+        self.tactical_burst_timer: float = 0.0
+        self.tactical_burst_cooldown: float = 0.0
+        self.gremlin: str = ""
+        self.gremlin_timer: float = 0.0
+        self.gremlin_recovery: float = 0.0
+        self.strategy_plans: dict[str, list[dict]] = {}
+        self.active_plan: str = "A"
+        self.pit_lane_start: bool = False
+        self.pit_lane_start_timer: float = 0.0
+        self._pit_start_dist: float = 0.0
+
     def record_sector(self, index: int, seconds: float) -> None:
         seconds = round(seconds, 3)
         self.current_sector_times[index] = seconds
@@ -1785,6 +1807,9 @@ class RaceSession:
         setup_confidences: dict[str, float] | None = None,
         practice_bonuses: dict[str, dict] | None = None,
         driver_morales: dict[str, int] | None = None,
+        rivalries: dict[str, int] | None = None,
+        staff_bonuses: dict[str, Any] | None = None,
+        strategy_plans: dict[str, dict] | None = None,
     ):
         self.track = track
         self.player_team_id = player_team_id
@@ -1812,6 +1837,15 @@ class RaceSession:
         self.setup_confidences = dict(setup_confidences or {})
         self.practice_bonuses = dict(practice_bonuses or {})
         self.driver_morales = dict(driver_morales or {})
+        self.rivalries: dict[str, int] = dict(rivalries or {})
+        self.rivalry_increments: dict[str, int] = {}
+        self.staff_bonuses: dict[str, Any] = dict(staff_bonuses or {})
+        self._init_strategy_plans = dict(strategy_plans or {})
+        self.gap_history: list[dict[str, Any]] = []
+        self.active_dilemma: dict[str, Any] | None = None
+        self._dilemma_cooldown: float = 42.0
+        self._dilemma_seq: int = 0
+        self._used_dilemma_kinds: set[str] = set()
         self.tire_sets = tire_sets if tire_sets is not None else {
             drv["id"]: create_weekend_tire_sets(self.tire_allocations.get(drv["id"], DEFAULT_WEEKEND_TIRE_SETS))
             for drv in grid_drivers
@@ -1872,7 +1906,8 @@ class RaceSession:
         self.track_temp_c: float = round(track.base_temp_c + (8.0 if wetness < 0.1 else -4.0), 1)
         self.weather_timer: float = 0.0
         self.track_rubber: float = 0.20 if wetness < 0.12 else 0.0
-        self._radar_noise_s: float = random.uniform(-90.0, 90.0)
+        radar_mult = float(self.staff_bonuses.get("radar_noise_mult", 1.0))
+        self._radar_noise_s: float = random.uniform(-90.0, 90.0) * radar_mult
         self._radar_cloud_phase: float = random.uniform(0.0, 6.28)
         self.red_flag_timer: float = 0.0
         self.red_flag_count: int = 0
@@ -1961,6 +1996,17 @@ class RaceSession:
             car.crossed_start_line = car.total_dist >= 0
             car.grid_start_d = car.d
             car.target_d = car.d
+            plan_entry = self._init_strategy_plans.get(drv["id"])
+            if isinstance(plan_entry, dict):
+                plans_map = plan_entry.get("plans") or {}
+                car.strategy_plans = {
+                    k: [dict(st_item) for st_item in v]
+                    for k, v in plans_map.items()
+                    if isinstance(v, list)
+                }
+                act_p = str(plan_entry.get("active", "A")).upper()
+                if act_p in ("A", "B", "C"):
+                    car.active_plan = act_p
             self._update_xy(car)
             self.cars.append(car)
 
@@ -1971,6 +2017,298 @@ class RaceSession:
         self.pitwall = RivalPitWall(self)
         for car in self.cars:
             self.pitwall.project_rejoin(car)
+
+    @staticmethod
+    def _rivalry_key(driver_a: str, driver_b: str) -> str:
+        return f"{driver_a}|{driver_b}" if driver_a <= driver_b else f"{driver_b}|{driver_a}"
+
+    def get_rivalry_level(self, driver_a: str, driver_b: str) -> int:
+        if not driver_a or not driver_b or driver_a == driver_b:
+            return 0
+        return int(self.rivalries.get(self._rivalry_key(driver_a, driver_b), 0))
+
+    def _record_rivalry(self, driver_a: str, driver_b: str, inc: int = 1) -> int:
+        if not driver_a or not driver_b or driver_a == driver_b:
+            return 0
+        key = self._rivalry_key(driver_a, driver_b)
+        cur = int(self.rivalries.get(key, 0))
+        nxt = min(5, cur + max(1, int(inc)))
+        self.rivalries[key] = nxt
+        self.rivalry_increments[key] = int(self.rivalry_increments.get(key, 0)) + max(1, int(inc))
+        return nxt
+
+    def get_lighting_phase(self) -> float:
+        """Return 0.0 (daylight) to 1.0 (midnight) floodlight progression for twilight/night GPs."""
+        cfg = NIGHT_CIRCUITS.get(self.track.id)
+        if not cfg:
+            return 0.0
+        start_dark, end_dark = cfg
+        if self.finished:
+            prog = 1.0
+        elif self.standings:
+            leader = self.standings[0]
+            total_m = max(1.0, self.total_laps * self.track.length_m)
+            prog = max(0.0, min(1.0, leader.total_dist / total_m))
+        else:
+            prog = 0.0
+        return round(start_dark + (end_dark - start_dark) * prog, 3)
+
+    def set_pit_lane_start(self, driver_id: str, enabled: bool = True) -> bool:
+        """Queue or cancel a pit-lane start (used when breaking Parc Ferme in Grid Walk)."""
+        car = self.cars_by_id.get(driver_id)
+        if car is None or self.lights_out or self.flag_state not in ("GRID", "LIGHTS"):
+            return False
+        L = self.track.length_m
+        if not enabled:
+            car.pit_lane_start = False
+            car.pit_lane_start_timer = 0.0
+            car.in_pits = False
+            car.pit_phase = "NONE"
+            return True
+        car.pit_lane_start = True
+        queue_idx = sum(
+            1 for c in self.cars if c is not car and getattr(c, "pit_lane_start", False)
+        )
+        car.pit_lane_start_timer = 11.5 + queue_idx * 1.4
+        car.in_pits = True
+        car.pit_phase = "PIT_START"
+        car.pit_apron = 0.0
+        car.v = 0.0
+        car.d = 2.0 * self.track.pit_side
+        car.target_d = car.d
+        rel_ex = max(12.0, self.track.pit_span_m - 16.0 - queue_idx * 10.0)
+        car.s = (self.track.pit_entry_s + rel_ex) % L
+        true_prog = car.s if car.s < L * 0.5 else (car.s - L)
+        car._pit_start_dist = true_prog
+        car.total_dist = -220.0 - queue_idx * 12.0
+        car.lap = 1
+        car.laps_completed = 0
+        car.crossed_start_line = true_prog >= 0.0
+        self._update_xy(car)
+        return True
+
+    def trigger_tactical_burst(self, driver_id: str, mode: str, event_cb=None) -> bool:
+        """Activate a 1-lap Attack Now / Defend Now tactical burst with short cooldown."""
+        car = self.cars_by_id.get(driver_id)
+        if car is None or car.dnf or car.finished or car.in_pits:
+            return False
+        if self.flag_state != "GREEN" or not self.lights_out:
+            return False
+        m = str(mode).upper()
+        if m not in ("ATTACK_NOW", "DEFEND_NOW"):
+            return False
+        if car.tactical_burst_timer > 0.0 or car.tactical_burst_cooldown > 0.0:
+            return False
+        lap_s = max(55.0, min(115.0, self.track.length_m / 58.0))
+        car.tactical_burst = m
+        car.tactical_burst_timer = round(lap_s, 1)
+        car.tactical_burst_cooldown = round(lap_s * 3.0, 1)
+        if m == "ATTACK_NOW":
+            car.pace_mode = "ATTACK"
+            car.auto_strategy = False
+            msg = f"ENGINEER -> #{car.number} {car.code}: '1-lap ATTACK NOW — full electrical release and late braking!'"
+        else:
+            car.auto_strategy = False
+            msg = f"ENGINEER -> #{car.number} {car.code}: 'DEFEND NOW — cover the inside apex and protect position for this lap!'"
+        if event_cb:
+            event_cb("RADIO", msg)
+        return True
+
+    def resolve_dilemma(self, choice: str, event_cb=None) -> dict | None:
+        """Apply Option A or Option B to the currently active Race Engineer dilemma."""
+        dil = self.active_dilemma
+        if not dil:
+            return None
+        ch = str(choice).upper()
+        if ch not in ("A", "B"):
+            ch = str(dil.get("default", "B")).upper()
+        car = self.cars_by_id.get(dil.get("driver_id", ""))
+        kind = dil.get("kind", "")
+        summary = ""
+        if car and not car.dnf and not car.finished:
+            if kind == "WEATHER_CROSSOVER":
+                if ch == "A":
+                    target_comp = dil.get("target_compound", "INTER")
+                    car.box_this_lap = True
+                    car.next_compound = target_comp
+                    car.strategy_status = f"Dilemma: Box for {target_comp}"
+                    summary = f"{car.code} boxes immediately for {target_comp}"
+                else:
+                    car.strategy_status = "Dilemma: Staying out on current rubber"
+                    summary = f"{car.code} stays out on track"
+            elif kind == "THERMAL_ALARM":
+                if ch == "A":
+                    car.pace_mode = "CONSERVE"
+                    car.lift_coast = True
+                    car.lift_coast_manual = True
+                    if car.gremlin in ("BRAKE_HOT", "ERS_DERATE", "AERO_STUCK"):
+                        car.gremlin = ""
+                        car.gremlin_recovery = 0.0
+                        car.gremlin_timer = 45.0
+                    car.tire_temp = max(75.0, car.tire_temp - 5.5)
+                    summary = f"{car.code} switches to Lift & Coast to stabilise temps"
+                else:
+                    car.pace_mode = "ATTACK"
+                    summary = f"{car.code} pushes through thermal warning!"
+            elif kind == "RIVAL_UNDERCUT":
+                if ch == "A":
+                    target_comp = dil.get("target_compound", self._best_compound_for_conditions(car, max(1, self.total_laps - car.laps_completed)))
+                    car.box_this_lap = True
+                    car.next_compound = target_comp
+                    car.strategy_status = f"Cover undercut -> {target_comp}"
+                    summary = f"{car.code} responds to undercut ({target_comp})"
+                else:
+                    car.pace_mode = "PUSH"
+                    car.strategy_status = "Go long / Overcut push"
+                    summary = f"{car.code} extends stint and attacks on overcut"
+        self.active_dilemma = None
+        self._dilemma_cooldown = 95.0
+        if event_cb and summary:
+            event_cb("RADIO", f"PIT WALL DECISION: {summary}.")
+        return {"kind": kind, "choice": ch, "summary": summary}
+
+    def _step_dilemmas(self, dt: float, event_cb) -> None:
+        if not self.lights_out or self.finished:
+            return
+        if self.active_dilemma is not None:
+            self.active_dilemma["timer"] = round(float(self.active_dilemma["timer"]) - dt, 2)
+            if self.active_dilemma["timer"] <= 0.0:
+                self.resolve_dilemma(self.active_dilemma.get("default", "B"), event_cb=event_cb)
+            return
+
+        if self.flag_state not in ("GREEN", "VSC", "SC"):
+            return
+        self._dilemma_cooldown -= dt
+        if self._dilemma_cooldown > 0.0:
+            return
+
+        player_cars = [
+            c for c in self.standings
+            if c.team_id == self.player_team_id
+            and not c.dnf
+            and not c.finished
+            and not c.in_pits
+            and not c.box_this_lap
+            and c.laps_completed >= 2
+            and c.laps_completed < self.total_laps - 2
+        ]
+        if not player_cars:
+            self._dilemma_cooldown = 12.0
+            return
+
+        lead_p = player_cars[0]
+        # 1. Weather crossover dilemma
+        is_wet_comp = lead_p.compound in ("INTER", "WET")
+        rain_imminent = (
+            self.rain_scheduled
+            and not self.rain_event_started
+            and 0.0 < (self.rain_start_clock - self.race_clock) < 120.0
+            and not is_wet_comp
+        )
+        wet_crossover = (self.wetness >= 0.20 and not is_wet_comp) or (self.wetness <= 0.13 and self.rain_intensity < 0.08 and is_wet_comp)
+        if "WEATHER_CROSSOVER" not in self._used_dilemma_kinds and (rain_imminent or wet_crossover):
+            laps_rem = max(1, self.total_laps - lead_p.laps_completed)
+            target_comp = "WET" if self.wetness > 0.55 else ("INTER" if (rain_imminent or self.wetness >= 0.20) else self._best_compound_for_conditions(lead_p, laps_rem))
+            self._dilemma_seq += 1
+            self._used_dilemma_kinds.add("WEATHER_CROSSOVER")
+            self.active_dilemma = {
+                "id": f"dil_{self._dilemma_seq}",
+                "kind": "WEATHER_CROSSOVER",
+                "driver_id": lead_p.driver_id,
+                "driver_code": lead_p.code,
+                "title": f"WEATHER CROSSOVER ({lead_p.code})",
+                "prompt": f"Track wetness {int(self.wetness * 100)}% — box {lead_p.code} for {target_comp} now or hold track position?",
+                "timer": 8.5,
+                "max_timer": 8.5,
+                "default": "B",
+                "target_compound": target_comp,
+                "option_a": {"label": f"BOX FOR {target_comp}", "sub": "Aggressive crossover call"},
+                "option_b": {"label": "STAY OUT", "sub": "Gamble on current rubber"},
+            }
+            event_cb("RADIO", f"URGENT ENGINEER ({lead_p.code}): 'Crossover window open — do we box for {target_comp} now?'")
+            return
+
+        # 2. Thermal / Gremlin alarm
+        hot_car = next(
+            (
+                c for c in player_cars
+                if (c.gremlin in ("BRAKE_HOT", "ERS_DERATE", "AERO_STUCK"))
+                or (c.tire_temp > TIRE_COMPOUNDS.get(c.compound, TIRE_COMPOUNDS["MEDIUM"]).get("opt_temp_max", 112.0) + 8.5)
+            ),
+            None,
+        )
+        if "THERMAL_ALARM" not in self._used_dilemma_kinds and hot_car is not None:
+            self._dilemma_seq += 1
+            self._used_dilemma_kinds.add("THERMAL_ALARM")
+            issue_lbl = hot_car.gremlin.replace("_", " ") if hot_car.gremlin else f"CORE TEMP {int(hot_car.tire_temp)}C"
+            self.active_dilemma = {
+                "id": f"dil_{self._dilemma_seq}",
+                "kind": "THERMAL_ALARM",
+                "driver_id": hot_car.driver_id,
+                "driver_code": hot_car.code,
+                "title": f"THERMAL / SYSTEM ALERT ({hot_car.code})",
+                "prompt": f"{issue_lbl} flagged on #{hot_car.number} {hot_car.code} telemetry — cool the car or push through?",
+                "timer": 8.5,
+                "max_timer": 8.5,
+                "default": "A",
+                "option_a": {"label": "LIFT & COAST", "sub": "Clear alert & protect car"},
+                "option_b": {"label": "PUSH THROUGH", "sub": "Keep full attack pace"},
+            }
+            event_cb("RADIO", f"URGENT ENGINEER ({hot_car.code}): '{issue_lbl} critical — authorise Lift & Coast or push?'")
+            return
+
+        # 3. Rival undercut threat
+        if "RIVAL_UNDERCUT" not in self._used_dilemma_kinds and lead_p.tire_age_laps >= 6:
+            p_pos = lead_p.pos
+            rival_boxed = any(
+                c.team_id != self.player_team_id
+                and abs(c.pos - p_pos) <= 4
+                and c.pit_stops > lead_p.pit_stops
+                and c.tire_age_laps <= 2
+                for c in self.cars
+                if not c.dnf and not c.in_pits
+            )
+            if rival_boxed:
+                laps_rem = max(1, self.total_laps - lead_p.laps_completed)
+                target_comp = self._best_compound_for_conditions(lead_p, laps_rem)
+                self._dilemma_seq += 1
+                self._used_dilemma_kinds.add("RIVAL_UNDERCUT")
+                self.active_dilemma = {
+                    "id": f"dil_{self._dilemma_seq}",
+                    "kind": "RIVAL_UNDERCUT",
+                    "driver_id": lead_p.driver_id,
+                    "driver_code": lead_p.code,
+                    "title": f"UNDERCUT THREAT ({lead_p.code})",
+                    "prompt": f"Direct rival just pitted for fresh rubber behind/ahead of {lead_p.code}. Cover on {target_comp} or extend stint?",
+                    "timer": 8.5,
+                    "max_timer": 8.5,
+                    "default": "B",
+                    "target_compound": target_comp,
+                    "option_a": {"label": f"COVER ({target_comp})", "sub": "Box this lap to defend"},
+                    "option_b": {"label": "EXTEND STINT", "sub": "Push on & run longer"},
+                }
+                event_cb("RADIO", f"URGENT ENGINEER ({lead_p.code}): 'Rivals covering the undercut! Box this lap for {target_comp} or go long?'")
+                return
+
+        self._dilemma_cooldown = 14.0
+
+    def _record_lap_gap(self, car: CarState, lap_num: int, crossing_time: float) -> None:
+        if lap_num <= 0:
+            return
+        entry = next((g for g in self.gap_history if g["lap"] == lap_num), None)
+        if entry is None:
+            entry = {"lap": lap_num, "leader_time": crossing_time, "gaps": {}, "positions": {}}
+            self.gap_history.append(entry)
+            self.gap_history.sort(key=lambda item: item["lap"])
+        elif crossing_time < entry["leader_time"]:
+            diff = entry["leader_time"] - crossing_time
+            entry["leader_time"] = crossing_time
+            for did, gv in list(entry["gaps"].items()):
+                entry["gaps"][did] = round(gv + diff, 3)
+        gap_s = max(0.0, round(crossing_time - entry["leader_time"], 3))
+        entry["gaps"][car.driver_id] = gap_s
+        ordered = sorted(entry["gaps"].items(), key=lambda kv: kv[1])
+        entry["positions"] = {did: i + 1 for i, (did, _) in enumerate(ordered)}
 
     def _draw_tire_set_record(self, driver_id: str, compound: str, prefer_fresh: bool = True) -> tuple[float, bool]:
         """Pull a fresh or scrubbed set record from weekend tire_sets if tracked."""
@@ -2111,6 +2449,10 @@ class RaceSession:
                 for c in self.cars:
                     c.lap_start_time = self.race_clock
                     c.sector_start_time = self.race_clock
+                    if getattr(c, "pit_lane_start", False):
+                        c.v = 0.0
+                        c.accel = 0.0
+                        continue
                     launch = 7.5 + (c.skills["racecraft"] - 80) * 0.14 + (c.car_perf_index - 80.0) * 0.09 + random.uniform(-1.1, 1.1)
                     c.v = 0.6
                     c.accel = launch * 1.5
@@ -2133,6 +2475,7 @@ class RaceSession:
         self._step_weather(dt, event_cb)
         self._step_race_control(dt, event_cb)
         self._step_stewards(dt, event_cb)
+        self._step_dilemmas(dt, event_cb)
         self.radio_dispatcher.step(dt, self.race_clock, self.cars, self.track, self.wetness, self.flag_state, event_cb)
         self.pitwall.step(event_cb)
 
@@ -2643,6 +2986,7 @@ class RaceSession:
 
             car.laps_completed += 1
             car.lap_cross_times[car.laps_completed] = crossing_time
+            self._record_lap_gap(car, car.laps_completed, crossing_time)
             if car.stints:
                 car.stints[-1]["end_lap"] = car.laps_completed
                 car.stints[-1]["wear_end"] = round(car.tire_wear * 100.0, 1)
@@ -2694,6 +3038,26 @@ class RaceSession:
                     )
             else:
                 car.lap = car.laps_completed + 1
+                plan_stints = (getattr(car, "strategy_plans", {}) or {}).get(getattr(car, "active_plan", "A"))
+                if (
+                    isinstance(plan_stints, list)
+                    and not car.in_pits
+                    and not car.box_this_lap
+                    and not car.finished
+                    and (self.total_laps - car.laps_completed) >= 2
+                ):
+                    next_idx = len(car.stints)
+                    if next_idx < len(plan_stints):
+                        cur_planned = plan_stints[next_idx - 1] if next_idx - 1 >= 0 else {}
+                        planned_next = plan_stints[next_idx]
+                        target_lap = int(cur_planned.get("pit_lap") or planned_next.get("start_lap", 0))
+                        if target_lap > 0 and car.lap >= target_lap:
+                            planned_comp = str(planned_next.get("compound", "MEDIUM")).upper()
+                            if self.wetness > 0.25 and planned_comp in ("SOFT", "MEDIUM", "HARD"):
+                                planned_comp = self._best_compound_for_conditions(car, max(1, self.total_laps - car.laps_completed))
+                            car.box_this_lap = True
+                            car.next_compound = planned_comp
+                            car.strategy_status = f"Plan {car.active_plan}: Box L{car.lap} -> {planned_comp}"
 
     def _step_car(
         self,
@@ -2708,6 +3072,35 @@ class RaceSession:
         car.contact_cooldown = max(0.0, car.contact_cooldown - dt)
         car.maneuver_attempt_cooldown = max(0.0, car.maneuver_attempt_cooldown - dt)
         car._sep_lane_timer = max(0.0, getattr(car, "_sep_lane_timer", 0.0) - dt)
+        if getattr(car, "tactical_burst_cooldown", 0.0) > 0.0:
+            car.tactical_burst_cooldown = max(0.0, car.tactical_burst_cooldown - dt)
+        if getattr(car, "tactical_burst_timer", 0.0) > 0.0:
+            car.tactical_burst_timer = max(0.0, car.tactical_burst_timer - dt)
+            if car.tactical_burst_timer <= 0.0:
+                old_burst = car.tactical_burst
+                car.tactical_burst = ""
+                if old_burst == "ATTACK_NOW" and car.pace_mode == "ATTACK":
+                    car.pace_mode = "BALANCED"
+                event_cb("RADIO", f"ENGINEER -> #{car.number} {car.code}: 'Burst lap complete, returning to baseline mapping.'")
+        if getattr(car, "gremlin_timer", 0.0) > 0.0:
+            car.gremlin_timer = max(0.0, car.gremlin_timer - dt)
+        if getattr(car, "gremlin", ""):
+            if car.gremlin != "SLOW_PUNCTURE" and (car.pace_mode == "CONSERVE" or car.lift_coast):
+                rate = 1.4 if (car.pace_mode == "CONSERVE" and car.lift_coast) else 0.95
+                car.gremlin_recovery = getattr(car, "gremlin_recovery", 0.0) + dt * rate
+                if car.gremlin_recovery >= 15.0:
+                    cleared = car.gremlin.replace("_", " ")
+                    car.gremlin = ""
+                    car.gremlin_recovery = 0.0
+                    car.gremlin_timer = 55.0
+                    event_cb("RADIO", f"ENGINEER -> #{car.number} {car.code}: '{cleared} resolved — telemetry green again!'")
+            elif car.gremlin == "SLOW_PUNCTURE":
+                car.tire_wear = min(0.99, car.tire_wear + 0.0045 * dt)
+                rem_laps = max(0, self.total_laps - car.lap)
+                if car.auto_strategy and not car.box_this_lap and rem_laps >= 2:
+                    car.box_this_lap = True
+                    car.next_compound = self._best_compound_for_conditions(car, rem_laps)
+                    car.strategy_status = "URGENT BOX: Slow puncture"
         if car.maneuver_pass_timer > 0.0:
             target = self.cars_by_id.get(car.maneuver_target_id)
             clearance = CAR_LEN_PX / self.track.px_per_m * 1.35
@@ -2907,11 +3300,15 @@ class RaceSession:
         gbx_wear = pu.get("gearbox", {}).get("wear", 0.0)
         pu_power_health = max(0.92, 1.0 - max(0.0, ice_wear - 0.35) * 0.045 - max(0.0, turbo_wear - 0.35) * 0.030 - max(0.0, gbx_wear - 0.50) * 0.025)
         mguk_eff = max(0.82, 1.0 - max(0.0, mguk_wear - 0.40) * 0.18)
+        if car.gremlin == "ERS_DERATE":
+            mguk_eff *= 0.65
         fuel_mass_grip = max(0.955, 1.0 - (car.fuel_kg / 100.0) * 0.036)
         fuel_mass_accel = max(0.945, 1.0 - (car.fuel_kg / 100.0) * 0.048)
 
         conf_grip = 1.0 + ((getattr(car, "setup_confidence", 65.0) - 65.0) / 35.0) * 0.009
         rubber_grip = 1.0 + self.track_rubber * 0.006 * (1.0 - local_wetness)
+        burst_grip = 1.012 if car.tactical_burst == "ATTACK_NOW" else 1.0
+        gremlin_grip = 0.935 if car.gremlin == "SLOW_PUNCTURE" else 1.0
         grip_mult = (
             comp_spec["base_grip"]
             * wear_factor
@@ -2921,6 +3318,8 @@ class RaceSession:
             * thermal_grip_mod
             * conf_grip
             * rubber_grip
+            * burst_grip
+            * gremlin_grip
             * (1.0 + setup_cfg["corner_grip"])
             * (1.0 - dirty_air_loss)
             * fw_grip_factor
@@ -2951,7 +3350,9 @@ class RaceSession:
                     car.drs_active = True
 
         # Aero mode determination
-        if has_active_aero:
+        if car.gremlin == "AERO_STUCK":
+            car.aero_mode = "CORNER"
+        elif has_active_aero:
             if (
                 smp["straight_mode"]
                 and self.wetness < 0.35
@@ -2984,14 +3385,16 @@ class RaceSession:
         if car.lift_coast:
             mode_brake = min(0.0, mode_brake) - 0.012
         driver_brake_auth = max(
-            0.90,
+            0.86,
             min(
-                1.12,
+                1.16,
                 1.0
                 + risk_n * 0.028
                 + pace_n * 0.016
                 + cons_n * 0.008
                 + mode_brake
+                + (0.045 if car.tactical_burst == "ATTACK_NOW" else (0.025 if car.tactical_burst == "DEFEND_NOW" else 0.0))
+                + (-0.065 if car.gremlin == "BRAKE_HOT" else 0.0)
                 + (u["chassis"] - 5) * 0.0035
                 + (u["suspension"] - 5) * 0.0025
                 - dirty_air_loss * 0.45,
@@ -3011,14 +3414,14 @@ class RaceSession:
         likely_braking = bool(car.braking or (self.is_braking[st] and car.v >= target_v - 1.5))
 
         # Determine active-deployment / straight-clipping flags before straight top-speed caps
-        if green_active and not likely_braking and (car.aero_mode in ("STRAIGHT", "DRS") or smp["curv"] < 0.0065):
+        if green_active and not likely_braking and (car.aero_mode in ("STRAIGHT", "DRS") or smp["curv"] < 0.0065) and car.gremlin != "ERS_DERATE":
             threshold_low = 0.20 if is_v8_era else 0.35
             threshold_bst = 0.30 if is_v8_era else 0.55
             want_overtake = (
                 car.overtake_eligible
-                and car.battery_mj > threshold_low
+                and car.battery_mj > (threshold_low * 0.55 if car.tactical_burst == "ATTACK_NOW" else threshold_low)
                 and car.ers_mode != "HARVEST"
-                and (gap_ahead_s < 1.35 or car.ers_mode in ("OVERTAKE", "BOOST"))
+                and (gap_ahead_s < 1.35 or car.ers_mode in ("OVERTAKE", "BOOST") or car.tactical_burst == "ATTACK_NOW")
             )
             want_boost = (
                 not want_overtake
@@ -3695,15 +4098,19 @@ class RaceSession:
         crew_lvl = car.upgrades["pit_crew"]
         tier_shift = (car.car_perf_index - 80.0) * 0.012
         mean_clean = 2.90 - crew_lvl * 0.098 - tier_shift
+        staff_risk_mult = 1.0
+        if car.team_id == self.player_team_id:
+            mean_clean *= float(self.staff_bonuses.get("pit_time_mult", 1.0))
+            staff_risk_mult = float(self.staff_bonuses.get("double_stack_risk_mult", 1.0))
 
         was_stacked = bool(getattr(car, "double_stack_held", False))
         car.double_stack_held = False
-        stack_risk = max(1.10, 1.50 - crew_lvl * 0.04) if was_stacked else 1.0
+        stack_risk = max(1.05, (1.50 - crew_lvl * 0.04) * staff_risk_mult) if was_stacked else staff_risk_mult
 
         roll = random.random()
-        botch_prob = max(0.008, 0.036 - crew_lvl * 0.0028) * stack_risk
-        slow_prob = max(0.035, 0.125 - crew_lvl * 0.0095) * stack_risk
-        hesitation_prob = max(0.080, 0.190 - crew_lvl * 0.011)
+        botch_prob = max(0.004, 0.036 - crew_lvl * 0.0028) * stack_risk
+        slow_prob = max(0.025, 0.125 - crew_lvl * 0.0095) * stack_risk
+        hesitation_prob = max(0.060, 0.190 - crew_lvl * 0.011) * max(0.75, staff_risk_mult)
 
         if roll < botch_prob:
             dur = round(mean_clean + random.uniform(4.8, 9.2), 2)
@@ -3750,6 +4157,25 @@ class RaceSession:
         car.overtake_active = False
         team_box_s = self._team_pit_box_s(car)
         min_pit_long_m = (CAR_LEN_PX * 1.10) / self.track.pit_px_per_m
+
+        if car.pit_phase == "PIT_START":
+            car.v = 0.0
+            car.pit_apron = 0.0
+            if not self.lights_out:
+                return
+            pack = [o for o in self.cars if not o.dnf and not o.pit_lane_start]
+            release_prog = getattr(car, "_pit_start_dist", 0.0)
+            pack_cleared = (not pack) or all(o.total_dist > release_prog + 18.0 for o in pack)
+            if (self.race_clock >= car.pit_lane_start_timer and pack_cleared) or self.race_clock >= 24.0:
+                car.pit_lane_start = False
+                car.pit_phase = "EXIT"
+                car.total_dist = release_prog
+                car.crossed_start_line = car.total_dist >= 0.0
+                car.v = 10.0
+                car.lap = 1
+                car.laps_completed = 0
+                event_cb("RACE_CONTROL", f"PIT EXIT GREEN: #{car.number} {car.code} joins from the pit lane!")
+            return
 
         if car.pit_phase == "ENTRY":
             prev_s = car.s
@@ -3912,6 +4338,9 @@ class RaceSession:
                 car.pit_phase = "EXIT"
                 car.v = PIT_SPEED_LIMIT_MS
                 car._pit_apron_vel = -2.4
+                car.gremlin = ""
+                car.gremlin_recovery = 0.0
+                car.gremlin_timer = 45.0
                 car.next_compound = self._best_compound_for_conditions(car, max(1, self.total_laps - car.laps_completed))
                 event_cb(
                     "PIT",
@@ -4077,9 +4506,26 @@ class RaceSession:
                 self.yellow_timer = 7.5
                 return
 
-        # Mechanical reliability failure (scaled to authentic modern F1 standards + PU component wear)
+        # Recoverable mechanical gremlins (manageable with Lift & Coast / Conserve or clearing via pit stop)
         rel_lvl = u.get("reliability", 5)
         pace_factor = 0.65 if car.pace_mode == "CONSERVE" else (1.20 if car.pace_mode == "ATTACK" else 1.0)
+        if (
+            not getattr(car, "gremlin", "")
+            and getattr(car, "gremlin_timer", 0.0) <= 0.0
+            and self.race_clock > 90.0
+            and 2 <= car.laps_completed < self.total_laps - 1
+        ):
+            gremlin_prob = 0.00024 * max(0.35, 1.32 - rel_lvl * 0.10) * pace_factor * (0.75 if car.lift_coast else 1.0) * dt
+            if random.random() < gremlin_prob:
+                g_kind = "SLOW_PUNCTURE" if (car.tire_wear > 0.35 and random.random() < 0.16) else random.choice(["BRAKE_HOT", "AERO_STUCK", "ERS_DERATE"])
+                car.gremlin = g_kind
+                car.gremlin_recovery = 0.0
+                car.gremlin_timer = 35.0
+                if car.team_id == self.player_team_id:
+                    advice = "Box this lap!" if g_kind == "SLOW_PUNCTURE" else "Switch to L&C / CONSERVE to recover or box to reset!"
+                    event_cb("RADIO", f"TELEMETRY WARNING (#{car.number} {car.code}): {g_kind.replace('_', ' ')} detected — {advice}")
+
+        # Mechanical reliability failure (scaled to authentic modern F1 standards + PU component wear)
         pu = getattr(car, "pu_pool", None) or {}
         pu_items = [(k, v) for k, v in pu.items() if isinstance(v, dict)]
         max_pu_wear = max((float(v.get("wear", 0.0)) for _, v in pu_items), default=0.0)
@@ -4129,7 +4575,7 @@ class RaceSession:
         """
         ins = float(smp.get("inside_sign", 1))
         curv = smp["curv"]
-        def_covers_inside = (defender.d * ins) > 0.22 or defender.skills["defense"] >= 87
+        def_covers_inside = (defender.d * ins) > 0.22 or defender.skills["defense"] >= 87 or getattr(defender, "tactical_burst", "") == "DEFEND_NOW"
 
         # Distance to nearest corner and corner characteristics
         dist_to_corner = 9999.0
@@ -4154,7 +4600,8 @@ class RaceSession:
         is_corner = (apex_curv >= 0.0062 and apex_v <= 65.0) and (dist_to_corner <= 55.0 or curv >= 0.0065)
 
         # Lap 1 opening sector: pack is compressed 22-wide; drivers avoid reckless divebombs and hold clean racing line
-        atk_rn = _car_risk_norm(attacker)
+        rivalry_lvl = self.get_rivalry_level(attacker.driver_id, defender.driver_id)
+        atk_rn = _car_risk_norm(attacker) + (0.25 if getattr(attacker, "tactical_burst", "") == "ATTACK_NOW" else 0.0) + rivalry_lvl * 0.08
         t2_s = self.track.corners[1]["s_m"] if len(self.track.corners) > 1 else 600.0
         if attacker.lap == 1 and attacker.total_dist < t2_s:
             maneuver = "SLIPSTREAM"
@@ -4262,6 +4709,8 @@ class RaceSession:
 
         atk_skill = attacker.skills["racecraft"] * 0.65 + attacker.skills["pace"] * 0.35
         def_skill = defender.skills["defense"] * 0.68 + defender.skills["racecraft"] * 0.32
+        if getattr(defender, "tactical_burst", "") == "DEFEND_NOW":
+            def_skill += 5.5
         skill_delta = atk_skill - def_skill
         if self.wetness > 0.15:
             skill_delta += (attacker.skills["wet_skill"] - defender.skills["wet_skill"]) * 0.35
@@ -4275,6 +4724,8 @@ class RaceSession:
         )
         width_mod = (self.track.track_width_m - 13.2) * 0.10
         agg_mod = 0.30 if attacker.pace_mode == "ATTACK" else (0.12 if attacker.pace_mode == "PUSH" else -0.08)
+        burst_mod = (0.42 if getattr(attacker, "tactical_burst", "") == "ATTACK_NOW" else 0.0) - (0.32 if getattr(defender, "tactical_burst", "") == "DEFEND_NOW" else 0.0)
+        rivalry_mod = rivalry_lvl * 0.06
         risk_mod = atk_rn * 0.12
         runoff_mod = 0.06 if smp.get("runoff_width_m", 0.0) >= 6.0 else 0.0
 
@@ -4286,6 +4737,8 @@ class RaceSession:
             + ers_mod
             + width_mod
             + agg_mod
+            + burst_mod
+            + rivalry_mod
             + risk_mod
             + runoff_mod
         )
@@ -4684,6 +5137,8 @@ class RaceSession:
             t1_s = self.track.corners[0]["s_m"] if self.track.corners else 320.0
             if defender.lap == 1 and defender.total_dist < t1_s * 0.75:
                 def_line = defender.grid_start_d
+            elif getattr(defender, "tactical_burst", "") == "DEFEND_NOW":
+                def_line = 0.44 * ins
             else:
                 def_line = (0.36 if defender.skills["defense"] >= 86 else 0.18) * ins
 
@@ -4845,6 +5300,9 @@ class RaceSession:
         attacker.contact_cooldown = 12.0
         defender.contact_cooldown = 12.0
         attacker.maneuver_pass_timer = 0.0
+        riv_lvl = self._record_rivalry(attacker.driver_id, defender.driver_id, 1)
+        if riv_lvl >= 2 and (attacker.team_id == self.player_team_id or defender.team_id == self.player_team_id):
+            event_cb("INCIDENT", f"RIVALRY HEATS UP (LVL {riv_lvl}/5): {attacker.code} & {defender.code} clash again!")
         turn = self.track.nearest_corner(attacker.s)
 
         atk_risk = attacker.skills.get("risk", 70)
@@ -5084,6 +5542,7 @@ class RaceSession:
             return
 
         spin_p = min(0.28, 0.14 * (_car_risk_scale(c1, 1.25) + _car_risk_scale(c2, 1.25)) * 0.5)
+        self._record_rivalry(c1.driver_id, c2.driver_id, 1)
         if c1.lap > 1 and c2.lap > 1 and random.random() < spin_p:
             culp, vict = (c1, c2) if random.random() < 0.5 else (c2, c1)
             vict.spin_timer = random.uniform(2.6, 4.0)
@@ -5263,6 +5722,8 @@ class RaceSession:
 
         def sort_key(c: CarState):
             if c.dnf:
+                return (3, -c.total_dist)
+            if c.pit_phase == "PIT_START":
                 return (2, -c.total_dist)
             if c.finished:
                 return (0, c.finish_time)

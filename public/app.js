@@ -1,6 +1,6 @@
 // FOM Broadcast & Pit Wall Controller — Zero Emojis, Vector Team Logos & Live 20Hz SSE
 import { CircuitRenderer } from "/canvas.js";
-import { teamLogoSVG } from "/logos.js";
+import { teamLogoSVG, registerCustomTeamLogo } from "/logos.js";
 
 const TIRE_META = {
   SOFT:   { code: "S", color: "#ff2800", optMin: 90, optMax: 106 },
@@ -624,6 +624,10 @@ class F1App {
     this.hofViewMode = "races";
     this.focusedCarIdx = 0;
     this.compactPitWall = false;
+    this.livePtsMode = false;
+    this._activeDilemmaId = null;
+    this._strategyEditDriverId = null;
+    this._lastCustomSig = "";
     this.replayBuffer = [];
     this.replayActive = false;
     this.replayIdx = 0;
@@ -669,6 +673,14 @@ class F1App {
       const res = await fetch("/api/state");
       const data = await res.json();
       this.fullState = data;
+      const ptMeta = data.player_team;
+      if (ptMeta?.is_custom && typeof registerCustomTeamLogo === "function") {
+        const sig = `${ptMeta.id}_${ptMeta.code}_${ptMeta.color}_${ptMeta.secondary}`;
+        if (sig !== this._lastCustomSig) {
+          this._lastCustomSig = sig;
+          registerCustomTeamLogo(ptMeta.id, ptMeta.code, ptMeta.color, ptMeta.secondary);
+        }
+      }
       if (data.track) {
         this.renderer.setTrack(data.track);
       }
@@ -861,9 +873,37 @@ class F1App {
       else if (cmd === "quali_auto") payload.quali_auto = val === "true";
       else if (cmd === "quali_tow_pair") payload.quali_tow_pair = true;
       else if (cmd === "practice_run") {
-        const resP = await this.apiPost("/api/practice_run", { driver_id: driverId, program: val });
+        const acad = this.fullState?.academy_drivers || [];
+        const resP = await this.apiPost("/api/practice_run", {
+          driver_id: driverId,
+          program: val,
+          rookie_id: val === "ROOKIE_FP1" ? acad[0] : undefined,
+        });
         if (resP.ok) {
           this.showToast(`FP FEEDBACK (${this._driverTag(driverId)}): Confidence ${Math.round(resP.confidence)}% · ${resP.feedback?.hint || "Complete"}`);
+          this.fetchFullState();
+          this.lastDomSyncMs = 0;
+        }
+        return;
+      }
+      else if (cmd === "tactical_burst") payload.tactical_burst = val;
+      else if (cmd === "active_plan") payload.active_plan = val;
+      else if (cmd === "edit_plan") {
+        this.openStrategyModal(driverId);
+        return;
+      }
+      else if (cmd === "break_parc_ferme") {
+        const dfEl = document.getElementById(`parc-wing-${driverId}`);
+        const puEl = document.getElementById(`parc-pu-${driverId}`);
+        const dfVal = dfEl ? Number(dfEl.value) : 0;
+        const freshPu = puEl && puEl.checked ? ["ice", "turbo"] : [];
+        const resB = await this.apiPost("/api/break_parc_ferme", {
+          driver_id: driverId,
+          setup_df: dfVal,
+          fresh_pu: freshPu,
+        });
+        if (resB.ok) {
+          this.showToast(`PARC FERME BROKEN: ${this._driverTag(driverId)} starting from Pit Lane`);
           this.fetchFullState();
           this.lastDomSyncMs = 0;
         }
@@ -1080,6 +1120,43 @@ class F1App {
       closeAnalyticsBtn.addEventListener("click", () => analyticsModal.classList.add("hidden"));
       analyticsModal.addEventListener("click", (e) => {
         if (e.target === analyticsModal) analyticsModal.classList.add("hidden");
+      });
+    }
+
+    const livePtsBtn = document.getElementById("btn-live-pts");
+    if (livePtsBtn) {
+      livePtsBtn.addEventListener("click", () => {
+        this.livePtsMode = !this.livePtsMode;
+        livePtsBtn.classList.toggle("active", this.livePtsMode);
+        if (this.liveTick) this.renderTimingTower(this.liveTick);
+      });
+    }
+    const liveChartBtn = document.getElementById("btn-live-chart");
+    if (liveChartBtn) {
+      liveChartBtn.addEventListener("click", () => this.openLiveAnalytics());
+    }
+
+    const dilA = document.getElementById("btn-dilemma-a");
+    const dilB = document.getElementById("btn-dilemma-b");
+    if (dilA) {
+      dilA.addEventListener("click", async () => {
+        const res = await this.apiPost("/api/dilemma", { choice: "A" });
+        if (res.ok) this.showToast(res.summary || "Option A confirmed");
+      });
+    }
+    if (dilB) {
+      dilB.addEventListener("click", async () => {
+        const res = await this.apiPost("/api/dilemma", { choice: "B" });
+        if (res.ok) this.showToast(res.summary || "Option B confirmed");
+      });
+    }
+
+    const stratModal = document.getElementById("strategy-modal");
+    const closeStratBtn = document.getElementById("btn-close-strategy");
+    if (stratModal && closeStratBtn) {
+      closeStratBtn.addEventListener("click", () => stratModal.classList.add("hidden"));
+      stratModal.addEventListener("click", (e) => {
+        if (e.target === stratModal) stratModal.classList.add("hidden");
       });
     }
 
@@ -1369,8 +1446,18 @@ class F1App {
       this.fetchFullState();
     }
 
+    if (tick.custom_team_meta && typeof registerCustomTeamLogo === "function") {
+      const cm = tick.custom_team_meta;
+      const sig = `${cm.id}_${cm.code}_${cm.color}_${cm.secondary}`;
+      if (sig !== this._lastCustomSig) {
+        this._lastCustomSig = sig;
+        registerCustomTeamLogo(cm.id, cm.code, cm.color, cm.secondary);
+      }
+    }
+
     this.renderHeader(tick);
     this.renderLightsAndPhaseOverlay(tick);
+    this.renderDilemmaOverlay(tick);
 
     const now = performance.now();
     if (now - this.lastDomSyncMs > 190) {
@@ -1380,6 +1467,36 @@ class F1App {
       this.renderTelemetry(tick);
       this.renderEventFeed(tick.events);
     }
+  }
+
+  renderDilemmaOverlay(tick) {
+    const card = document.getElementById("dilemma-card");
+    if (!card) return;
+    const dil = tick?.active_dilemma;
+    if (!dil) {
+      card.classList.add("hidden");
+      this._activeDilemmaId = null;
+      return;
+    }
+    card.classList.remove("hidden");
+    const tEl = document.getElementById("dilemma-title");
+    const tmEl = document.getElementById("dilemma-timer");
+    const bEl = document.getElementById("dilemma-bar");
+    const pEl = document.getElementById("dilemma-prompt");
+    const aLbl = document.getElementById("dil-a-lbl");
+    const aSub = document.getElementById("dil-a-sub");
+    const bLbl = document.getElementById("dil-b-lbl");
+    const bSub = document.getElementById("dil-b-sub");
+    if (tEl) tEl.textContent = dil.title || "URGENT STRATEGY CALL";
+    if (tmEl) tmEl.textContent = `${Math.max(0, Number(dil.timer || 0)).toFixed(1)}s`;
+    const pct = Math.max(0, Math.min(100, (Number(dil.timer || 0) / Math.max(1, Number(dil.max_timer || 8.5))) * 100));
+    if (bEl) bEl.style.width = `${pct.toFixed(1)}%`;
+    if (pEl) pEl.textContent = dil.prompt || "";
+    if (aLbl) aLbl.textContent = dil.option_a?.label || "OPTION A";
+    if (aSub) aSub.textContent = dil.option_a?.sub || "";
+    if (bLbl) bLbl.textContent = dil.option_b?.label || "OPTION B";
+    if (bSub) bSub.textContent = dil.option_b?.sub || "";
+    this._activeDilemmaId = dil.id;
   }
 
   renderHeader(tick) {
@@ -1571,6 +1688,16 @@ class F1App {
         ? "Difference between best qualifying laps"
         : "Gap to the race leader / interval to the car ahead";
     }
+    const titleBar = document.getElementById("live-title-bar");
+    const liveWdc = (this.livePtsMode && !isQuali && tick.live_standings) ? tick.live_standings : null;
+    if (titleBar && titleBar.classList) {
+      if (liveWdc && liveWdc.title_note) {
+        titleBar.classList.remove("hidden");
+        titleBar.textContent = liveWdc.title_note;
+      } else {
+        titleBar.classList.add("hidden");
+      }
+    }
     if (!tick.cars || tick.cars.length === 0) {
       list.innerHTML = `<div style="padding:14px;color:#8f90a6;font-size:11.5px;letter-spacing:0.4px">CARS IN GARAGE — SESSION PREPARING</div>`;
       return;
@@ -1659,6 +1786,13 @@ class F1App {
             ? `<div class="knockout-cut-row"><span>ELIMINATION ZONE</span><span>P${tick.quali_cut + 1}-P${tick.quali_cut === 16 ? 22 : 16} OUT IN ${tick.quali_stage}</span></div>`
             : "";
 
+        let livePtsHtml = "";
+        if (liveWdc && liveWdc.wdc && liveWdc.wdc[c.id]) {
+          const wRow = liveWdc.wdc[c.id];
+          const dr = wRow.delta_rank > 0 ? ` ▲${wRow.delta_rank}` : wRow.delta_rank < 0 ? ` ▼${Math.abs(wRow.delta_rank)}` : "";
+          livePtsHtml = `<span class="t-live-pts">P${wRow.rank} · ${wRow.points}p${wRow.delta_pts > 0 ? ` (+${wRow.delta_pts})` : ""}${dr}</span>`;
+        }
+
         return `
           <div class="t-row ${isSel ? "selected" : ""} ${isMine ? "my-car" : ""} ${c.dnf ? "dnf" : ""} ${c.elim ? "elim" : ""}" data-id="${c.id}">
             <div class="t-pos">${c.pos}</div>
@@ -1677,6 +1811,7 @@ class F1App {
             </div>
             <div class="t-gap">
               <span class="t-gap-val" title="${gapTitle}">${gapStr}</span>
+              ${livePtsHtml}
               ${intervalStr ? `<span class="t-interval" title="Interval to the car ahead in race order">INT ${intervalStr}</span>` : ""}
               <span class="ers-mini"><i style="width:${Math.min(100, Math.max(0, c.bat))}%;background:${batColor}"></i></span>
             </div>
@@ -1786,6 +1921,7 @@ class F1App {
                       <button class="pw-btn release-cta" ${locked || runsLeft <= 0 ? "disabled" : ""} data-pw-cmd="practice_run" data-drv="${d.id}" data-val="QUALI_SIM">QUALI SIM</button>
                       <button class="pw-btn" ${locked || runsLeft <= 0 ? "disabled" : ""} data-pw-cmd="practice_run" data-drv="${d.id}" data-val="LONG_RUN">LONG RUN</button>
                       <button class="pw-btn" ${locked || runsLeft <= 0 ? "disabled" : ""} data-pw-cmd="practice_run" data-drv="${d.id}" data-val="WET_PREP">WET PREP</button>
+                      ${(this.fullState?.academy || []).length > 0 ? `<button class="pw-btn" ${locked || runsLeft <= 0 ? "disabled" : ""} data-pw-cmd="practice_run" data-drv="${d.id}" data-val="ROOKIE_FP1" title="Run Academy Junior in FP1 for permanent +1 skill growth">ROOKIE FP1 (${this.fullState.academy[0].code})</button>` : ""}
                     </div>
                     <div class="pw-group" title="Wing Setup (-2 Low Drag .. +2 High Downforce)">
                       <span class="pw-lbl">WING</span>
@@ -1935,6 +2071,8 @@ class F1App {
                 ${fcstHtml}
                 <span class="pw-morale" style="color:${moraleCol}" title="Driver Morale">MOR ${morale}%</span>
                 ${(c.drs || c.aero === "DRS") ? `<span class="badge b-drs">DRS</span>` : c.ovt ? `<span class="badge b-ovt">OVT</span>` : ""}
+                ${c.gremlin ? `<span class="gremlin-badge" title="Recoverable issue — Lift &amp; Coast / Conserve or Box to clear">${c.gremlin.replace(/_/g, " ")}</span>` : ""}
+                ${c.pit_start ? `<span class="badge b-pen">PIT START</span>` : ""}
                 ${c.pen > 0 ? `<span class="badge b-pen">+${c.pen}S</span>` : ""}
                 ${c.dmg > 15 ? `<span class="badge b-pen">FW -${c.dmg}%</span>` : ""}
                 ${c.scrubbed ? `<span class="badge" style="background:#2b2714;color:#ffd000">SCR</span>` : ""}
@@ -2036,7 +2174,28 @@ class F1App {
                     .map(([k, lbl]) => `<button class="pw-btn ${c.order === k ? "active" : ""}" ${dis} data-pw-cmd="order" data-drv="${c.id}" data-val="${k}">${lbl}</button>`)
                     .join("")}
                 </div>
+                <div class="pw-group" title="1-Lap Attack/Defend Tactical Burst">
+                  <span class="pw-lbl">1L</span>
+                  <button class="pw-btn burst-atk ${c.burst === "ATTACK_NOW" ? "active" : ""}" ${(isRace && !isRedFlag && tick.flag === "GREEN" && !(c.burst_rem > 0) && !(c.burst_cd > 0)) ? "" : "disabled"} data-pw-cmd="tactical_burst" data-drv="${c.id}" data-val="ATTACK_NOW">${c.burst === "ATTACK_NOW" ? `ATK ${Math.ceil(c.burst_rem)}s` : (c.burst_cd > 0 ? `ATK (${Math.ceil(c.burst_cd)}s)` : "ATK 1L")}</button>
+                  <button class="pw-btn burst-def ${c.burst === "DEFEND_NOW" ? "active" : ""}" ${(isRace && !isRedFlag && tick.flag === "GREEN" && !(c.burst_rem > 0) && !(c.burst_cd > 0)) ? "" : "disabled"} data-pw-cmd="tactical_burst" data-drv="${c.id}" data-val="DEFEND_NOW">${c.burst === "DEFEND_NOW" ? `DEF ${Math.ceil(c.burst_rem)}s` : "DEF 1L"}</button>
+                </div>
+                <div class="pw-group" title="Interactive Stint Plan A/B/C">
+                  <span class="pw-lbl">PLAN</span>
+                  ${["A", "B", "C"].map((pk) => `<button class="pw-btn ${(c.plan || "A") === pk ? "active" : ""}" ${dis} data-pw-cmd="active_plan" data-drv="${c.id}" data-val="${pk}">${pk}</button>`).join("")}
+                  <button class="pw-btn" ${dis} data-pw-cmd="edit_plan" data-drv="${c.id}">EDIT</button>
+                </div>
               </div>
+              ${tick.phase === "GRID_WALK" && !c.pit_start ? `
+              <div class="parc-break-row">
+                <span style="color:#ffd000;font-weight:800">BREAK PARC FERME -> PIT START</span>
+                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                  <select id="parc-wing-${c.id}" style="background:#0c0d17;color:#fff;border:1px solid #353856;border-radius:3px;padding:1px 4px;font-size:10px">
+                    ${[-2, -1, 0, 1, 2].map((w) => `<option value="${w}" ${(c.setup_df ?? 0) === w ? "selected" : ""}>Wing ${w >= 0 ? `+${w}` : w}</option>`).join("")}
+                  </select>
+                  <label style="font-size:9.5px;color:#cfd2e6;display:flex;align-items:center;gap:3px"><input type="checkbox" id="parc-pu-${c.id}" /> Fresh ICE/Turbo</label>
+                  <button class="pw-btn box-cta" data-pw-cmd="break_parc_ferme" data-drv="${c.id}">PIT LANE START</button>
+                </div>
+              </div>` : ""}
             </div>
 
             <!-- TIER 4: STRATEGIST CALLOUT + APPLY + REJOIN GHOST -->
@@ -2479,6 +2638,71 @@ class F1App {
       });
     });
 
+    const nyPanel = document.getElementById("next-year-rd-panel");
+    if (nyPanel && st.next_year_rd) {
+      const ny = st.next_year_rd;
+      const prog = Math.max(0, Math.min(100, Number(ny.progress || 0)));
+      const freeProj = Math.min(3, Math.floor(prog / 30));
+      const investedThisGp = Number(ny.last_round_invested || 0) === Number(st.round || 0);
+      nyPanel.innerHTML = `
+        <div class="ny-rd-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <strong style="font-size:12px;color:#fff">${st.season + 1} CHASSIS PROGRAMME</strong>
+            <span style="font-size:11px;font-weight:900;color:#00d2be">${prog}% COMPLETE (CARRIES +${freeProj} FREE SPEC${freeProj === 1 ? "" : "S"})</span>
+          </div>
+          <div class="bar-meter" style="margin-bottom:8px"><span style="width:${prog}%;background:#00d2be"></span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between">
+            <span style="font-size:10.5px;color:#8f90a6">Total Invested: $${Number(ny.invested_m || 0).toFixed(1)}M · Separate from 3/GP limit</span>
+            <div style="display:flex;gap:6px">
+              <button class="btn-outline btn-sm" data-ny-tier="standard" ${investedThisGp || prog >= 100 || pt.budget_m < 8 ? "disabled" : ""}>STANDARD ($8M)</button>
+              <button class="btn-primary btn-sm" data-ny-tier="major" ${investedThisGp || prog >= 100 || pt.budget_m < 16 ? "disabled" : ""}>MAJOR ($16M)</button>
+            </div>
+          </div>
+        </div>
+      `;
+      nyPanel.querySelectorAll("button[data-ny-tier]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const res = await this.apiPost("/api/next_year_rd", { tier: btn.dataset.nyTier });
+          if (res.ok) {
+            this.showToast(`NEXT-YEAR CHASSIS: Progress reached ${res.next_year_rd?.progress}%`);
+            this.fetchFullState();
+          }
+        });
+      });
+    }
+
+    const staffPanel = document.getElementById("staff-panel");
+    if (staffPanel && st.staff_roles && st.staff) {
+      staffPanel.innerHTML = Object.entries(st.staff_roles).map(([roleKey, spec]) => {
+        const curTier = Math.max(0, Math.min(3, Number(st.staff[roleKey] || 0)));
+        const curObj = spec.tiers[curTier];
+        const nxtObj = curTier < 3 ? spec.tiers[curTier + 1] : null;
+        return `
+          <div class="staff-card">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <strong style="color:#fff;font-size:12px">${spec.name.toUpperCase()}</strong>
+                <div style="font-size:10.5px;color:#00d2be;font-weight:800">T${curTier}: ${curObj.title} · ${curObj.perk}</div>
+              </div>
+              ${nxtObj
+                ? `<button class="btn-primary btn-sm" data-hire-role="${roleKey}" ${pt.budget_m >= nxtObj.cost_m ? "" : "disabled"}>HIRE T${nxtObj.tier} ($${nxtObj.cost_m.toFixed(1)}M)</button>`
+                : `<span class="badge b-ovt">MAX TIER</span>`}
+            </div>
+            ${nxtObj ? `<div style="font-size:10px;color:#8f90a6;margin-top:4px">Next (${nxtObj.title}): ${nxtObj.perk}</div>` : ""}
+          </div>
+        `;
+      }).join("");
+      staffPanel.querySelectorAll("button[data-hire-role]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const res = await this.apiPost("/api/hire_staff", { role: btn.dataset.hireRole });
+          if (res.ok) {
+            this.showToast(`SENIOR STAFF HIRED: ${btn.dataset.hireRole.replace("_", " ").toUpperCase()} Tier ${res.tier}`);
+            this.fetchFullState();
+          }
+        });
+      });
+    }
+
     document.getElementById("power-rank-list").innerHTML = st.teams
       .map(
         (t, idx) => `
@@ -2615,6 +2839,73 @@ class F1App {
         }
       });
     });
+
+    const acadPanel = document.getElementById("academy-panel");
+    if (acadPanel) {
+      const acadList = st.academy || [];
+      const nonLegendFA = freeAgents.filter((d) => !d.legend && !acadList.some((a) => a.id === d.id));
+      acadPanel.innerHTML = `
+        <p class="muted-note">Sign up to 2 juniors ($1.5M), run ROOKIE FP1 in Free Practice (+1 permanent skill), and promote with ZERO signing fee during Transfer Windows.</p>
+        ${acadList.length ? acadList.map((a) => `
+          <div class="academy-slot" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+            <div>
+              <strong style="color:#fff">#${a.number} ${a.name} (${a.code})</strong>
+              <span style="color:#00d2be;font-weight:900;margin-left:6px">OVR ${a.overall}</span>
+              <div style="font-size:10px;color:#8f90a6">PACE ${a.pace} · CRAFT ${a.racecraft} · CONS ${a.consistency} · MGMT ${a.tire_mgmt} · WET ${a.wet_skill}</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button class="btn-primary btn-sm" data-acad-act="promote" data-acad-drv="${a.id}" ${windowOpen ? "" : "disabled"}>PROMOTE</button>
+              <button class="btn-outline btn-sm" data-acad-act="release" data-acad-drv="${a.id}">RELEASE</button>
+            </div>
+          </div>
+        `).join("") : `<div style="color:#8f90a6;font-size:11px;margin-bottom:8px">No academy juniors signed yet (0/2 seats).</div>`}
+        ${acadList.length < 2 && nonLegendFA.length > 0 ? `
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+            <select id="acad-sign-select" style="flex:1;background:#0c0d17;border:1px solid #30334d;color:#fff;padding:5px 8px;border-radius:4px;font-size:11px">
+              ${nonLegendFA.map((d) => `<option value="${d.id}">#${d.number} ${d.name} (Age ${d.age} · OVR ${d.overall})</option>`).join("")}
+            </select>
+            <button class="btn-outline btn-sm" id="btn-acad-sign" ${pt.budget_m < 1.5 ? "disabled" : ""}>SIGN ACADEMY ($1.5M)</button>
+          </div>
+        ` : ""}
+      `;
+      const signBtn = document.getElementById("btn-acad-sign");
+      if (signBtn) {
+        signBtn.addEventListener("click", async () => {
+          const did = document.getElementById("acad-sign-select")?.value;
+          if (!did) return;
+          const res = await this.apiPost("/api/academy", { action: "sign", driver_id: did });
+          if (res.ok) {
+            this.showToast("ACADEMY: Junior signed to development roster");
+            this.fetchFullState();
+          }
+        });
+      }
+      acadPanel.querySelectorAll("button[data-acad-act]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const relId = document.getElementById("fa-release-driver")?.value;
+          const res = await this.apiPost("/api/academy", {
+            action: btn.dataset.acadAct,
+            driver_id: btn.dataset.acadDrv,
+            release_driver_id: btn.dataset.acadAct === "promote" ? relId : undefined,
+          });
+          if (res.ok) {
+            this.showToast(`ACADEMY: Action '${btn.dataset.acadAct.toUpperCase()}' complete`);
+            this.fetchFullState();
+          }
+        });
+      });
+    }
+
+    const rivPanel = document.getElementById("rivalries-panel");
+    if (rivPanel) {
+      const rivs = st.rivalries || [];
+      rivPanel.innerHTML = rivs.length ? rivs.slice(0, 8).map((r) => `
+        <div class="rivalry-row" style="display:flex;justify-content:space-between;align-items:center">
+          <strong style="color:#fff;font-size:11.5px">${r.d1_code} vs ${r.d2_code}</strong>
+          <span style="color:${r.level >= 4 ? "#ff3b30" : "#ff9f1c"};font-weight:900;font-size:11px">INTENSITY LVL ${r.level}/5</span>
+        </div>
+      `).join("") : `<div style="color:#8f90a6;font-size:11px">No active driver rivalries recorded yet. Wheel-to-wheel collisions raise pair hostility (1-5).</div>`;
+    }
 
     this.renderDriverDatabase();
 
@@ -2886,6 +3177,97 @@ class F1App {
           }
         });
       });
+    }
+
+    const custWrap = document.getElementById("my-team-customizer");
+    if (custWrap && this.fullState.player_team) {
+      const pt = this.fullState.player_team;
+      const supps = this.fullState.engine_suppliers || ["Mercedes", "Ferrari", "Honda RBPT", "Audi"];
+      custWrap.innerHTML = `
+        <div class="custom-form-grid">
+          <div><label>TEAM NAME</label><input id="ct-name" value="${pt.name}" maxlength="32" /></div>
+          <div><label>SHORT NAME</label><input id="ct-short" value="${pt.short}" maxlength="16" /></div>
+          <div><label>3-CHAR CODE</label><input id="ct-code" value="${pt.code}" maxlength="3" /></div>
+          <div><label>PRIMARY HEX</label><input id="ct-col" type="color" value="${pt.color}" /></div>
+          <div><label>ACCENT HEX</label><input id="ct-sec" type="color" value="${pt.secondary || pt.color}" /></div>
+          <div><label>ENGINE SUPPLIER</label>
+            <select id="ct-eng">${supps.map((e) => `<option value="${e}" ${pt.engine === e ? "selected" : ""}>${e}</option>`).join("")}</select>
+          </div>
+        </div>
+        <button class="btn-primary btn-sm" id="btn-save-custom-team">APPLY CONSTRUCTOR BRANDING</button>
+      `;
+      const saveCust = document.getElementById("btn-save-custom-team");
+      if (saveCust) {
+        saveCust.addEventListener("click", async () => {
+          const payload = {
+            name: document.getElementById("ct-name").value,
+            short: document.getElementById("ct-short").value,
+            code: document.getElementById("ct-code").value,
+            color: document.getElementById("ct-col").value,
+            secondary: document.getElementById("ct-sec").value,
+            engine: document.getElementById("ct-eng").value,
+          };
+          const res = await this.apiPost("/api/custom_team", payload);
+          if (res.ok && res.team) {
+            if (typeof registerCustomTeamLogo === "function") {
+              registerCustomTeamLogo(res.team.id, res.team.code, res.team.color, res.team.secondary);
+            }
+            this._lastCustomSig = `${res.team.id}_${res.team.code}_${res.team.color}_${res.team.secondary}`;
+            document.getElementById("team-modal").classList.add("hidden");
+            this.showToast(`MY TEAM UPDATED: ${res.team.name} (${res.team.engine})`);
+            this.fetchFullState();
+          }
+        });
+      }
+    }
+
+    const csWrap = document.getElementById("custom-scenario-builder");
+    if (csWrap && this.fullState.all_tracks) {
+      csWrap.innerHTML = `
+        <div class="custom-form-grid">
+          <div><label>CIRCUIT (27 TRACKS)</label>
+            <select id="cs-track">${this.fullState.all_tracks.map((t) => `<option value="${t.id}" ${t.id === this.fullState.track?.id ? "selected" : ""}>${t.city} — ${t.name} (${t.laps}L)</option>`).join("")}</select>
+          </div>
+          <div><label>REGULATIONS ERA</label>
+            <select id="cs-era"><option value="2026">2026 Hybrid &amp; Active Aero</option><option value="2028">2028 2.4L V8 &amp; DRS</option></select>
+          </div>
+          <div><label>START LAP</label><input id="cs-lap" type="number" min="1" max="70" value="18" /></div>
+          <div><label>WEATHER</label>
+            <select id="cs-weather"><option value="DRY">Dry</option><option value="DAMP">Damp Track</option><option value="RAIN_SOON">Rain Approaching</option><option value="WET">Heavy Rain</option></select>
+          </div>
+          <div><label>RACE FLAG</label>
+            <select id="cs-flag"><option value="GREEN">Green Flag</option><option value="VSC">Virtual Safety Car</option><option value="SC">Safety Car</option><option value="RED_FLAG">Red Flag</option></select>
+          </div>
+          <div><label>GRID POS (P1-20)</label><input id="cs-pos" type="number" min="1" max="20" value="6" /></div>
+          <div><label>TYRE COMPOUND</label>
+            <select id="cs-comp"><option value="MEDIUM">MEDIUM</option><option value="SOFT">SOFT</option><option value="HARD">HARD</option><option value="INTER">INTER</option><option value="WET">WET</option></select>
+          </div>
+          <div><label>TYRE WEAR (%)</label><input id="cs-wear" type="number" min="0" max="85" value="25" /></div>
+        </div>
+        <button class="btn-primary btn-sm" id="btn-launch-custom-scen">LAUNCH CUSTOM SCENARIO</button>
+      `;
+      const launchCs = document.getElementById("btn-launch-custom-scen");
+      if (launchCs) {
+        launchCs.addEventListener("click", async () => {
+          const payload = {
+            track_id: document.getElementById("cs-track").value,
+            era: document.getElementById("cs-era").value,
+            start_lap: Number(document.getElementById("cs-lap").value || 15),
+            weather: document.getElementById("cs-weather").value,
+            flag: document.getElementById("cs-flag").value,
+            start_pos: Number(document.getElementById("cs-pos").value || 6),
+            compound: document.getElementById("cs-comp").value,
+            tire_wear: Number(document.getElementById("cs-wear").value || 25),
+          };
+          const res = await this.apiPost("/api/custom_scenario", payload);
+          if (res.ok) {
+            document.getElementById("team-modal").classList.add("hidden");
+            this.stopReplay();
+            this.showToast(`CUSTOM SCENARIO: ${res.scenario?.title || "READY"}`);
+            this.fetchFullState();
+          }
+        });
+      }
     }
   }
   renderHallOfFame() {
@@ -3279,15 +3661,112 @@ class F1App {
     if (execBtn) execBtn.disabled = !res.accepted;
   }
 
+  openStrategyModal(driverId) {
+    const modal = document.getElementById("strategy-modal");
+    const editor = document.getElementById("strategy-plan-editor");
+    const titleEl = document.getElementById("strategy-modal-title");
+    if (!modal || !editor) return;
+    this._strategyEditDriverId = driverId;
+    const car = this.liveTick?.cars?.find((c) => c.id === driverId);
+    const totalLaps = Math.max(10, Number(this.liveTick?.total_laps || this.fullState?.track?.laps || 50));
+    const entry = car?.plans
+      ? { active: car.plan || "A", plans: car.plans }
+      : (this.fullState?.strategy_plans?.[driverId] || { active: "A", plans: { A: [{ compound: "MEDIUM", start_lap: 1, end_lap: 22, pit_lap: 23 }, { compound: "HARD", start_lap: 23, end_lap: totalLaps }], B: [{ compound: "SOFT", start_lap: 1, end_lap: 14, pit_lap: 15 }, { compound: "MEDIUM", start_lap: 15, end_lap: 33, pit_lap: 34 }, { compound: "SOFT", start_lap: 34, end_lap: totalLaps }], C: [{ compound: "SOFT", start_lap: 1, end_lap: 17, pit_lap: 18 }, { compound: "HARD", start_lap: 18, end_lap: totalLaps }] } });
+    const plansCopy = JSON.parse(JSON.stringify(entry.plans || {}));
+    if (titleEl) titleEl.textContent = `STRATEGY PLANNER — ${this._driverTag(driverId)} (${totalLaps} LAPS)`;
+
+    const renderPlans = () => {
+      const comps = ["SOFT", "MEDIUM", "HARD", "INTER", "WET"];
+      editor.innerHTML = ["A", "B", "C"].map((pk) => {
+        const list = plansCopy[pk] || [];
+        return `
+          <div style="margin-bottom:10px;padding:8px;background:#10121e;border:1px solid ${entry.active === pk ? "#00d2be" : "#26283d"};border-radius:4px">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <strong style="color:${entry.active === pk ? "#00d2be" : "#ffffff"}">PLAN ${pk} (${list.length - 1} STOP)</strong>
+              <button class="btn-outline btn-sm" data-set-active-pk="${pk}">${entry.active === pk ? "ACTIVE PLAN" : "SET ACTIVE"}</button>
+            </div>
+            ${list.map((st, si) => `
+              <div class="strategy-stint-row">
+                <strong style="font-size:10px;color:#8f90a6;min-width:54px">STINT ${si + 1}</strong>
+                <select data-plan-pk="${pk}" data-stint-idx="${si}" data-field="compound">
+                  ${comps.map((cp) => `<option value="${cp}" ${st.compound === cp ? "selected" : ""}>${cp}</option>`).join("")}
+                </select>
+                ${si < list.length - 1
+                  ? `<label style="font-size:10px;color:#9ea2bd">Pit Lap <input type="number" min="2" max="${totalLaps - 1}" value="${st.pit_lap || (st.end_lap + 1)}" data-plan-pk="${pk}" data-stint-idx="${si}" data-field="pit_lap" style="width:56px" /></label>`
+                  : `<span style="font-size:10px;color:#00d2be">To Chequered Flag (L${totalLaps})</span>`}
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }).join("") + `<button class="btn-primary btn-block" id="btn-save-strategy-plans">CONFIRM &amp; SYNC STRATEGY PLANS</button>`;
+
+      editor.querySelectorAll("button[data-set-active-pk]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          entry.active = btn.dataset.setActivePk;
+          renderPlans();
+        });
+      });
+      editor.querySelectorAll("[data-plan-pk]").forEach((el) => {
+        el.addEventListener("change", () => {
+          const pk = el.dataset.planPk;
+          const idx = Number(el.dataset.stintIdx);
+          const fld = el.dataset.field;
+          if (plansCopy[pk]?.[idx]) {
+            plansCopy[pk][idx][fld] = fld === "pit_lap" ? Number(el.value) : el.value;
+          }
+        });
+      });
+      const saveBtn = document.getElementById("btn-save-strategy-plans");
+      if (saveBtn) {
+        saveBtn.addEventListener("click", async () => {
+          const res = await this.apiPost("/api/strategy_plan", {
+            driver_id: driverId,
+            active_plan: entry.active,
+            plans: plansCopy,
+          });
+          if (res.ok) {
+            modal.classList.add("hidden");
+            this.showToast(`STRATEGY SYNCED: ${this._driverTag(driverId)} locked on Plan ${entry.active}`);
+            this.fetchFullState();
+          }
+        });
+      }
+    };
+    renderPlans();
+    modal.classList.remove("hidden");
+  }
+
+  async openLiveAnalytics() {
+    try {
+      const res = await fetch("/api/live_analytics");
+      const data = await res.json();
+      if (data && data.ok) {
+        this.openAnalyticsModal({
+          gp: data.gp,
+          laps: data.total_laps,
+          gap_history: data.gap_history || [],
+          lap_chart: data.lap_chart || [],
+          stints: data.stints || {},
+          driver_meta: data.drivers || {},
+        });
+      }
+    } catch {
+      this.showToast("Unable to load live race pace chart");
+    }
+  }
+
   openAnalyticsModal(raceObj) {
     const modal = document.getElementById("analytics-modal");
     const titleEl = document.getElementById("analytics-modal-title");
+    const gapSection = document.getElementById("analytics-gap-section");
+    const gapWrap = document.getElementById("analytics-gap-chart");
     const posWrap = document.getElementById("analytics-pos-chart");
     const stintsWrap = document.getElementById("analytics-stints-chart");
     if (!modal || !posWrap || !stintsWrap) return;
 
     const rec = raceObj.round_rec || raceObj;
     const gpName = rec.gp || "Grand Prix";
+    const gapHistory = raceObj.gap_history || rec.gap_history || [];
     const lapChart = raceObj.lap_chart || rec.lap_chart || [];
     const stintsMap = raceObj.stints || rec.stints || {};
     const top10 = raceObj.top10 || rec.top10 || [];
@@ -3302,6 +3781,57 @@ class F1App {
       const stDrv = this.fullState?.drivers?.find((d) => d.id === did);
       return stDrv ? { code: stDrv.code, team_color: stDrv.team_color || "#888888", name: stDrv.name } : { code: did.slice(0, 3).toUpperCase(), team_color: "#888888", name: did };
     };
+
+    if (gapSection && gapWrap) {
+      if (gapHistory.length >= 2) {
+        gapSection.classList.remove("hidden");
+        const lastEntry = gapHistory[gapHistory.length - 1];
+        const laps = gapHistory.map((g) => g.lap);
+        const minL = laps[0];
+        const maxL = laps[laps.length - 1];
+        const showIds = Object.entries(lastEntry.positions || {})
+          .filter(([, p]) => p <= 10)
+          .sort((a, b) => a[1] - b[1])
+          .map(([id]) => id);
+        for (const did of Object.keys(dMeta)) {
+          if (dMeta[did]?.team_id === this.fullState?.player_team_id && !showIds.includes(did)) {
+            showIds.push(did);
+          }
+        }
+        let maxGap = 5.0;
+        for (const item of gapHistory) {
+          for (const did of showIds) {
+            const gv = item.gaps?.[did];
+            if (gv != null && gv > maxGap) maxGap = Math.min(90, gv);
+          }
+        }
+        const W = 860, H = 220, padL = 42, padR = 54, padT = 16, padB = 24;
+        const xOf = (lap) => padL + ((lap - minL) / Math.max(1, maxL - minL)) * (W - padL - padR);
+        const yOf = (g) => padT + (Math.min(maxGap, Math.max(0, g)) / maxGap) * (H - padT - padB);
+        const gridG = [];
+        for (let i = 0; i <= 4; i++) {
+          const val = (maxGap / 4) * i;
+          const y = yOf(val);
+          gridG.push(`<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="rgba(255,255,255,0.06)" stroke-width="1" />`);
+          gridG.push(`<text x="${padL - 5}" y="${y + 3}" fill="#8f90a6" font-size="9" text-anchor="end">+${val.toFixed(0)}s</text>`);
+        }
+        const gapLines = showIds.map((did) => {
+          const m = metaLookup(did);
+          const pts = gapHistory
+            .map((it) => it.gaps?.[did] != null ? `${xOf(it.lap).toFixed(1)},${yOf(it.gaps[did]).toFixed(1)}` : null)
+            .filter(Boolean)
+            .join(" ");
+          const lastG = lastEntry.gaps?.[did];
+          return `
+            <polyline fill="none" stroke="${m.team_color}" stroke-width="2" points="${pts}" />
+            ${lastG != null ? `<text x="${W - padR + 5}" y="${(yOf(lastG) + 3).toFixed(1)}" fill="${m.team_color}" font-size="9" font-weight="800">${m.code} +${lastG.toFixed(1)}s</text>` : ""}
+          `;
+        }).join("");
+        gapWrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${gridG.join("")}${gapLines}</svg>`;
+      } else {
+        gapSection.classList.add("hidden");
+      }
+    }
 
     // 1. Render SVG Lap-by-Lap Position Trace
     if (lapChart.length >= 2) {

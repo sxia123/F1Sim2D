@@ -5,6 +5,7 @@ import json
 import copy
 import os
 import random
+import re
 import threading
 import time
 from pathlib import Path
@@ -39,7 +40,7 @@ from sim.economy import (
     BALANCE_VERSION, SALARY_SOURCE, BUDGET_SOURCE, migrate_legacy_balance,
     team_finances, season_allocation_m,
 )
-from sim.tracks import get_season_tracks, calendar_status
+from sim.tracks import COMPILED_TRACKS, TRACK_BY_ID, get_season_tracks, calendar_status
 from sim.track_geometry import in_pit_tunnel
 from sim.hall_of_fame import (
     generate_default_season_archives,
@@ -119,6 +120,44 @@ PITWALL_SCENARIOS: list[dict[str, Any]] = [
         "goal": "Fit the fastest rubber and win the 9-lap standing-restart sprint",
     },
 ]
+
+ENGINE_SUPPLIERS: list[str] = ["Mercedes", "Ferrari", "Honda RBPT", "Audi"]
+
+STAFF_ROLES: dict[str, dict[str, Any]] = {
+    "tech_director": {
+        "name": "Technical Director",
+        "short": "Tech Director",
+        "desc": "Reduces current-year R&D part costs and accelerates next-year chassis development.",
+        "tiers": [
+            {"tier": 0, "title": "Standard Lead", "cost_m": 0.0, "rd_discount": 0.00, "ny_rd_mult": 1.00, "perk": "Baseline R&D efficiency"},
+            {"tier": 1, "title": "Lead Concept Engineer", "cost_m": 9.5, "rd_discount": 0.06, "ny_rd_mult": 1.15, "perk": "-6% R&D cost, +15% NY R&D gain"},
+            {"tier": 2, "title": "Chief Technical Officer", "cost_m": 22.0, "rd_discount": 0.12, "ny_rd_mult": 1.32, "perk": "-12% R&D cost, +32% NY R&D gain"},
+            {"tier": 3, "title": "Legendary Aero Guru", "cost_m": 42.0, "rd_discount": 0.18, "ny_rd_mult": 1.50, "perk": "-18% R&D cost, +50% NY R&D gain"},
+        ],
+    },
+    "chief_mechanic": {
+        "name": "Chief Mechanic",
+        "short": "Chief Mechanic",
+        "desc": "Sharpens pit-stop turnaround times and lowers double-stack/botched stop error rates.",
+        "tiers": [
+            {"tier": 0, "title": "Standard Pit Boss", "cost_m": 0.0, "pit_time_mult": 1.00, "double_stack_risk_mult": 1.00, "perk": "Baseline pit stop speed"},
+            {"tier": 1, "title": "Senior Garage Chief", "cost_m": 7.5, "pit_time_mult": 0.96, "double_stack_risk_mult": 0.82, "perk": "-4% stop time, -18% botch/stack risk"},
+            {"tier": 2, "title": "Elite Pit Operations Lead", "cost_m": 17.0, "pit_time_mult": 0.92, "double_stack_risk_mult": 0.64, "perk": "-8% stop time, -36% botch/stack risk"},
+            {"tier": 3, "title": "World-Record Pit Director", "cost_m": 32.0, "pit_time_mult": 0.87, "double_stack_risk_mult": 0.45, "perk": "-13% stop time, -55% botch/stack risk"},
+        ],
+    },
+    "chief_meteorologist": {
+        "name": "Chief Meteorologist",
+        "short": "Meteorologist",
+        "desc": "Tightens live weather radar cone variance exclusively for your Pit Wall.",
+        "tiers": [
+            {"tier": 0, "title": "Trackside Met Desk", "cost_m": 0.0, "radar_noise_mult": 1.00, "perk": "Standard radar uncertainty"},
+            {"tier": 1, "title": "Doppler Specialist", "cost_m": 6.0, "radar_noise_mult": 0.65, "perk": "-35% live radar cone error"},
+            {"tier": 2, "title": "Senior Synoptic Forecaster", "cost_m": 14.0, "radar_noise_mult": 0.35, "perk": "-65% live radar cone error"},
+            {"tier": 3, "title": "Satellite Microclimate Chief", "cost_m": 26.0, "radar_noise_mult": 0.12, "perk": "-88% pinpoint radar cone accuracy"},
+        ],
+    },
+}
 
 
 def get_season_regulations(year: int) -> dict[str, Any]:
@@ -223,7 +262,13 @@ class ChampionshipWorld:
         self.practice_bonuses: dict[str, dict[str, bool]] = {}
         self.weekend_setup_target: dict[str, int] = {}
         self.board_state: dict[str, Any] = {}
+        self.next_year_rd: dict[str, Any] = {"progress": 0, "invested_m": 0.0, "last_round_invested": 0}
+        self.staff: dict[str, int] = {"tech_director": 0, "chief_mechanic": 0, "chief_meteorologist": 0}
+        self.academy_drivers: list[str] = []
+        self.rivalries: dict[str, int] = {}
+        self.strategy_plans: dict[str, dict[str, Any]] = {}
         self.active_scenario: dict[str, Any] | None = None
+        self._scenario_track: Any = None
         self._career_backup: dict[str, Any] | None = None
 
         if not self._load_state():
@@ -252,6 +297,74 @@ class ChampionshipWorld:
             "status": "SECURE",
             "extra_upgrade_slots": int(extra_upgrade_slots),
         }
+
+    def _staff_bonuses(self) -> dict[str, float]:
+        """Compute aggregate staff tier multipliers for player Pit Wall & R&D."""
+        td_tier = max(0, min(3, int(getattr(self, "staff", {}).get("tech_director", 0))))
+        cm_tier = max(0, min(3, int(getattr(self, "staff", {}).get("chief_mechanic", 0))))
+        met_tier = max(0, min(3, int(getattr(self, "staff", {}).get("chief_meteorologist", 0))))
+        td = STAFF_ROLES["tech_director"]["tiers"][td_tier]
+        cm = STAFF_ROLES["chief_mechanic"]["tiers"][cm_tier]
+        met = STAFF_ROLES["chief_meteorologist"]["tiers"][met_tier]
+        return {
+            "rd_discount": float(td["rd_discount"]),
+            "ny_rd_mult": float(td["ny_rd_mult"]),
+            "pit_time_mult": float(cm["pit_time_mult"]),
+            "double_stack_risk_mult": float(cm["double_stack_risk_mult"]),
+            "radar_noise_mult": float(met["radar_noise_mult"]),
+        }
+
+    def _default_strategy_plans(self, total_laps: int, wetness: float) -> dict[str, Any]:
+        """Generate pre-race editable Plan A / B / C stint presets."""
+        L = max(10, int(total_laps))
+        s1_end = max(4, int(round(L * 0.44)))
+        b1_end = max(3, int(round(L * 0.28)))
+        b2_end = max(b1_end + 3, int(round(L * 0.65)))
+        c_end = max(3, int(round(L * 0.34)))
+        if wetness > 0.45:
+            p_a = [
+                {"compound": "WET", "start_lap": 1, "end_lap": s1_end, "pit_lap": s1_end + 1},
+                {"compound": "INTER", "start_lap": s1_end + 1, "end_lap": L},
+            ]
+        elif wetness > 0.16:
+            p_a = [
+                {"compound": "INTER", "start_lap": 1, "end_lap": s1_end, "pit_lap": s1_end + 1},
+                {"compound": "MEDIUM", "start_lap": s1_end + 1, "end_lap": L},
+            ]
+        else:
+            p_a = [
+                {"compound": "MEDIUM", "start_lap": 1, "end_lap": s1_end, "pit_lap": s1_end + 1},
+                {"compound": "HARD", "start_lap": s1_end + 1, "end_lap": L},
+            ]
+        p_b = [
+            {"compound": "SOFT", "start_lap": 1, "end_lap": b1_end, "pit_lap": b1_end + 1},
+            {"compound": "MEDIUM", "start_lap": b1_end + 1, "end_lap": b2_end, "pit_lap": b2_end + 1},
+            {"compound": "SOFT", "start_lap": b2_end + 1, "end_lap": L},
+        ]
+        p_c = [
+            {"compound": "SOFT", "start_lap": 1, "end_lap": c_end, "pit_lap": c_end + 1},
+            {"compound": "HARD", "start_lap": c_end + 1, "end_lap": L},
+        ]
+        return {"active": "A", "plans": {"A": p_a, "B": p_b, "C": p_c}}
+
+    def _merge_session_rivalries(self, rs: RaceSession) -> None:
+        incs = getattr(rs, "rivalry_increments", None) or {}
+        if not incs:
+            return
+        dmap = self._drivers_by_id()
+        for key, inc in incs.items():
+            cur = int(self.rivalries.get(key, 0))
+            nxt = min(5, cur + int(inc))
+            self.rivalries[key] = nxt
+            if cur < 3 <= nxt and "|" in key:
+                d1, d2 = key.split("|", 1)
+                c1 = dmap.get(d1, {})
+                c2 = dmap.get(d2, {})
+                if c1.get("team_id") == self.player_team_id or c2.get("team_id") == self.player_team_id:
+                    self._push_event(
+                        "NEWS",
+                        f"PADDOCK FEUD (LVL {nxt}/5): {c1.get('name', d1)} and {c2.get('name', d2)} lock into an intense on-track rivalry!",
+                    )
 
     # -------------------------------------------------------------------------
     # Initialization & Persistence
@@ -391,6 +504,11 @@ class ChampionshipWorld:
         for d in self.drivers:
             d.setdefault("morale", 75)
         self.board_state = self._build_board_objectives(self.player_team_id)
+        self.next_year_rd = {"progress": 0, "invested_m": 0.0, "last_round_invested": 0}
+        self.staff = {"tech_director": 0, "chief_mechanic": 0, "chief_meteorologist": 0}
+        self.academy_drivers = []
+        self.rivalries = {}
+        self.strategy_plans = {}
         self.active_scenario = None
         self._career_backup = None
 
@@ -443,6 +561,11 @@ class ChampionshipWorld:
             "pu_pools": copy.deepcopy(getattr(self, "pu_pools", {})),
             "driver_setups": dict(getattr(self, "driver_setups", {})),
             "board_state": copy.deepcopy(getattr(self, "board_state", {})),
+            "next_year_rd": copy.deepcopy(getattr(self, "next_year_rd", {"progress": 0, "invested_m": 0.0, "last_round_invested": 0})),
+            "staff": dict(getattr(self, "staff", {"tech_director": 0, "chief_mechanic": 0, "chief_meteorologist": 0})),
+            "academy_drivers": list(getattr(self, "academy_drivers", [])),
+            "rivalries": dict(getattr(self, "rivalries", {})),
+            "strategy_plans": copy.deepcopy(getattr(self, "strategy_plans", {})),
             "temp_ban_subs": [list(item) for item in getattr(self, "temp_ban_subs", [])],
             "hall_of_fame": self.hall_of_fame[-25:],
             "ledger": self.ledger[-60:],
@@ -563,6 +686,19 @@ class ChampionshipWorld:
             self.driver_setups = data.get("driver_setups", {})
             loaded_board = data.get("board_state")
             self.board_state = loaded_board if isinstance(loaded_board, dict) and loaded_board.get("team_id") else self._build_board_objectives(self.player_team_id)
+            ny_raw = data.get("next_year_rd")
+            self.next_year_rd = dict(ny_raw) if isinstance(ny_raw, dict) else {"progress": 0, "invested_m": 0.0, "last_round_invested": 0}
+            st_raw = data.get("staff")
+            self.staff = {
+                role: max(0, min(3, int((st_raw or {}).get(role, 0))))
+                for role in STAFF_ROLES
+            }
+            ac_raw = data.get("academy_drivers")
+            self.academy_drivers = [str(x) for x in (ac_raw or []) if isinstance(x, str)][:2]
+            riv_raw = data.get("rivalries")
+            self.rivalries = {str(k): int(v) for k, v in (riv_raw or {}).items()} if isinstance(riv_raw, dict) else {}
+            sp_raw = data.get("strategy_plans")
+            self.strategy_plans = dict(sp_raw) if isinstance(sp_raw, dict) else {}
             self.temp_ban_subs = [
                 (str(item[0]), str(item[1]), str(item[2]))
                 for item in data.get("temp_ban_subs", [])
@@ -589,6 +725,8 @@ class ChampionshipWorld:
 
     @property
     def current_track(self):
+        if getattr(self, "active_scenario", None) and getattr(self, "_scenario_track", None) is not None:
+            return self._scenario_track
         tracks = self.calendar
         return tracks[max(0, min(self.current_round - 1, len(tracks) - 1))]
 
@@ -799,6 +937,10 @@ class ChampionshipWorld:
         }
         self.weekend_setup_target = {
             d["id"]: max(-2, min(2, rec_df + (1 if self.weekend_wetness > 0.35 and rec_df < 2 else 0)))
+            for d in player_drvs
+        }
+        self.strategy_plans = {
+            d["id"]: self._default_strategy_plans(trk.race_laps, self.weekend_wetness)
             for d in player_drvs
         }
 
@@ -1140,6 +1282,9 @@ class ChampionshipWorld:
             setup_confidences=self.driver_setup_confidence,
             practice_bonuses=self.practice_bonuses,
             driver_morales={d["id"]: d.get("morale", 75) for d in grid_drivers},
+            rivalries=self.rivalries,
+            staff_bonuses=self._staff_bonuses(),
+            strategy_plans=self.strategy_plans,
         )
         self.phase = "SPRINT_RACE"
         self._push_event(
@@ -1182,6 +1327,7 @@ class ChampionshipWorld:
         p2 = rs.standings[1]
         p3 = rs.standings[2]
         self.sprint_winner_code = w.code
+        self._merge_session_rivalries(rs)
         self._push_event(
             "PODIUM",
             f"SPRINT RESULT ({self.current_track.country}): P1 {w.name} ({w.team_short}, +8 pts) | P2 {p2.code} (+7) | P3 {p3.code} (+6)!",
@@ -1287,6 +1433,9 @@ class ChampionshipWorld:
             setup_confidences=self.driver_setup_confidence,
             practice_bonuses=self.practice_bonuses,
             driver_morales={d["id"]: d.get("morale", 75) for d in grid_drivers},
+            rivalries=self.rivalries,
+            staff_bonuses=self._staff_bonuses(),
+            strategy_plans=self.strategy_plans,
         )
 
     def _start_race(self) -> None:
@@ -1501,6 +1650,7 @@ class ChampionshipWorld:
         }
 
         self._restore_race_bans()
+        self._merge_session_rivalries(rs)
         self.phase = "PODIUM"
         self.phase_timer = 13.0
         self._push_event(
@@ -1958,6 +2108,30 @@ class ChampionshipWorld:
         self.season_year = next_year
         self.current_round = 1
         self._run_ai_offseason_development()
+
+        # Apply Next-Year R&D Progress carryover AFTER any new-regulations reset
+        ny_prog = int(getattr(self, "next_year_rd", {}).get("progress", 0) or 0)
+        free_lvls = min(3, ny_prog // 30)
+        if free_lvls > 0:
+            p_team = self._teams_by_id().get(self.player_team_id)
+            if p_team:
+                applied = []
+                for _ in range(free_lvls):
+                    cands = [
+                        k for k, sp in UPGRADE_DEPARTMENTS.items()
+                        if p_team["upgrades"].get(k, 1) < sp["max_level"]
+                    ]
+                    if not cands:
+                        break
+                    lowest = min(cands, key=lambda k: p_team["upgrades"][k])
+                    p_team["upgrades"][lowest] += 1
+                    applied.append(f"{UPGRADE_DEPARTMENTS[lowest]['short']} Lv.{p_team['upgrades'][lowest]}")
+                if applied:
+                    self._push_event(
+                        "UPGRADE",
+                        f"NEXT-YEAR R&D DIVIDEND ({ny_prog}%): {p_team['short']} launches {next_year} chassis with {len(applied)} free upgrade(s): {', '.join(applied)}!",
+                    )
+        self.next_year_rd = {"progress": 0, "invested_m": 0.0, "last_round_invested": 0}
         carry_slots = int(getattr(self, "board_state", {}).get("extra_upgrade_slots", 0))
         self.board_state = self._build_board_objectives(self.player_team_id, extra_upgrade_slots=carry_slots)
         self.starting_compounds.clear()
@@ -2021,7 +2195,8 @@ class ChampionshipWorld:
                 return {"ok": False, "error": f"{spec['short']} is already at maximum FIA development level ({spec['max_level']})."}
             if self._upgrade_allowance(team["id"])["remaining"] == 0:
                 return {"ok": False, "error": f"Race weekend upgrade limit reached ({MAX_UPGRADES_PER_RACE}/{MAX_UPGRADES_PER_RACE}). Your next allowance opens at the next Grand Prix."}
-            cost = upgrade_cost_m(dept_key, cur_lvl)
+            disc = self._staff_bonuses()["rd_discount"]
+            cost = round(upgrade_cost_m(dept_key, cur_lvl) * (1.0 - disc), 2)
             if team["budget_m"] < cost:
                 return {"ok": False, "error": f"Insufficient budget: need ${cost:.2f}M (available ${team['budget_m']:.2f}M)."}
 
@@ -2048,6 +2223,270 @@ class ChampionshipWorld:
             self._save_state()
             return {"ok": True, "dept": dept_key, "level": new_lvl, "budget_m": team["budget_m"],
                     "upgrade_allowance": self._upgrade_allowance(team["id"])}
+
+    def invest_next_year_rd(self, tier: str = "standard") -> dict:
+        """Invest into next season's chassis once per Grand Prix without using current-year slots."""
+        with self.lock:
+            ny = self.next_year_rd
+            if int(ny.get("last_round_invested", 0)) == self.current_round:
+                return {"ok": False, "error": "Already invested in next season's chassis this Grand Prix weekend."}
+            if int(ny.get("progress", 0)) >= 100:
+                return {"ok": False, "error": "Next-year chassis development is already at 100%."}
+            t = str(tier).lower()
+            if t not in ("standard", "major"):
+                return {"ok": False, "error": "Tier must be 'standard' or 'major'."}
+            cost_m = 8.0 if t == "standard" else 16.0
+            base_gain = 12 if t == "standard" else 26
+            team = self._teams_by_id()[self.player_team_id]
+            if team["budget_m"] < cost_m:
+                return {"ok": False, "error": f"Insufficient budget: need ${cost_m:.1f}M."}
+            mult = self._staff_bonuses()["ny_rd_mult"]
+            gain = max(1, int(round(base_gain * mult)))
+            team["budget_m"] = round(team["budget_m"] - cost_m, 2)
+            ny["progress"] = min(100, int(ny.get("progress", 0)) + gain)
+            ny["invested_m"] = round(float(ny.get("invested_m", 0.0)) + cost_m, 2)
+            ny["last_round_invested"] = self.current_round
+            self._log_ledger("R&D NEXT-YEAR", f"{self.season_year + 1} Chassis Programme ({t})", -cost_m)
+            self._push_event("UPGRADE", f"FUTURE CHASSIS R&D: {team['short']} invests ${cost_m:.1f}M toward {self.season_year + 1} ({ny['progress']}% complete).")
+            self._save_state()
+            return {"ok": True, "next_year_rd": dict(ny), "budget_m": team["budget_m"]}
+
+    def hire_staff(self, role: str, target_tier: int | None = None) -> dict:
+        """Recruit or upgrade a senior department head (Technical Director, Chief Mechanic, Meteorologist)."""
+        with self.lock:
+            if role not in STAFF_ROLES:
+                return {"ok": False, "error": f"Unknown senior staff role '{role}'."}
+            spec = STAFF_ROLES[role]
+            cur = max(0, min(3, int(self.staff.get(role, 0))))
+            nxt = (cur + 1) if target_tier is None else int(target_tier)
+            if nxt <= cur or nxt > 3:
+                return {"ok": False, "error": f"{spec['name']} is already at tier {cur}."}
+            tier_obj = spec["tiers"][nxt]
+            cost_m = float(tier_obj["cost_m"])
+            team = self._teams_by_id()[self.player_team_id]
+            if team["budget_m"] < cost_m:
+                return {"ok": False, "error": f"Insufficient budget: need ${cost_m:.1f}M to recruit {tier_obj['title']}."}
+            team["budget_m"] = round(team["budget_m"] - cost_m, 2)
+            self.staff[role] = nxt
+            bonuses = self._staff_bonuses()
+            if self.race_session:
+                self.race_session.staff_bonuses = dict(bonuses)
+            self._log_ledger("STAFF", f"Hired {spec['name']}: {tier_obj['title']}", -cost_m)
+            self._push_event("NEWS", f"SENIOR HIRE ({team['short']}): Appointed {tier_obj['title']} as {spec['name']} (-${cost_m:.1f}M)!")
+            self._save_state()
+            return {"ok": True, "role": role, "tier": nxt, "staff": dict(self.staff), "bonuses": bonuses, "budget_m": team["budget_m"]}
+
+    def manage_academy(self, action: str, driver_id: str, release_driver_id: str | None = None) -> dict:
+        """Sign, release, or promote Youth Driver Academy prospects (up to 2 seats)."""
+        with self.lock:
+            act = str(action).lower()
+            dmap = self._drivers_by_id()
+            tmap = self._teams_by_id()
+            team = tmap[self.player_team_id]
+            drv = dmap.get(driver_id)
+            if not drv:
+                return {"ok": False, "error": "Driver not found."}
+            if act == "sign":
+                if drv.get("team_id") is not None or drv.get("legend"):
+                    return {"ok": False, "error": "Academy recruits must be active free agents (non-legend)."}
+                if driver_id in self.academy_drivers:
+                    return {"ok": False, "error": f"{drv['name']} is already in your Youth Academy."}
+                if len(self.academy_drivers) >= 2:
+                    return {"ok": False, "error": "Academy roster full (max 2 junior prospects). Release one first."}
+                fee = 1.5
+                if team["budget_m"] < fee:
+                    return {"ok": False, "error": f"Insufficient budget: academy contract requires ${fee:.1f}M."}
+                team["budget_m"] = round(team["budget_m"] - fee, 2)
+                self.academy_drivers.append(driver_id)
+                self._log_ledger("ACADEMY", f"Signed academy prospect {drv['name']}", -fee)
+                self._push_event("TRANSFER", f"YOUTH ACADEMY ({team['short']}): Signs prospect {drv['name']} (OVR {int(round(driver_overall(drv)))}) for FP1 & development.")
+                self._save_state()
+                return {"ok": True, "academy_drivers": list(self.academy_drivers), "budget_m": team["budget_m"]}
+            elif act == "release":
+                if driver_id not in self.academy_drivers:
+                    return {"ok": False, "error": "Driver is not in your Youth Academy."}
+                self.academy_drivers.remove(driver_id)
+                self._push_event("TRANSFER", f"YOUTH ACADEMY ({team['short']}): Released {drv['name']} from academy contract.")
+                self._save_state()
+                return {"ok": True, "academy_drivers": list(self.academy_drivers)}
+            elif act == "promote":
+                if driver_id not in self.academy_drivers:
+                    return {"ok": False, "error": "Only academy drivers can be promoted here."}
+                if not self.is_transfer_window_open():
+                    return {"ok": False, "error": "Promotion locked outside transfer window (Round 1 / Off-Season)."}
+                if drv.get("team_id") is not None:
+                    return {"ok": False, "error": "Prospect already holds a race seat."}
+                my_drvs = [d for d in self._active_drivers() if d["team_id"] == self.player_team_id]
+                rel = dmap.get(release_driver_id) if release_driver_id else (min(my_drvs, key=driver_overall) if my_drvs else None)
+                if not rel or rel.get("team_id") != self.player_team_id:
+                    return {"ok": False, "error": "Select an active team driver to replace."}
+                buyout_m = round(rel["salary_m"] * max(1, rel["contract_years"]) * 0.25, 2)
+                if team["budget_m"] < buyout_m:
+                    return {"ok": False, "error": f"Insufficient budget for outgoing buyout (${buyout_m:.1f}M)."}
+                team["budget_m"] = round(team["budget_m"] - buyout_m, 2)
+                rel["team_id"] = None
+                rel["contract_years"] = 0
+                drv["team_id"] = self.player_team_id
+                drv["contract_years"] = 2
+                drv["salary_m"] = round(max(1.2, drv.get("salary_m", 1.8)), 2)
+                self.academy_drivers.remove(driver_id)
+                self.driver_points.setdefault(driver_id, 0)
+                self.driver_wins.setdefault(driver_id, 0)
+                self.driver_podiums.setdefault(driver_id, 0)
+                self.driver_poles.setdefault(driver_id, 0)
+                self.driver_dnfs.setdefault(driver_id, 0)
+                self._ensure_component_pools()
+                self._log_ledger("SIGNING", f"Promoted academy driver {drv['name']} (released {rel['code']})", -buyout_m)
+                self._push_event("TRANSFER", f"ACADEMY PROMOTION: {team['short']} promotes {drv['name']} to F1 race seat with zero signing fee!")
+                self._save_state()
+                return {"ok": True, "academy_drivers": list(self.academy_drivers), "budget_m": team["budget_m"]}
+            return {"ok": False, "error": f"Unknown academy action '{action}'."}
+
+    def customize_team(self, name: str, short: str, code: str, color: str, secondary: str, engine: str) -> dict:
+        """Customize the player constructor identity in place (keeps 11 teams / 22 cars intact)."""
+        with self.lock:
+            nm = str(name or "").strip()[:32]
+            sh = str(short or "").strip()[:16]
+            cd = re.sub(r"[^A-Z0-9]", "", str(code or "").upper())[:3]
+            col = str(color or "").strip()
+            sec = str(secondary or "").strip()
+            eng = str(engine or "").strip()
+            if not nm or not sh or len(cd) < 2:
+                return {"ok": False, "error": "Provide team name, short name, and 2-3 character code."}
+            hex_re = re.compile(r"^#[0-9a-fA-F]{6}$")
+            if not hex_re.match(col) or not hex_re.match(sec):
+                return {"ok": False, "error": "Primary and secondary colors must be 6-digit hex codes (#rrggbb)."}
+            if eng not in ENGINE_SUPPLIERS:
+                return {"ok": False, "error": f"Engine supplier must be one of: {', '.join(ENGINE_SUPPLIERS)}."}
+            team = self._teams_by_id()[self.player_team_id]
+            team["name"] = nm
+            team["short"] = sh
+            team["code"] = cd
+            team["color"] = col.lower()
+            team["secondary"] = sec.lower()
+            team["engine"] = eng
+            team["is_custom"] = True
+            for sess in (self.race_session, self.quali_session):
+                if sess:
+                    for c in sess.cars:
+                        if c.team_id == self.player_team_id:
+                            c.team_short = sh
+                            c.team_color = team["color"]
+                            c.secondary_color = team["secondary"]
+            self._push_event("NEWS", f"CONSTRUCTOR REBRAND: {nm} ({cd}) unveils custom livery powered by {eng}!")
+            self._save_state()
+            return {"ok": True, "team": dict(team)}
+
+    def break_parc_ferme(self, driver_id: str, setup_df: int, fresh_pu: list[str] | None = None) -> dict:
+        """Break Parc Ferme in Grid Walk: unlock wing setup & optional fresh PU parts from Pit Lane Start."""
+        with self.lock:
+            if self.phase != "GRID_WALK" or not self.race_session:
+                return {"ok": False, "error": "Breaking Parc Ferme is only possible during Grid Walk before Lights Out."}
+            dmap = self._drivers_by_id()
+            drv = dmap.get(driver_id)
+            car = self.race_session.cars_by_id.get(driver_id)
+            if not drv or not car or drv.get("team_id") != self.player_team_id:
+                return {"ok": False, "error": "Driver is not on your active team."}
+            try:
+                lvl = int(setup_df)
+            except (TypeError, ValueError):
+                return {"ok": False, "error": "Invalid setup downforce level."}
+            if lvl not in SETUP_LEVELS:
+                return {"ok": False, "error": "Setup downforce level must be between -2 and +2."}
+            self.driver_setups[driver_id] = lvl
+            car.setup_df = lvl
+            fitted_parts = []
+            if isinstance(fresh_pu, list) and fresh_pu:
+                self._ensure_component_pools()
+                pool = self.pu_pools[driver_id]
+                for comp in fresh_pu:
+                    if comp in PU_COMPONENT_SPECS:
+                        pool[comp]["used"] = int(pool[comp].get("used", 1)) + 1
+                        pool[comp]["wear"] = 0.0
+                        fitted_parts.append(PU_COMPONENT_SPECS[comp]["short"])
+                car.pu_pool = copy.deepcopy(pool)
+            self.race_session.set_pit_lane_start(driver_id, True)
+            lbl = SETUP_LEVELS[lvl]["label"]
+            pu_note = f" & fresh {'/'.join(fitted_parts)}" if fitted_parts else ""
+            self._push_event(
+                "STEWARDS",
+                f"PARC FERME BREACHED (#{car.number} {car.code}): Wing changed to {lbl}{pu_note} — FIA mandates Pit Lane Start (no grid drop).",
+            )
+            self._save_state()
+            return {"ok": True, "driver_id": driver_id, "setup_df": lvl, "pit_lane_start": True, "fitted_pu": fitted_parts}
+
+    def set_strategy_plan(self, driver_id: str, active_plan: str | None = None, plans: dict | None = None) -> dict:
+        """Edit or switch Plan A/B/C stint strategy for one of the player team's drivers."""
+        with self.lock:
+            dmap = self._drivers_by_id()
+            drv = dmap.get(driver_id)
+            if not drv or drv.get("team_id") != self.player_team_id:
+                return {"ok": False, "error": "Can only edit strategies for your own drivers."}
+            total_laps = self.race_session.total_laps if self.race_session else self.current_track.race_laps
+            entry = self.strategy_plans.get(driver_id)
+            if not isinstance(entry, dict):
+                entry = self._default_strategy_plans(total_laps, self.weekend_wetness)
+                self.strategy_plans[driver_id] = entry
+            if isinstance(plans, dict):
+                cleaned: dict[str, list[dict]] = {}
+                for pk in ("A", "B", "C"):
+                    raw_list = plans.get(pk)
+                    if not isinstance(raw_list, list) or not raw_list:
+                        cleaned[pk] = list(entry["plans"].get(pk, []))
+                        continue
+                    norm_list = []
+                    cur_s = 1
+                    for i, st_item in enumerate(raw_list):
+                        if not isinstance(st_item, dict):
+                            continue
+                        comp = str(st_item.get("compound", "MEDIUM")).upper()
+                        if comp not in TIRE_COMPOUNDS:
+                            return {"ok": False, "error": f"Invalid tyre compound '{comp}' in Plan {pk}."}
+                        is_last = (i == len(raw_list) - 1)
+                        if is_last:
+                            end_l = total_laps
+                            pit_l = None
+                        else:
+                            pit_l = max(cur_s + 1, min(total_laps - 1, int(st_item.get("pit_lap") or (cur_s + max(4, total_laps // (len(raw_list) + 1))))))
+                            end_l = max(cur_s, pit_l - 1)
+                        item_d: dict[str, Any] = {"compound": comp, "start_lap": cur_s, "end_lap": end_l}
+                        if pit_l is not None:
+                            item_d["pit_lap"] = pit_l
+                        norm_list.append(item_d)
+                        cur_s = (pit_l if pit_l is not None else end_l + 1)
+                        if cur_s >= total_laps:
+                            break
+                    if norm_list:
+                        norm_list[-1]["end_lap"] = total_laps
+                        norm_list[-1].pop("pit_lap", None)
+                        cleaned[pk] = norm_list
+                    else:
+                        cleaned[pk] = list(entry["plans"].get(pk, []))
+                entry["plans"] = cleaned
+            if active_plan is not None:
+                ap = str(active_plan).upper()
+                if ap not in ("A", "B", "C"):
+                    return {"ok": False, "error": "Plan key must be A, B, or C."}
+                entry["active"] = ap
+            if self.race_session and driver_id in self.race_session.cars_by_id:
+                car = self.race_session.cars_by_id[driver_id]
+                car.strategy_plans = {k: [dict(x) for x in v] for k, v in entry["plans"].items()}
+                car.active_plan = entry["active"]
+                if not self.race_session.lights_out and entry["plans"].get(entry["active"]):
+                    first_c = entry["plans"][entry["active"]][0]["compound"]
+                    self.race_session.set_starting_compound(driver_id, first_c)
+            self._save_state()
+            return {"ok": True, "driver_id": driver_id, "strategy": copy.deepcopy(entry)}
+
+    def resolve_dilemma(self, choice: str) -> dict:
+        """Resolve an active Race Engineer timed dilemma with choice A or B."""
+        with self.lock:
+            if not self.race_session or not getattr(self.race_session, "active_dilemma", None):
+                return {"ok": False, "error": "No active dilemma to resolve."}
+            res = self.race_session.resolve_dilemma(choice, event_cb=self._push_event)
+            if not res:
+                return {"ok": False, "error": "Dilemma already expired."}
+            return {"ok": True, **res}
 
     def is_parc_ferme_locked(self) -> bool:
         """Parc Ferme locks car downforce setup once Qualifying or Sprint Shootout starts."""
@@ -2094,12 +2533,12 @@ class ChampionshipWorld:
                 "confidence": round(float(self.driver_setup_confidence.get(driver_id, 55.0)), 1),
             }
 
-    def run_practice_program(self, driver_id: str, program: str) -> dict:
+    def run_practice_program(self, driver_id: str, program: str, rookie_id: str | None = None) -> dict:
         """Execute a Free Practice program to boost setup confidence and uncover driver balance feedback."""
         with self.lock:
             if self.is_parc_ferme_locked():
                 return {"ok": False, "error": "Parc Ferme is ACTIVE: practice garage runs are closed for this weekend."}
-            if program not in ("QUALI_SIM", "LONG_RUN", "WET_PREP"):
+            if program not in ("QUALI_SIM", "LONG_RUN", "WET_PREP", "ROOKIE_FP1"):
                 return {"ok": False, "error": f"Unknown practice programme '{program}'."}
             dmap = self._drivers_by_id()
             drv = dmap.get(driver_id)
@@ -2108,6 +2547,13 @@ class ChampionshipWorld:
             runs_left = int(self.practice_runs_left.get(driver_id, 3))
             if runs_left <= 0:
                 return {"ok": False, "error": f"No practice tyre sets/time remaining for #{drv['number']} {drv['code']}."}
+
+            rookie_drv = None
+            if program == "ROOKIE_FP1":
+                rid = rookie_id or (self.academy_drivers[0] if self.academy_drivers else None)
+                if not rid or rid not in self.academy_drivers or rid not in dmap:
+                    return {"ok": False, "error": "Sign a Youth Academy driver before assigning a Rookie FP1 outing."}
+                rookie_drv = dmap[rid]
 
             self.practice_runs_left[driver_id] = runs_left - 1
             if self.phase == "PRE_WEEKEND":
@@ -2119,7 +2565,17 @@ class ChampionshipWorld:
             diff = target_df - cur_df
 
             cur_conf = float(self.driver_setup_confidence.get(driver_id, 55.0))
-            if diff == 0:
+            if program == "ROOKIE_FP1" and rookie_drv is not None:
+                gain = 8.0
+                stat_keys = ("pace", "racecraft", "consistency", "tire_mgmt", "wet_skill")
+                grow_candidates = [k for k in stat_keys if rookie_drv.get(k, 75) < 99]
+                grown_stat = None
+                if grow_candidates:
+                    grown_stat = min(grow_candidates, key=lambda k: rookie_drv[k])
+                    rookie_drv[grown_stat] = int(rookie_drv[grown_stat]) + 1
+                quote = f"Great FP1 mileage! Telemetry felt responsive around {self.current_track.circuit}."
+                hint = f"ROOKIE +{grown_stat.upper() if grown_stat else 'EXP'} +1"
+            elif diff == 0:
                 gain = 24.0
                 quote = "Car feels dialed in on both turn-in and traction. Keep this wing!"
                 hint = "OPTIMAL WING LOCKED IN"
@@ -2150,7 +2606,7 @@ class ChampionshipWorld:
                 bonuses["quali_prep"] = True
             elif program == "LONG_RUN":
                 bonuses["long_run_prep"] = True
-            else:
+            elif program == "WET_PREP":
                 bonuses["wet_prep"] = True
                 rain_pct = int(round(self.current_track.rain_chance * 100))
                 if self.weekend_wetness > 0.20 or rain_pct >= 35:
@@ -2167,7 +2623,8 @@ class ChampionshipWorld:
             }
             self.practice_feedback.setdefault(driver_id, []).append(entry)
             t_short = self._teams_by_id()[self.player_team_id]["short"]
-            self._push_event("RADIO", f"FP RADIO ({t_short} / #{drv['number']} {drv['code']}): '{quote}' [{hint}]")
+            radio_name = rookie_drv["code"] if rookie_drv is not None else drv["code"]
+            self._push_event("RADIO", f"FP RADIO ({t_short} / #{drv['number']} {radio_name}): '{quote}' [{hint}]")
             self._save_state()
             return {
                 "ok": True,
@@ -2273,7 +2730,7 @@ class ChampionshipWorld:
                 rel_buyout = round(rel["salary_m"] * max(1, rel["contract_years"]) * 0.25, 2)
                 if drv.get("team_id") is None:
                     buyout_m = rel_buyout
-                    signing_fee_m = round(drv["value_m"] * 0.28, 2)
+                    signing_fee_m = 0.0 if driver_id in self.academy_drivers else round(drv["value_m"] * 0.28, 2)
                 else:
                     rival = tmap[drv["team_id"]]
                     poach_fee = round(drv["salary_m"] * max(1, drv["contract_years"]) * 0.35 + drv["value_m"] * 0.28, 2)
@@ -2356,6 +2813,8 @@ class ChampionshipWorld:
             drv["team_id"] = self.player_team_id
             drv["salary_m"] = sal
             drv["contract_years"] = years
+            if driver_id in self.academy_drivers:
+                self.academy_drivers.remove(driver_id)
             self.driver_points.setdefault(drv["id"], 0)
             self.driver_wins.setdefault(drv["id"], 0)
             self.driver_podiums.setdefault(drv["id"], 0)
@@ -2625,6 +3084,15 @@ class ChampionshipWorld:
                     )
             if "prefer_fresh" in cmd:
                 car.prefer_fresh_tyre = bool(cmd["prefer_fresh"])
+            if "tactical_burst" in cmd:
+                ok = self.race_session.trigger_tactical_burst(driver_id, str(cmd["tactical_burst"]), event_cb=self._push_event)
+                if not ok:
+                    return {"ok": False, "error": "1-Lap Burst unavailable (requires Green Flag and ready cooldown)."}
+                return {"ok": True, "tactical_burst": car.tactical_burst, "cooldown": car.tactical_burst_cooldown}
+            if "active_plan" in cmd:
+                res = self.set_strategy_plan(driver_id, active_plan=str(cmd["active_plan"]))
+                if not res.get("ok"):
+                    return res
             if "start_compound" in cmd and cmd["start_compound"] in TIRE_COMPOUNDS:
                 comp = cmd["start_compound"]
                 res = self.set_starting_compound(driver_id, comp)
@@ -2850,6 +3318,7 @@ class ChampionshipWorld:
                 self._career_backup = snap
 
             # Keep scenario isolated inside in-memory backup (never touch save_path)
+            self._scenario_track = None
             self.active_scenario = dict(scen)
             self._legacy_calendar = False
             self.season_year = int(scen["season_year"])
@@ -2913,6 +3382,9 @@ class ChampionshipWorld:
                 pu_pools=self.pu_pools,
                 tire_sets=self.tire_sets,
                 setup_confidences=self.driver_setup_confidence,
+                rivalries=self.rivalries,
+                staff_bonuses=self._staff_bonuses(),
+                strategy_plans=self.strategy_plans,
             )
             self.race_session = rs
             rs.lights_out = True
@@ -2997,11 +3469,164 @@ class ChampionshipWorld:
             self._push_event("NEWS", f"SCENARIO: {scen['title']} — {scen['desc']} Goal: {scen['goal']}.")
             return {"ok": True, "scenario": self.active_scenario}
 
+    def start_custom_scenario(self, cfg: dict) -> dict:
+        """Launch a user-configured scenario on any of the 27 circuits without modifying career save."""
+        from sim.physics import enforce_2d_car_separation
+
+        with self.lock:
+            track_id = str(cfg.get("track_id", "brazil"))
+            trk = TRACK_BY_ID.get(track_id)
+            if not trk:
+                return {"ok": False, "error": f"Unknown circuit '{track_id}'."}
+            era = str(cfg.get("era", "2026"))
+            year = 2028 if era == "2028" else 2026
+            weather = str(cfg.get("weather", "DRY")).upper()
+            if weather not in ("DRY", "DAMP", "RAIN_SOON", "WET"):
+                weather = "DRY"
+            flag = str(cfg.get("flag", "GREEN")).upper()
+            if flag not in ("GREEN", "VSC", "SC", "RED_FLAG"):
+                flag = "GREEN"
+            start_pos = max(1, min(20, int(cfg.get("start_pos", 1))))
+            start_lap = max(1, min(trk.race_laps - 1, int(cfg.get("start_lap", max(1, trk.race_laps // 2)))))
+            comp = str(cfg.get("compound", "INTER" if weather in ("DAMP", "WET") else "MEDIUM")).upper()
+            if comp not in TIRE_COMPOUNDS:
+                comp = "MEDIUM"
+            wear_pct = max(0, min(85, int(cfg.get("tire_wear", 25))))
+
+            if self._career_backup is None:
+                snap = self._snapshot_career_dict()
+                snap["_phase"] = self.phase
+                snap["_phase_timer"] = self.phase_timer
+                snap["_weekend_wetness"] = self.weekend_wetness
+                snap["_weekend_rain_forecast"] = self.weekend_rain_forecast
+                self._career_backup = snap
+
+            title = f"CUSTOM: {trk.city.upper()} ({year})"
+            self._scenario_track = trk
+            self.active_scenario = {
+                "id": "custom",
+                "title": title,
+                "track_id": trk.id,
+                "season_year": year,
+                "desc": f"L{start_lap}/{trk.race_laps} · {weather} · {flag} · P{start_pos} on {comp} ({wear_pct}% wear)",
+                "goal": "Execute custom race strategy simulation",
+            }
+            self._legacy_calendar = False
+            self.season_year = year
+            self.teams, self.drivers = clone_initial_roster()
+            for d in self.drivers:
+                d.setdefault("morale", 75)
+            self.current_round = trk.round or 1
+            self.tire_allocations = {
+                d["id"]: dict(DEFAULT_WEEKEND_TIRE_SETS)
+                for d in self.drivers
+                if d.get("team_id")
+            }
+            self.tire_sets = {
+                d["id"]: create_weekend_tire_sets()
+                for d in self.drivers
+                if d.get("team_id")
+            }
+            rec_df = track_upgrade_profile(trk)["recommended_df"]
+            self.driver_setups = {d["id"]: rec_df for d in self.drivers if d.get("team_id")}
+            self.driver_setup_confidence = {d["id"]: 85.0 for d in self.drivers if d.get("team_id")}
+            self.practice_bonuses = {}
+            self.pu_pools = {d["id"]: create_pu_pool() for d in self.drivers if d.get("team_id")}
+
+            grid_drivers = sorted(self._active_drivers(), key=lambda d: d.get("pace", 80), reverse=True)
+            my_drvs = [d for d in grid_drivers if d["team_id"] == self.player_team_id]
+            rivals = [d for d in grid_drivers if d["team_id"] != self.player_team_id]
+            idx_insert = max(0, min(len(rivals), start_pos - 1))
+            order = rivals[:idx_insert] + my_drvs + rivals[idx_insert:]
+
+            init_wet = 0.65 if weather == "WET" else (0.28 if weather == "DAMP" else 0.0)
+            rain_sched = weather in ("RAIN_SOON", "WET")
+            forecast = 0.85 if rain_sched else (0.25 if weather == "DAMP" else 0.05)
+
+            self.quali_session = None
+            rs = RaceSession(
+                trk,
+                self._teams_by_id(),
+                order,
+                init_wet,
+                forecast,
+                self.player_team_id,
+                is_sprint=False,
+                regulations=self.regulations,
+                rain_scheduled=rain_sched,
+                tire_allocations=self.tire_allocations,
+                setups=self.driver_setups,
+                pu_pools=self.pu_pools,
+                tire_sets=self.tire_sets,
+                setup_confidences=self.driver_setup_confidence,
+                rivalries=self.rivalries,
+                staff_bonuses=self._staff_bonuses(),
+                strategy_plans=self.strategy_plans,
+            )
+            self.race_session = rs
+            rs.lights_out = True
+            rs.lights_countdown = 0.0
+            rs.flag_state = "GREEN"
+            rs.race_clock = (start_lap - 1) * 76.0
+            L = trk.length_m
+            mean_v = 60.0
+            for idx, car in enumerate(rs.cars):
+                dist = (start_lap - 1) * L + 220.0 - idx * 2.1 * mean_v
+                car.total_dist = dist
+                car.s = dist % L
+                car.lap = max(1, int(dist // L) + 1)
+                car.laps_completed = car.lap - 1
+                car.crossed_start_line = True
+                car.d = 0.14 if idx % 2 == 0 else -0.14
+                car.target_d = car.d
+                car.v = 64.0
+                car.fuel_kg = max(4.0, (trk.race_laps - car.laps_completed) * 1.80)
+                car.lap_start_time = rs.race_clock
+                car.sector_start_time = rs.race_clock
+                if car.team_id == self.player_team_id:
+                    car.auto_strategy = False
+                    car.compound = comp
+                    car.compounds_used = {comp}
+                    car.tire_wear = round(wear_pct / 100.0, 2)
+                    car.tire_age_laps = max(0, wear_pct // 3)
+                rs._update_xy(car)
+
+            if weather == "RAIN_SOON":
+                rs.rain_start_clock = rs.race_clock + 120.0
+                rs.rain_duration = 450.0
+                rs.target_rain_intensity = 0.65
+                rs._radar_noise_s = 10.0
+
+            if flag == "VSC":
+                rs.flag_state = "VSC"
+                rs.vsc_timer = 22.0
+            elif flag == "SC":
+                rs.trigger_safety_car("SC", "Custom Scenario Safety Car", self._push_event)
+            elif flag == "RED_FLAG":
+                rs.trigger_red_flag("Custom Scenario Red Flag", self._push_event)
+
+            enforce_2d_car_separation(trk, rs.cars, True, rs._update_xy)
+            rs._update_standings(0.05, self._push_event)
+            for c in rs.cars:
+                rs.pitwall.project_rejoin(c)
+                rs.pitwall.advise(c)
+
+            self.phase = "RACE"
+            self.sim_speed = 1.0
+            self.event_feed = []
+            self._push_event("NEWS", f"{title}: {self.active_scenario['desc']}")
+            return {"ok": True, "scenario": self.active_scenario, "track_id": trk.id}
+
+    def _apply_custom_track_if_needed(self) -> None:
+        """Allow active custom scenario track to override current_round lookup cleanly."""
+        pass
+
     def exit_scenario(self) -> dict:
         """Restore saved career state when leaving a Quick-Play scenario."""
         with self.lock:
             bak = self._career_backup
             self.active_scenario = None
+            self._scenario_track = None
             if not bak:
                 return {"ok": True, "restored": False}
             self.season_year = int(bak["season_year"])
@@ -3028,6 +3653,11 @@ class ChampionshipWorld:
             self.pu_pools = copy.deepcopy(bak.get("pu_pools", {}))
             self.driver_setups = dict(bak.get("driver_setups", {}))
             self.board_state = copy.deepcopy(bak.get("board_state", {}))
+            self.next_year_rd = copy.deepcopy(bak.get("next_year_rd", {"progress": 0, "invested_m": 0.0, "last_round_invested": 0}))
+            self.staff = dict(bak.get("staff", {"tech_director": 0, "chief_mechanic": 0, "chief_meteorologist": 0}))
+            self.academy_drivers = list(bak.get("academy_drivers", []))
+            self.rivalries = dict(bak.get("rivalries", {}))
+            self.strategy_plans = copy.deepcopy(bak.get("strategy_plans", {}))
             self.temp_ban_subs = [tuple(x) for x in bak.get("temp_ban_subs", [])]
             self.hall_of_fame = copy.deepcopy(bak.get("hall_of_fame", []))
             self.ledger = copy.deepcopy(bak.get("ledger", []))
@@ -3097,6 +3727,127 @@ class ChampionshipWorld:
         for idx, r in enumerate(rows):
             r["rank"] = idx + 1
         return rows
+
+    def _build_live_championship(self) -> dict[str, Any] | None:
+        """Compute live 'As It Stands' provisional WDC & WCC points during active Race/Sprint."""
+        if self.phase not in ("RACE", "SPRINT_RACE", "GRID_WALK") or not self.race_session:
+            return None
+        rs = self.race_session
+        pts_table = SPRINT_POINTS if rs.is_sprint else RACE_POINTS
+        d_live = dict(self.driver_points)
+        t_live = dict(self.team_points)
+        d_delta: dict[str, int] = {}
+        t_delta: dict[str, int] = {}
+        for idx, car in enumerate(rs.standings):
+            pts = pts_table[idx] if (idx < len(pts_table) and not car.dnf) else 0
+            if pts > 0:
+                d_live[car.driver_id] = d_live.get(car.driver_id, 0) + pts
+                t_live[car.team_id] = t_live.get(car.team_id, 0) + pts
+                d_delta[car.driver_id] = d_delta.get(car.driver_id, 0) + pts
+                t_delta[car.team_id] = t_delta.get(car.team_id, 0) + pts
+
+        base_wdc = self.get_wdc_table()
+        base_ranks = {r["id"]: r["rank"] for r in base_wdc}
+        wdc_rows = []
+        for r in base_wdc:
+            did = r["id"]
+            wdc_rows.append({
+                "id": did,
+                "code": r["code"],
+                "team_id": r["team_id"],
+                "team_color": r["team_color"],
+                "points": d_live.get(did, r["points"]),
+                "delta_pts": d_delta.get(did, 0),
+                "wins": r["wins"],
+                "podiums": r["podiums"],
+                "overall": r["overall"],
+                "base_rank": base_ranks.get(did, r["rank"]),
+            })
+        wdc_rows.sort(key=lambda r: (-r["points"], -r["wins"], -r["podiums"], -r["overall"]))
+        for idx, r in enumerate(wdc_rows):
+            r["rank"] = idx + 1
+            r["delta_rank"] = r["base_rank"] - r["rank"]
+
+        base_wcc = self.get_wcc_table()
+        base_t_ranks = {r["id"]: r["rank"] for r in base_wcc}
+        wcc_rows = []
+        for r in base_wcc:
+            tid = r["id"]
+            wcc_rows.append({
+                "id": tid,
+                "short": r["short"],
+                "code": r["code"],
+                "color": r["color"],
+                "points": t_live.get(tid, r["points"]),
+                "delta_pts": t_delta.get(tid, 0),
+                "wins": r["wins"],
+                "car_rating": r["car_rating"],
+                "base_rank": base_t_ranks.get(tid, r["rank"]),
+            })
+        wcc_rows.sort(key=lambda r: (-r["points"], -r["wins"], -r["car_rating"]))
+        for idx, r in enumerate(wcc_rows):
+            r["rank"] = idx + 1
+            r["delta_rank"] = r["base_rank"] - r["rank"]
+
+        rem_gps = max(0, len(self.calendar) - self.current_round)
+        max_rem_pts = rem_gps * 25
+        title_note = ""
+        if len(wdc_rows) >= 2:
+            lead_gap = wdc_rows[0]["points"] - wdc_rows[1]["points"]
+            if lead_gap > max_rem_pts and wdc_rows[0]["points"] > 0:
+                title_note = f"TITLE CLINCHED AS IT STANDS: {wdc_rows[0]['code']} (+{lead_gap} pts)"
+            else:
+                title_note = f"WDC AS IT STANDS: {wdc_rows[0]['code']} +{lead_gap} over {wdc_rows[1]['code']}"
+        return {
+            "wdc": {r["id"]: r for r in wdc_rows},
+            "wdc_top": wdc_rows[:10],
+            "wcc_top": wcc_rows,
+            "title_note": title_note,
+        }
+
+    def get_live_analytics(self) -> dict[str, Any]:
+        """Return live in-race gap-to-leader series, lap chart, and stints for live telemetry chart."""
+        with self.lock:
+            rs = self.race_session
+            if rs and self.phase in ("GRID_WALK", "RACE", "SPRINT_RACE"):
+                drivers_meta = {
+                    c.driver_id: {
+                        "id": c.driver_id,
+                        "code": c.code,
+                        "team_id": c.team_id,
+                        "team_short": c.team_short,
+                        "team_color": c.team_color,
+                        "pos": c.pos,
+                        "gap": c.gap_to_leader,
+                        "dnf": c.dnf,
+                    }
+                    for c in rs.standings
+                }
+                return {
+                    "ok": True,
+                    "live": True,
+                    "gp": self.current_track.name,
+                    "lap": rs.standings[0].lap if rs.standings else 1,
+                    "total_laps": rs.total_laps,
+                    "gap_history": list(getattr(rs, "gap_history", [])),
+                    "lap_chart": rs.build_lap_chart(),
+                    "stints": rs.build_stints_summary(),
+                    "drivers": drivers_meta,
+                }
+            if self.last_podium_summary:
+                rec = self.last_podium_summary.get("round_rec", {})
+                return {
+                    "ok": True,
+                    "live": False,
+                    "gp": rec.get("gp", self.current_track.name),
+                    "lap": rec.get("laps", 0),
+                    "total_laps": rec.get("laps", 0),
+                    "gap_history": [],
+                    "lap_chart": rec.get("lap_chart", []),
+                    "stints": rec.get("stints", {}),
+                    "drivers": rec.get("driver_meta", {}),
+                }
+            return {"ok": True, "live": False, "gp": self.current_track.name, "lap": 0, "total_laps": self.current_track.race_laps, "gap_history": [], "lap_chart": [], "stints": {}, "drivers": {}}
 
     def build_live_tick_payload(self) -> dict:
         """Compact 20Hz live frame streamed via SSE to all connected browser tabs."""
@@ -3173,12 +3924,15 @@ class ChampionshipWorld:
             )
             rs_ref = self.race_session if self.phase in ("GRID_WALK", "RACE", "SPRINT_RACE") else None
             qs_ref = self.quali_session if self.phase in ("QUALIFYING", "SPRINT_QUALIFYING") else None
+            tmap_live = self._teams_by_id()
             for c in active_cars:
                 b_fcst = (
                     rs_ref.pitwall.battle_forecast(c)
                     if rs_ref and (c.team_id == self.player_team_id or c.pos <= 6)
                     else None
                 )
+                t_obj = tmap_live.get(c.team_id, {})
+                c_plan_entry = self.strategy_plans.get(c.driver_id, {})
                 cars_payload.append(
                     {
                         "id": c.driver_id,
@@ -3272,6 +4026,14 @@ class ChampionshipWorld:
                         "man": maneuver_session.display_maneuver(c) if maneuver_session else c.maneuver,
                         "elim": c.eliminated,
                         "estg": c.elim_stage,
+                        "burst": getattr(c, "tactical_burst", ""),
+                        "burst_rem": round(getattr(c, "tactical_burst_timer", 0.0), 1),
+                        "burst_cd": round(getattr(c, "tactical_burst_cooldown", 0.0), 1),
+                        "gremlin": getattr(c, "gremlin", ""),
+                        "plan": getattr(c, "active_plan", c_plan_entry.get("active", "A")),
+                        "plans": (getattr(c, "strategy_plans", None) or c_plan_entry.get("plans") or {}) if c.team_id == self.player_team_id else None,
+                        "pit_start": bool(getattr(c, "pit_lane_start", False) or getattr(c, "pit_phase", "") == "PIT_START"),
+                        "custom_team": bool(t_obj.get("is_custom", False)),
                     }
                 )
 
@@ -3336,6 +4098,18 @@ class ChampionshipWorld:
                 "board_confidence": int(self.board_state.get("confidence", 75)) if self.board_state else 75,
                 "active_scenario": self.active_scenario,
                 "practice_state": p_state,
+                "lighting_phase": rs_ref.get_lighting_phase() if rs_ref else 0.0,
+                "active_dilemma": copy.deepcopy(getattr(rs_ref, "active_dilemma", None)) if rs_ref else None,
+                "live_standings": self._build_live_championship(),
+                "custom_team_meta": {
+                    "id": p_team["id"],
+                    "name": p_team["name"],
+                    "short": p_team["short"],
+                    "code": p_team["code"],
+                    "color": p_team["color"],
+                    "secondary": p_team["secondary"],
+                    "is_custom": bool(p_team.get("is_custom", False)),
+                } if p_team.get("is_custom") else None,
                 "cars": cars_payload,
                 "events": self.event_feed[-60:],
                 "podium": self.last_podium_summary,
@@ -3350,6 +4124,8 @@ class ChampionshipWorld:
             trk = self.current_track
             track_profile = track_upgrade_profile(trk)
             p_team = self._teams_by_id()[self.player_team_id]
+            bonuses = self._staff_bonuses()
+            disc = bonuses["rd_discount"]
             upgrades_info = []
             for key, spec in UPGRADE_DEPARTMENTS.items():
                 lvl = p_team["upgrades"][key]
@@ -3362,7 +4138,7 @@ class ChampionshipWorld:
                         "desc": spec["desc"],
                         "level": lvl,
                         "max_level": spec["max_level"],
-                        "cost_m": upgrade_cost_m(key, lvl),
+                        "cost_m": round(upgrade_cost_m(key, lvl) * (1.0 - disc), 2),
                         "track_weight": track_profile["weights"].get(key, 0.25),
                     }
                 )
@@ -3400,6 +4176,31 @@ class ChampionshipWorld:
             ]
             teams_summary.sort(key=lambda x: -x["car_rating"])
 
+            dmap_full = self._drivers_by_id()
+            academy_objs = []
+            for aid in getattr(self, "academy_drivers", []):
+                ad = dmap_full.get(aid)
+                if ad:
+                    academy_objs.append({
+                        **ad,
+                        "overall": driver_overall(ad),
+                        "risk": driver_risk(ad),
+                    })
+            rivalries_list = []
+            for rk, rlvl in sorted((getattr(self, "rivalries", {}) or {}).items(), key=lambda kv: -kv[1]):
+                if "|" in rk and rlvl > 0:
+                    d1_id, d2_id = rk.split("|", 1)
+                    d1_o, d2_o = dmap_full.get(d1_id, {}), dmap_full.get(d2_id, {})
+                    rivalries_list.append({
+                        "key": rk,
+                        "level": int(rlvl),
+                        "d1_id": d1_id,
+                        "d2_id": d2_id,
+                        "d1_code": d1_o.get("code", d1_id[:3].upper()),
+                        "d2_code": d2_o.get("code", d2_id[:3].upper()),
+                        "d1_team": d1_o.get("team_id"),
+                        "d2_team": d2_o.get("team_id"),
+                    })
             return {
                 "season": self.season_year,
                 "round": self.current_round,
@@ -3413,6 +4214,28 @@ class ChampionshipWorld:
                              "budget_source": BUDGET_SOURCE, "opening_grid_average_m": 400.0},
                 "upgrades": upgrades_info,
                 "upgrade_allowance": self._upgrade_allowance(p_team["id"]),
+                "staff": dict(getattr(self, "staff", {})),
+                "staff_roles": STAFF_ROLES,
+                "staff_bonuses": bonuses,
+                "next_year_rd": dict(getattr(self, "next_year_rd", {"progress": 0, "invested_m": 0.0, "last_round_invested": 0})),
+                "academy_drivers": list(getattr(self, "academy_drivers", [])),
+                "academy": academy_objs,
+                "rivalries": rivalries_list,
+                "rivalries_map": dict(getattr(self, "rivalries", {})),
+                "engine_suppliers": ENGINE_SUPPLIERS,
+                "strategy_plans": copy.deepcopy(getattr(self, "strategy_plans", {})),
+                "live_standings": self._build_live_championship(),
+                "all_tracks": [
+                    {
+                        "id": t.id,
+                        "name": t.name,
+                        "circuit": t.circuit,
+                        "city": t.city,
+                        "country": t.country,
+                        "laps": t.race_laps,
+                    }
+                    for t in COMPILED_TRACKS
+                ],
                 "track_profile": track_profile,
                 "parc_ferme": self.is_parc_ferme_locked(),
                 "setup_levels": {str(k): v for k, v in SETUP_LEVELS.items()},

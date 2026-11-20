@@ -87,10 +87,25 @@ export function getTeamLogoImage(teamId) {
   if (IMAGE_CACHE.has(teamId)) return IMAGE_CACHE.get(teamId);
   const raw = LOGO_SVGS[teamId];
   if (!raw) return null;
+  if (typeof Image === "undefined") return null;
   const img = new Image();
   img.src = "data:image/svg+xml;utf8," + encodeURIComponent(raw);
   IMAGE_CACHE.set(teamId, img);
   return img;
+}
+
+export function registerCustomTeamLogo(teamId, code = "F1", primary = "#00d2be", secondary = "#ffffff") {
+  if (!teamId) return;
+  const safeCode = String(code || "F1").toUpperCase().slice(0, 3).replace(/[^A-Z0-9]/g, "") || "F1";
+  const p = /^#[0-9a-fA-F]{6}$/.test(String(primary)) ? primary : "#00d2be";
+  const s = /^#[0-9a-fA-F]{6}$/.test(String(secondary)) ? secondary : "#ffffff";
+  LOGO_SVGS[teamId] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+    <path d="M5 6 H27 L24.5 22 L16 27.5 L7.5 22 Z" fill="${p}" stroke="${s}" stroke-width="2"/>
+    <path d="M9 11 L23 11 L21 14 L11 14 Z" fill="${s}" opacity="0.9"/>
+    <text x="16" y="21.5" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="8.2" fill="${s}">${safeCode}</text>
+  </svg>`;
+  IMAGE_CACHE.delete(teamId);
+  getTeamLogoImage(teamId);
 }
 
 // Pre-warm all 11 Constructor logo images on module load

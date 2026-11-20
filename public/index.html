@@ -85,8 +85,13 @@
       <aside class="timing-panel">
         <div class="panel-hdr">
           <span>TIMING TOWER</span>
-          <span class="fastest-chip" id="tower-fastest">FL --:--.---</span>
+          <div style="display:flex;align-items:center;gap:4px">
+            <button class="tower-hdr-btn" id="btn-live-pts" title="Toggle Live As-It-Stands Provisional WDC Points">WDC LIVE</button>
+            <button class="tower-hdr-btn" id="btn-live-chart" title="Open Live Gap-to-Leader &amp; Stint Chart">CHART</button>
+            <span class="fastest-chip" id="tower-fastest">FL --:--.---</span>
+          </div>
         </div>
+        <div class="live-title-bar hidden" id="live-title-bar"></div>
         <div class="timing-legend">
           <span>P</span>
           <span>DRIVER</span>
@@ -143,6 +148,21 @@
               <button class="btn-outline btn-sm" id="btn-exit-scenario">EXIT TO CAREER</button>
             </div>
 
+            <!-- TIMED RACE ENGINEER DILEMMA POP-UP -->
+            <div class="dilemma-overlay hidden" id="dilemma-card">
+              <div class="dilemma-hdr">
+                <span class="dilemma-tag">URGENT RACE ENGINEER</span>
+                <strong id="dilemma-title">CRITICAL STRATEGY CALL</strong>
+                <span class="dilemma-time" id="dilemma-timer">8.5s</span>
+              </div>
+              <div class="dilemma-progress"><span id="dilemma-bar" style="width:100%"></span></div>
+              <div class="dilemma-prompt" id="dilemma-prompt"></div>
+              <div class="dilemma-actions">
+                <button class="dilemma-btn opt-a" id="btn-dilemma-a"><strong id="dil-a-lbl">OPTION A</strong><small id="dil-a-sub"></small></button>
+                <button class="dilemma-btn opt-b" id="btn-dilemma-b"><strong id="dil-b-lbl">OPTION B</strong><small id="dil-b-sub"></small></button>
+              </div>
+            </div>
+
             <!-- FIA 5 RED START LIGHTS GANTRY -->
             <div class="lights-gantry hidden" id="lights-overlay">
               <div class="light-col"><span class="light-pod" id="lp-1"></span></div>
@@ -196,12 +216,16 @@
           <div id="setup-circuit-panel"></div>
           <div class="hq-grid-2">
             <div>
-              <h3 class="sec-title">2026 FACTORY DEVELOPMENT PROGRAMMES</h3>
+              <h3 class="sec-title">CURRENT SEASON FACTORY DEVELOPMENT</h3>
               <div class="upgrade-cards" id="upgrade-cards"></div>
+              <h3 class="sec-title" style="margin-top:16px">NEXT-SEASON CHASSIS R&amp;D SPLIT</h3>
+              <div id="next-year-rd-panel"></div>
             </div>
             <div>
               <h3 class="sec-title">CONSTRUCTOR PERFORMANCE INDEX</h3>
               <div class="power-rank-card" id="power-rank-list"></div>
+              <h3 class="sec-title" style="margin-top:16px">SENIOR DEPARTMENT STAFF</h3>
+              <div id="staff-panel"></div>
               <h3 class="sec-title" style="margin-top:16px">POWER UNIT &amp; GEARBOX ALLOCATION POOL</h3>
               <div id="pu-pool-panel"></div>
             </div>
@@ -273,6 +297,17 @@
             </div>
             <div class="trade-eval-box" id="neg-eval-box">Evaluating contract terms...</div>
             <button class="btn-primary btn-block" id="btn-exec-neg">SIGN MULTI-YEAR CONTRACT</button>
+          </div>
+
+          <div class="hq-grid-2" style="margin-top:16px">
+            <div class="market-card">
+              <h3 class="sec-title">YOUTH DRIVER ACADEMY &amp; FP1 ROOKIE PROGRAMME</h3>
+              <div id="academy-panel"></div>
+            </div>
+            <div class="market-card">
+              <h3 class="sec-title">ON-TRACK RIVALRIES &amp; COLLISION HISTORY</h3>
+              <div id="rivalries-panel"></div>
+            </div>
           </div>
 
           <div class="db-banner-card" style="margin-top:20px;padding:14px 18px;background:#0d0e17;border:1px solid #232438;border-left:3px solid var(--f1-red);border-radius:4px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
@@ -531,6 +566,10 @@
         <button class="btn-outline btn-sm" id="btn-close-analytics">CLOSE</button>
       </div>
       <div class="analytics-body">
+        <div class="analytics-section hidden" id="analytics-gap-section" style="margin-bottom:14px">
+          <div class="sec-title">LIVE GAP-TO-LEADER EVOLUTION (SECONDS)</div>
+          <div id="analytics-gap-chart" class="analytics-chart-wrap"></div>
+        </div>
         <div class="analytics-section">
           <div class="sec-title">LAP-BY-LAP RACE POSITION TRACE</div>
           <div id="analytics-pos-chart" class="analytics-chart-wrap"></div>
@@ -543,9 +582,21 @@
     </div>
   </div>
 
+  <!-- MODAL: STRATEGY PLANNER (PLAN A / B / C) -->
+  <div class="modal-backdrop hidden" id="strategy-modal">
+    <div class="modal-box" style="width:min(620px,92vw)">
+      <div class="modal-hdr">
+        <h3 id="strategy-modal-title">RACE STRATEGY PLANNER</h3>
+        <button class="btn-outline btn-sm" id="btn-close-strategy">CLOSE</button>
+      </div>
+      <p class="muted-note">Configure Plan A / B / C pit windows and compound sequences. Active plans box automatically at the target lap.</p>
+      <div id="strategy-plan-editor"></div>
+    </div>
+  </div>
+
   <!-- MODAL: CONSTRUCTOR SELECTION / CAREER RESET -->
   <div class="modal-backdrop hidden" id="team-modal">
-    <div class="modal-box">
+    <div class="modal-box" style="max-height:90vh;overflow-y:auto">
       <div class="modal-hdr">
         <h3>SELECT CONSTRUCTOR — TEAM PRINCIPAL</h3>
         <button class="btn-outline btn-sm" id="btn-close-modal">CLOSE</button>
@@ -553,8 +604,16 @@
       <p class="muted-note">Assume Team Principal control of any of the 11 Formula 1 Constructors immediately, or initialize a clean 2026 Season from Round 1.</p>
       <div class="team-picker-grid" id="team-picker-grid"></div>
       <div class="scenario-picker-wrap">
+        <div class="sec-title" style="margin:12px 0 6px">MY TEAM CONSTRUCTOR CUSTOMIZER (LIVERY &amp; ENGINE SUPPLIER)</div>
+        <div id="my-team-customizer" class="custom-builder-card"></div>
+      </div>
+      <div class="scenario-picker-wrap">
         <div class="sec-title" style="margin:12px 0 6px">QUICK-PLAY PIT-WALL SCENARIOS (DOES NOT OVERWRITE CAREER SAVE)</div>
         <div class="scenario-grid" id="scenario-picker-grid"></div>
+      </div>
+      <div class="scenario-picker-wrap">
+        <div class="sec-title" style="margin:12px 0 6px">CUSTOM SCENARIO BUILDER (ALL 27 CIRCUITS · SANDBOX)</div>
+        <div id="custom-scenario-builder" class="custom-builder-card"></div>
       </div>
       <div class="modal-ftr" style="display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
         <span class="muted-note" style="margin:0;margin-right:auto">Restart Season:</span>

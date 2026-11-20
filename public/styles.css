@@ -2510,3 +2510,203 @@ select, input[type="range"] {
 @media (max-width: 900px) {
   .circuit-dna-card { grid-template-columns: 1fr; }
 }
+
+/* Timing Tower Live WDC / Pace Chart Controls */
+.tower-hdr-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #cfd2e6;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.tower-hdr-btn.active {
+  background: rgba(0, 210, 190, 0.18);
+  border-color: #00d2be;
+  color: #00d2be;
+}
+.live-title-bar {
+  background: linear-gradient(90deg, rgba(225, 6, 0, 0.22), rgba(18, 21, 34, 0.95));
+  border-bottom: 1px solid rgba(225, 6, 0, 0.45);
+  color: #ffd7d5;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  padding: 4px 10px;
+}
+.t-live-pts {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #ffd000;
+}
+
+/* Timed Race Engineer Dilemma Overlay */
+.dilemma-overlay {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(440px, 88%);
+  background: rgba(12, 14, 24, 0.96);
+  border: 1px solid #ff9f1c;
+  border-top: 3px solid #e10600;
+  border-radius: 6px;
+  padding: 10px 12px;
+  z-index: 30;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.72);
+}
+.dilemma-hdr {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.dilemma-tag {
+  background: #e10600;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+.dilemma-time {
+  margin-left: auto;
+  color: #ffd000;
+  font-weight: 900;
+}
+.dilemma-progress {
+  height: 4px;
+  background: #23263a;
+  border-radius: 2px;
+  margin: 6px 0;
+  overflow: hidden;
+}
+.dilemma-progress > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ff3b30, #ff9f1c);
+  transition: width 0.18s linear;
+}
+.dilemma-prompt {
+  font-size: 11.5px;
+  color: #e4e6f2;
+  margin-bottom: 8px;
+}
+.dilemma-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.dilemma-btn {
+  background: #171a2b;
+  border: 1px solid #353856;
+  border-radius: 4px;
+  color: #ffffff;
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: inherit;
+}
+.dilemma-btn:hover {
+  border-color: #00d2be;
+  background: #1d2238;
+}
+.dilemma-btn.opt-a { border-left: 3px solid #00d2be; }
+.dilemma-btn.opt-b { border-left: 3px solid #ff9f1c; }
+.dilemma-btn strong { font-size: 11px; }
+.dilemma-btn small { font-size: 9.5px; color: #9ea2bd; }
+
+/* Pit Wall Burst, Plan A/B/C, Gremlin & Break Parc Ferme Pills */
+.pw-btn.burst-atk.active, .pw-btn.burst-atk.armed {
+  background: #e10600;
+  border-color: #ff4d4f;
+  color: #ffffff;
+}
+.pw-btn.burst-def.active, .pw-btn.burst-def.armed {
+  background: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+.gremlin-badge {
+  background: rgba(255, 59, 48, 0.20);
+  border: 1px solid #ff4d4f;
+  color: #ff9b9b;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.parc-break-row {
+  margin-top: 4px;
+  padding: 5px 8px;
+  background: rgba(255, 159, 28, 0.10);
+  border: 1px dashed rgba(255, 159, 28, 0.45);
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 10.5px;
+}
+
+/* Management: Next-Year R&D, Staff, Academy, Rivalries & Custom Builders */
+.staff-card, .ny-rd-card, .academy-slot, .rivalry-row, .custom-builder-card {
+  background: #111320;
+  border: 1px solid #26293f;
+  border-radius: 5px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+.custom-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.custom-form-grid label {
+  display: block;
+  font-size: 9.5px;
+  color: #8f90a6;
+  font-weight: 800;
+  margin-bottom: 3px;
+}
+.custom-form-grid input, .custom-form-grid select {
+  width: 100%;
+  background: #0c0d17;
+  border: 1px solid #30334d;
+  color: #ffffff;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 11.5px;
+  font-family: inherit;
+}
+.strategy-stint-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #121422;
+  border: 1px solid #25283d;
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+.strategy-stint-row select, .strategy-stint-row input {
+  background: #0b0d15;
+  border: 1px solid #323550;
+  color: #ffffff;
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: inherit;
+}

@@ -136,6 +136,9 @@ class F1RequestHandler(BaseHTTPRequestHandler):
         if path == "/api/hall_of_fame":
             self._send_json(self.world.get_hall_of_fame_data())
             return
+        if path == "/api/live_analytics":
+            self._send_json(self.world.get_live_analytics())
+            return
 
         # Serve static files from public/
         rel = "index.html" if path in ("/", "") else path.lstrip("/")
@@ -231,14 +234,54 @@ class F1RequestHandler(BaseHTTPRequestHandler):
                 int(body.get("setup_df", 0)),
             )
         elif path == "/api/practice_run":
+            rid = body.get("rookie_id")
             res = self.world.run_practice_program(
                 str(body.get("driver_id", "")),
                 str(body.get("program", "QUALI_SIM")),
+                rookie_id=str(rid) if rid else None,
             )
         elif path == "/api/scenario":
             res = self.world.start_scenario(str(body.get("scenario_id", "")))
+        elif path == "/api/custom_scenario":
+            res = self.world.start_custom_scenario(body)
         elif path == "/api/exit_scenario":
             res = self.world.exit_scenario()
+        elif path == "/api/dilemma":
+            res = self.world.resolve_dilemma(str(body.get("choice", "B")))
+        elif path == "/api/strategy_plan":
+            res = self.world.set_strategy_plan(
+                str(body.get("driver_id", "")),
+                active_plan=str(body["active_plan"]) if body.get("active_plan") is not None else None,
+                plans=body.get("plans") if isinstance(body.get("plans"), dict) else None,
+            )
+        elif path == "/api/next_year_rd":
+            res = self.world.invest_next_year_rd(str(body.get("tier", "standard")))
+        elif path == "/api/hire_staff":
+            tt = body.get("target_tier")
+            res = self.world.hire_staff(str(body.get("role", "")), target_tier=int(tt) if tt is not None else None)
+        elif path == "/api/academy":
+            rel = body.get("release_driver_id")
+            res = self.world.manage_academy(
+                str(body.get("action", "")),
+                str(body.get("driver_id", "")),
+                release_driver_id=str(rel) if rel else None,
+            )
+        elif path == "/api/custom_team":
+            res = self.world.customize_team(
+                str(body.get("name", "")),
+                str(body.get("short", "")),
+                str(body.get("code", "")),
+                str(body.get("color", "")),
+                str(body.get("secondary", "")),
+                str(body.get("engine", "")),
+            )
+        elif path == "/api/break_parc_ferme":
+            fpu = body.get("fresh_pu")
+            res = self.world.break_parc_ferme(
+                str(body.get("driver_id", "")),
+                int(body.get("setup_df", 0)),
+                fresh_pu=[str(x) for x in fpu] if isinstance(fpu, list) else None,
+            )
         elif path == "/api/replace_pu_component":
             res = self.world.replace_pu_component(
                 str(body.get("driver_id", "")),
