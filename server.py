@@ -230,6 +230,15 @@ class F1RequestHandler(BaseHTTPRequestHandler):
                 str(body.get("driver_id", "")),
                 int(body.get("setup_df", 0)),
             )
+        elif path == "/api/practice_run":
+            res = self.world.run_practice_program(
+                str(body.get("driver_id", "")),
+                str(body.get("program", "QUALI_SIM")),
+            )
+        elif path == "/api/scenario":
+            res = self.world.start_scenario(str(body.get("scenario_id", "")))
+        elif path == "/api/exit_scenario":
+            res = self.world.exit_scenario()
         elif path == "/api/replace_pu_component":
             res = self.world.replace_pu_component(
                 str(body.get("driver_id", "")),

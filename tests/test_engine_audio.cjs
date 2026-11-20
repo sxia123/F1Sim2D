@@ -128,4 +128,18 @@ assert.equal(audio.toggle(), false);
 assert.equal(audio.masterGain.gain.value, 0);
 assert.equal(audio.toggle(), true);
 
+// Broadcast SFX helpers (headless-safe & active AudioContext)
+headlessAudio.playStartLightBeep(false);
+headlessAudio.playRadioChirp();
+headlessAudio.playPitGun();
+headlessAudio.playFlagChime('SC');
+
+const oscCountBefore = audio.ctx.oscillators.length;
+audio.playStartLightBeep(false);
+audio.playStartLightBeep(true);
+audio.playRadioChirp();
+audio.playPitGun();
+audio.playFlagChime('RED_FLAG');
+assert.ok(audio.ctx.oscillators.length >= oscCountBefore + 5);
+
 console.log('Engine audio checks passed.');

@@ -62,6 +62,7 @@
             <strong id="hdr-team-name">Williams</strong>
           </div>
           <div class="tp-budget" id="hdr-budget">$102.0M</div>
+          <div class="tp-board" id="hdr-board" title="Board Confidence">BRD 75%</div>
         </div>
         <div class="server-status" id="hdr-conn">LIVE</div>
       </div>
@@ -110,18 +111,36 @@
             <a class="map-attribution" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors · ODbL</a>
 
             <div class="canvas-hud-top">
-              <div class="cam-group">
-                <button class="cam-btn active" data-cam="full">CIRCUIT MAP</button>
-                <button class="cam-btn" data-cam="battle">BATTLE CAM</button>
-                <button class="cam-btn" data-cam="leader">LEADER</button>
-                <button class="cam-btn" data-cam="team">TEAM FEED</button>
-                <button class="cam-btn" data-cam="selected">ONBOARD</button>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <div class="cam-group">
+                  <button class="cam-btn active" data-cam="full">CIRCUIT MAP</button>
+                  <button class="cam-btn" data-cam="director" title="Auto TV Director (Incidents, Pit Stops &amp; Battles)">DIRECTOR</button>
+                  <button class="cam-btn" data-cam="battle">BATTLE CAM</button>
+                  <button class="cam-btn" data-cam="leader">LEADER</button>
+                  <button class="cam-btn" data-cam="team">TEAM FEED</button>
+                  <button class="cam-btn" data-cam="selected">ONBOARD</button>
+                </div>
+                <button class="btn-outline btn-sm btn-replay" id="btn-replay" title="Replay Last 10 Seconds [R]">REPLAY -10s</button>
+                <span class="director-pill hidden" id="director-pill"></span>
               </div>
               <div class="map-legend">
                 <span><i class="ind ind-aero"></i>STRAIGHT AERO</span>
                 <span><i class="ind ind-ovt"></i>OVERTAKE MODE</span>
                 <span><i class="ind ind-det"></i>DETECTION GATE</span>
               </div>
+            </div>
+
+            <div class="replay-banner hidden" id="replay-banner">
+              <span class="replay-dot"></span>
+              <span>INSTANT REPLAY <strong id="replay-offset">-10.0s</strong></span>
+              <button class="btn-outline btn-sm" id="btn-exit-replay">RETURN TO LIVE &gt;&gt;</button>
+            </div>
+
+            <div class="scenario-banner hidden" id="scenario-banner">
+              <span class="scen-tag">SCENARIO CHALLENGE</span>
+              <strong id="scenario-title-text"></strong>
+              <span id="scenario-goal-text"></span>
+              <button class="btn-outline btn-sm" id="btn-exit-scenario">EXIT TO CAREER</button>
             </div>
 
             <!-- FIA 5 RED START LIGHTS GANTRY -->
@@ -138,12 +157,33 @@
           </div>
 
           <!-- DUAL-CHANNEL PIT WALL STRATEGY CONSOLE -->
-          <div class="pitwall-dock">
+          <div class="pitwall-dock" id="pitwall-dock">
             <div class="pitwall-hdr">
               <div class="pw-hdr-left">
                 <span class="pw-red-tag">PIT WALL</span>
                 <strong id="pw-title">RACE STRATEGY CONSOLE</strong>
-                <span class="pw-hint">AUTO-STRATEGIST ACTIVE WHEN UNATTENDED — MANUAL COMMANDS OVERRIDE IMMEDIATELY</span>
+                <div class="pw-radar hidden" id="pw-radar" title="Live Weather Radar Cone (+2 / +4 / +6 Laps)"></div>
+                <span class="pw-grip hidden" id="pw-grip"></span>
+              </div>
+              <div class="pw-hdr-right">
+                <div class="pw-focus-pills" id="pw-focus-pills" title="Hotkey Target Car ([1] / [2])"></div>
+                <button class="pw-hdr-btn" id="btn-pw-compact" title="Toggle Compact Pit Wall View [C]">COMPACT</button>
+                <button class="pw-hdr-btn" id="btn-hotkeys" title="Keyboard Hotkeys [?]">? KEYS</button>
+                <div class="hotkeys-popover hidden" id="hotkeys-popover">
+                  <div class="hk-title">PIT WALL HOTKEYS</div>
+                  <div class="hk-grid">
+                    <span><kbd>Space</kbd> Hold / 1x</span>
+                    <span><kbd>[</kbd> <kbd>]</kbd> Speed - / +</span>
+                    <span><kbd>1</kbd> <kbd>2</kbd> Focus Car</span>
+                    <span><kbd>B</kbd> Box / Release Now</span>
+                    <span><kbd>P</kbd> Cycle Pace Mode</span>
+                    <span><kbd>E</kbd> Cycle ERS Mode</span>
+                    <span><kbd>L</kbd> Lift &amp; Coast</span>
+                    <span><kbd>W</kbd> Pit Wing Flap</span>
+                    <span><kbd>C</kbd> Compact Wall</span>
+                    <span><kbd>R</kbd> 10s Replay</span>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="pitwall-cards" id="pitwall-cards"></div>
@@ -294,6 +334,7 @@
               <div class="sponsor-list" id="sponsor-list"></div>
             </div>
             <div>
+              <div id="board-objectives-panel"></div>
               <div id="finance-summary"></div>
               <h3 class="sec-title">TEAM CASH LEDGER</h3>
               <div class="table-wrap">
@@ -511,6 +552,10 @@
       </div>
       <p class="muted-note">Assume Team Principal control of any of the 11 Formula 1 Constructors immediately, or initialize a clean 2026 Season from Round 1.</p>
       <div class="team-picker-grid" id="team-picker-grid"></div>
+      <div class="scenario-picker-wrap">
+        <div class="sec-title" style="margin:12px 0 6px">QUICK-PLAY PIT-WALL SCENARIOS (DOES NOT OVERWRITE CAREER SAVE)</div>
+        <div class="scenario-grid" id="scenario-picker-grid"></div>
+      </div>
       <div class="modal-ftr" style="display:flex;gap:10px;justify-content:flex-end;align-items:center;flex-wrap:wrap">
         <span class="muted-note" style="margin:0;margin-right:auto">Restart Season:</span>
         <button class="btn-outline btn-sm" id="btn-reset-career" style="border-color:var(--border);color:var(--text)">RESET 2026 (HYBRID)</button>

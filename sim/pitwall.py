@@ -573,6 +573,53 @@ class RivalPitWall:
             "pit_loss": round(loss, 1),
         }
 
+    def battle_forecast(self, car):
+        """Estimate catch/defend lap countdown against nearest rival using recent pace and tyre state."""
+        race = self.race
+        if car.dnf or car.finished or car.in_pits or race.flag_state != "GREEN":
+            return None
+        standings = [c for c in getattr(race, "standings", []) if not c.dnf]
+        try:
+            idx = standings.index(car)
+        except ValueError:
+            return None
+
+        def est_lap_s(target):
+            rec = getattr(target, "recent_lap_times", None) or []
+            if rec:
+                return sum(rec[-2:]) / len(rec[-2:])
+            pace_mod = {"ATTACK": -0.35, "PUSH": -0.18, "BALANCED": 0.0, "CONSERVE": 0.30}.get(target.pace_mode, 0.0)
+            perf_mod = (82.0 - getattr(target, "car_perf_index", 82.0)) * 0.14
+            return self.lap_s + self._lap_cost(target.compound, target.tire_wear, race.wetness, target.wing_damage) + pace_mod + perf_mod
+
+        my_pace = est_lap_s(car)
+        if idx > 0:
+            ahead = standings[idx - 1]
+            if not ahead.in_pits and 0.25 < car.interval_ahead < 18.0:
+                rate = est_lap_s(ahead) - my_pace
+                if rate >= 0.12:
+                    return {
+                        "type": "CATCH",
+                        "target": ahead.code,
+                        "target_pos": ahead.pos,
+                        "rate_s": round(rate, 2),
+                        "laps": min(25, max(1, math.ceil(car.interval_ahead / rate))),
+                    }
+        if idx + 1 < len(standings):
+            behind = standings[idx + 1]
+            gap_behind = getattr(behind, "interval_ahead", 0.0)
+            if not behind.in_pits and 0.25 < gap_behind < 12.0:
+                rate = my_pace - est_lap_s(behind)
+                if rate >= 0.15:
+                    return {
+                        "type": "DEFEND",
+                        "target": behind.code,
+                        "target_pos": behind.pos,
+                        "rate_s": round(rate, 2),
+                        "laps": min(25, max(1, math.ceil(gap_behind / rate))),
+                    }
+        return None
+
     def advise(self, car):
         """Evaluate full pit/undercut/overcut window and rejoin telemetry without mutating orders."""
         proj = self.project_rejoin(car)
@@ -580,6 +627,9 @@ class RivalPitWall:
             car.strategy_advice = None
             return None
         call = self.plan(car)
+        cand_comp = call.compound if call is not None else car.next_compound
+        fresh_two = 2.0 * (self._lap_cost(car.compound, car.tire_wear, self.race.wetness, car.wing_damage) - self._lap_cost(cand_comp, 0.02, self.race.wetness))
+        undercut_s = round(fresh_two - proj["traffic_penalty"] * 0.65, 1)
         if call is not None:
             mode = "BOX_NOW"
             if "undercut" in call.reason:
@@ -593,6 +643,7 @@ class RivalPitWall:
                 "compound": call.compound,
                 "reason": call.reason,
                 "gain_s": round(call.gain_s, 1),
+                "undercut_s": undercut_s,
                 "urgent": bool(call.urgent),
                 "rejoin_pos": proj["pos"],
                 "traffic_s": proj["traffic_s"],
@@ -606,6 +657,7 @@ class RivalPitWall:
             "compound": car.next_compound,
             "reason": car.strategy_status or "Monitor pace and track position",
             "gain_s": 0.0,
+            "undercut_s": undercut_s,
             "urgent": False,
             "rejoin_pos": proj["pos"],
             "traffic_s": proj["traffic_s"],

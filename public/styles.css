@@ -207,6 +207,15 @@ html, body {
   padding: 2px 7px;
   font-size: 12px;
 }
+.tp-board {
+  background: #141722;
+  border: 1px solid #2b2f44;
+  color: #00d2be;
+  font-weight: 900;
+  padding: 2px 6px;
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+}
 
 .server-status {
   font-size: 10px;
@@ -711,25 +720,30 @@ html, body {
 
 .hidden { display: none !important; }
 
-/* PIT WALL CONSOLE */
+/* PIT WALL CONSOLE (3-TIER TACTICAL DECK) */
 .pitwall-dock {
+  position: relative;
   background: var(--bg-carbon);
   border-top: 1px solid var(--line-bright);
-  padding: 8px 12px 10px;
+  padding: 6px 10px 8px;
   flex-shrink: 0;
 }
 .pitwall-hdr {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 7px;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
 }
-.pw-hdr-left {
+.pw-hdr-left,
+.pw-hdr-right {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 11px;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.5px;
+  flex-wrap: wrap;
 }
 .pw-red-tag {
   background: var(--f1-red);
@@ -739,55 +753,228 @@ html, body {
   padding: 1px 6px;
   letter-spacing: 0.7px;
 }
-.pw-hint {
-  color: var(--muted);
+.pw-radar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #12141e;
+  border: 1px solid #26293d;
+  padding: 2px 8px;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 800;
+}
+.pw-radar-bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 12px;
+}
+.pw-radar-col {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+.pw-radar-bar {
+  width: 10px;
+  border-radius: 1px;
+  background: #00d2be;
+  transition: height 0.25s;
+}
+.pw-grip {
+  background: #141724;
+  border: 1px solid #2b2e44;
+  color: #c8cae0;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.pw-focus-pills {
+  display: inline-flex;
+  gap: 3px;
+}
+.pw-focus-pill {
+  background: #12131d;
+  border: 1px solid #2b2e44;
+  color: #8f90a6;
+  font-family: var(--font);
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.pw-focus-pill.active {
+  background: #1f2438;
+  border-color: #00d2be;
+  color: #ffffff;
+}
+.pw-hdr-btn {
+  background: #141622;
+  border: 1px solid #2d3046;
+  color: #b4b6cc;
+  font-family: var(--font);
+  font-size: 9.5px;
+  font-weight: 800;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.pw-hdr-btn:hover,
+.pw-hdr-btn.active {
+  border-color: #ffffff;
+  color: #ffffff;
+  background: #1d2133;
+}
+.hotkeys-popover {
+  position: absolute;
+  right: 10px;
+  bottom: calc(100% + 6px);
+  z-index: 40;
+  background: rgba(15, 16, 25, 0.98);
+  border: 1px solid var(--line-bright);
+  border-top: 2px solid var(--f1-red);
+  padding: 10px 12px;
+  width: 310px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8);
+}
+.hk-title {
+  font-size: 10.5px;
+  font-weight: 900;
+  letter-spacing: 0.7px;
+  margin-bottom: 6px;
+  color: #ffffff;
+}
+.hk-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 10px;
+  font-size: 10.5px;
+  color: #c8c9d8;
+}
+.hk-grid kbd {
+  display: inline-block;
+  background: #202336;
+  border: 1px solid #3a3e5a;
+  color: #ffffff;
+  padding: 0 5px;
+  font-family: var(--font);
+  font-size: 9.5px;
+  font-weight: 800;
+  border-radius: 2px;
+  margin-right: 4px;
 }
 
 .pitwall-cards {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
-
 .pw-card {
   background: var(--bg-panel);
   border: 1px solid var(--line);
   border-top: 2px solid var(--line-bright);
-  padding: 8px 10px;
+  padding: 7px 9px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+  transition: box-shadow 0.15s, border-color 0.15s;
 }
-
+.pw-card.pw-focused {
+  border-color: rgba(255, 255, 255, 0.42);
+  box-shadow: inset 2px 0 0 #00d2be, 0 0 0 1px rgba(0, 210, 190, 0.22);
+}
 .pw-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 .pw-driver {
   font-weight: 900;
-  font-size: 12.5px;
+  font-size: 12px;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   text-transform: uppercase;
+  flex-wrap: wrap;
 }
-.pw-metrics {
+.pw-keycap {
+  background: #1b1e2e;
+  border: 1px solid #343850;
+  color: #9ea2bd;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 0 4px;
+  border-radius: 2px;
+}
+.pw-focused .pw-keycap {
+  border-color: #00d2be;
+  color: #00d2be;
+}
+.pw-fcst {
+  font-size: 9.5px;
+  font-weight: 900;
+  padding: 1px 5px;
+  border-radius: 2px;
+  letter-spacing: 0.3px;
+}
+.pw-fcst.catch { background: rgba(0, 210, 106, 0.16); color: #00d26a; border: 1px solid rgba(0, 210, 106, 0.35); }
+.pw-fcst.defend { background: rgba(255, 165, 0, 0.16); color: #ffb020; border: 1px solid rgba(255, 165, 0, 0.35); }
+.pw-morale {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: #9f9fb5;
+}
+.pw-gauges {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+.pitwall-dock.pw-compact .pw-gauges {
+  display: none;
+}
+.pw-gauge {
+  background: #0d0e16;
+  border: 1px solid #202334;
+  padding: 3px 6px;
   display: flex;
-  gap: 9px;
-  font-size: 11px;
-  color: #d4d4e0;
+  flex-direction: column;
+  gap: 2px;
 }
-
+.pw-gauge-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 9.5px;
+  color: #9ea2bd;
+  font-weight: 700;
+}
+.pw-gauge-hdr strong {
+  color: #ffffff;
+  font-weight: 900;
+}
+.pw-gbar {
+  height: 3px;
+  background: #222538;
+  overflow: hidden;
+  border-radius: 1px;
+}
+.pw-gbar > span {
+  display: block;
+  height: 100%;
+}
 .pw-controls {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pw-action-row,
+.pw-drive-row {
+  display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
   align-items: center;
 }
-
 .pw-group {
   display: flex;
   align-items: center;
@@ -795,11 +982,11 @@ html, body {
   border: 1px solid var(--line);
 }
 .pw-lbl {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
   color: var(--muted);
-  padding: 0 6px;
+  padding: 0 5px;
   border-right: 1px solid var(--line);
 }
 .pw-btn {
@@ -808,18 +995,182 @@ html, body {
   border-right: 1px solid rgba(255, 255, 255, 0.05);
   color: #9f9fb5;
   font-family: var(--font);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  padding: 4px 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.35px;
+  padding: 3.5px 5.5px;
   cursor: pointer;
 }
 .pw-btn:last-child { border-right: none; }
 .pw-btn:hover:not(:disabled) { color: #ffffff; background: var(--bg-elev); }
 .pw-btn.active { background: #ffffff; color: #0b0b0f; font-weight: 900; }
+.pw-btn.box-cta {
+  background: #1d202e;
+  color: #ffd000;
+  padding: 4px 9px;
+}
 .pw-btn.box-active { background: var(--f1-yellow); color: #0b0b0f; font-weight: 900; }
+.pw-btn.release-cta {
+  background: rgba(0, 210, 106, 0.22);
+  color: #00d26a;
+  font-weight: 900;
+  padding: 4px 10px;
+}
+.pw-btn.release-cta:hover:not(:disabled) {
+  background: #00d26a;
+  color: #08100c;
+}
+.pw-btn.hold-active {
+  background: rgba(255, 59, 48, 0.24);
+  color: #ff6b6b;
+  font-weight: 900;
+}
 .pw-btn.auto-on { background: rgba(0, 210, 106, 0.18); color: var(--f1-green); font-weight: 900; }
-.pw-btn:disabled { opacity: 0.4; cursor: default; }
+.pw-btn.pace-CONSERVE.active { background: #38bdf8; color: #06131a; }
+.pw-btn.pace-BALANCED.active { background: #ffffff; color: #0b0b0f; }
+.pw-btn.pace-PUSH.active { background: #ffa726; color: #160e02; }
+.pw-btn.pace-ATTACK.active { background: #ff3b30; color: #ffffff; }
+.pw-btn.ers-HARVEST.active { background: #ffd000; color: #141000; }
+.pw-btn.ers-AUTO.active { background: #e2e8f0; color: #0b0b0f; }
+.pw-btn.ers-BOOST.active { background: #00d2be; color: #061412; }
+.pw-btn.ers-OVERTAKE.active { background: #00d26a; color: #04130a; }
+.pw-btn:disabled { opacity: 0.36; cursor: default; }
+
+/* Broadcast HUD Banners, Quali Traffic, Practice & Scenario Panels */
+.btn-replay.active,
+.btn-replay.pulse {
+  border-color: #ff3b30;
+  color: #ff6b6b;
+  background: rgba(255, 59, 48, 0.14);
+}
+.director-pill {
+  background: rgba(15, 17, 26, 0.92);
+  border: 1px solid #00d2be;
+  color: #00d2be;
+  padding: 3px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+}
+.replay-banner {
+  position: absolute;
+  top: 46px;
+  left: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(28, 10, 12, 0.94);
+  border: 1px solid #ff3b30;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #ffffff;
+  z-index: 15;
+}
+.replay-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff3b30;
+}
+.scenario-banner {
+  position: absolute;
+  top: 46px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(16, 19, 30, 0.95);
+  border: 1px solid #ff9f1c;
+  padding: 5px 10px;
+  font-size: 10.5px;
+  color: #e4e6f5;
+  z-index: 15;
+  max-width: 56%;
+}
+.scen-tag {
+  background: #ff9f1c;
+  color: #0b0b0f;
+  font-size: 9px;
+  font-weight: 900;
+  padding: 1px 5px;
+}
+.pw-banner-strip {
+  grid-column: 1 / -1;
+  background: #141726;
+  border: 1px solid #2b2f47;
+  padding: 5px 9px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 10.5px;
+  flex-wrap: wrap;
+}
+.pw-banner-strip.red-flag {
+  background: rgba(225, 6, 0, 0.16);
+  border-color: #e10600;
+}
+.pw-apply-btn {
+  background: #00d2be;
+  color: #081214;
+  border: none;
+  font-family: var(--font);
+  font-size: 9px;
+  font-weight: 900;
+  padding: 2px 7px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+.pw-apply-btn:hover { background: #ffffff; }
+.pw-prac-fb {
+  font-size: 10px;
+  color: #c8cae0;
+  background: #11131e;
+  border-left: 2px solid #00d2be;
+  padding: 3px 6px;
+}
+.tel-sparkline {
+  width: 100%;
+  height: 36px;
+  background: #0c0d14;
+  border: 1px solid #202336;
+  margin-top: 2px;
+  display: block;
+}
+.board-card {
+  background: #141624;
+  border: 1px solid #2c2f48;
+  border-left: 3px solid #00d2be;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+}
+.scenario-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+.scenario-card {
+  background: #121420;
+  border: 1px solid #2a2d44;
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  cursor: pointer;
+  color: #ffffff;
+  font-family: var(--font);
+}
+.scenario-card:hover { border-color: #ff9f1c; background: #181b2c; }
+.scenario-card strong { font-size: 11px; color: #ff9f1c; }
+.scenario-card span { font-size: 10px; color: #c4c6da; line-height: 1.35; }
+.scenario-card small { font-size: 9.5px; color: #00d2be; font-weight: 700; }
+
+@media (max-width: 1120px) {
+  .pitwall-cards { grid-template-columns: 1fr; }
+  .pw-gauges { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* RIGHT TELEMETRY & FIA RACE CONTROL WIRE */
 .right-panel {

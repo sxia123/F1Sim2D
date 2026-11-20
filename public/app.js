@@ -115,6 +115,7 @@ class F1EngineAudio {
     this._blipUntil = 0;
     this._lastCrackleMs = 0;
     this._lastGridPulse = 0;
+    this._lastRadioChirpMs = -9999;
   }
 
   _makeSaturationCurve(drive = 3.2) {
@@ -491,6 +492,114 @@ class F1EngineAudio {
     const targetVol = isLights ? 0.18 : car.in_pit ? 0.11 : 0.12 + 0.08 * rpmNorm * load;
     this.masterGain.gain.setTargetAtTime(targetVol, now, 0.05);
   }
+
+  _canSfx() {
+    return Boolean(this.enabled && this.ctx && this.ctx.state === "running");
+  }
+
+  playStartLightBeep(isGo = false) {
+    if (!this._canSfx()) return;
+    try {
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(isGo ? 1320 : 780, now);
+      gain.gain.setValueAtTime(0.001, now);
+      if (typeof gain.gain.linearRampToValueAtTime === "function") {
+        gain.gain.linearRampToValueAtTime(isGo ? 0.16 : 0.11, now + 0.01);
+      }
+      if (typeof gain.gain.exponentialRampToValueAtTime === "function") {
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (isGo ? 0.24 : 0.12));
+      }
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      if (typeof osc.stop === "function") osc.stop(now + (isGo ? 0.25 : 0.13));
+    } catch (_) {}
+  }
+
+  playRadioChirp() {
+    if (!this._canSfx()) return;
+    const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (nowMs - (this._lastRadioChirpMs ?? -9999) < 1500) return;
+    this._lastRadioChirpMs = nowMs;
+    try {
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(1750, now);
+      if (typeof osc.frequency.setValueAtTime === "function") {
+        osc.frequency.setValueAtTime(2250, now + 0.035);
+      }
+      gain.gain.setValueAtTime(0.001, now);
+      if (typeof gain.gain.linearRampToValueAtTime === "function") {
+        gain.gain.linearRampToValueAtTime(0.08, now + 0.008);
+      }
+      if (typeof gain.gain.exponentialRampToValueAtTime === "function") {
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.085);
+      }
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      if (typeof osc.stop === "function") osc.stop(now + 0.09);
+    } catch (_) {}
+  }
+
+  playPitGun() {
+    if (!this._canSfx()) return;
+    try {
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(360, now);
+      if (typeof osc.frequency.linearRampToValueAtTime === "function") {
+        osc.frequency.linearRampToValueAtTime(590, now + 0.14);
+      }
+      gain.gain.setValueAtTime(0.001, now);
+      if (typeof gain.gain.linearRampToValueAtTime === "function") {
+        gain.gain.linearRampToValueAtTime(0.11, now + 0.02);
+      }
+      if (typeof gain.gain.exponentialRampToValueAtTime === "function") {
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.21);
+      }
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      if (typeof osc.stop === "function") osc.stop(now + 0.22);
+    } catch (_) {}
+  }
+
+  playFlagChime(flag) {
+    if (!this._canSfx()) return;
+    try {
+      const ctx = this.ctx;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      const baseHz = flag === "CHEQUERED" ? 660 : flag === "RED_FLAG" ? 587 : 440;
+      const nextHz = flag === "CHEQUERED" ? 880 : flag === "RED_FLAG" ? 440 : 554;
+      osc.frequency.setValueAtTime(baseHz, now);
+      osc.frequency.setValueAtTime(nextHz, now + 0.10);
+      gain.gain.setValueAtTime(0.001, now);
+      if (typeof gain.gain.linearRampToValueAtTime === "function") {
+        gain.gain.linearRampToValueAtTime(0.09, now + 0.015);
+      }
+      if (typeof gain.gain.exponentialRampToValueAtTime === "function") {
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+      }
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      if (typeof osc.stop === "function") osc.stop(now + 0.28);
+    } catch (_) {}
+  }
 }
 
 class F1App {
@@ -513,12 +622,26 @@ class F1App {
     this._lastHeaderLogoTeam = "";
     this.selectedHofSeason = 2026;
     this.hofViewMode = "races";
+    this.focusedCarIdx = 0;
+    this.compactPitWall = false;
+    this.replayBuffer = [];
+    this.replayActive = false;
+    this.replayIdx = 0;
+    this._replayTimer = null;
+    this._replayKey = "";
+    this.telHistory = [];
+    this._telHistDriverId = null;
+    this._lastLightsCount = 0;
+    this._lastFlagSound = "";
+    this._lastEventSfxId = -1;
+    this._prevPitPhases = new Map();
     this.audio = new F1EngineAudio();
 
     const canvas = document.getElementById("track-canvas");
     this.renderer = new CircuitRenderer(canvas, (drvId) => this.selectDriver(drvId));
 
     this._bindUI();
+    this._bindHotkeys();
     this.fetchFullState();
     this._connectSSE();
   }
@@ -729,6 +852,23 @@ class F1App {
       else if (cmd === "pace") payload.pace_mode = val;
       else if (cmd === "ers") payload.ers_mode = val;
       else if (cmd === "order") payload.team_order = val;
+      else if (cmd === "wing_adjust") payload.wing_adjust = Number(val);
+      else if (cmd === "apply_advice") payload.apply_advice = true;
+      else if (cmd === "resume_red_flag") payload.resume_red_flag = true;
+      else if (cmd === "rf_comp") payload.red_flag_compound = val;
+      else if (cmd === "quali_send_now") payload.quali_send_now = true;
+      else if (cmd === "quali_hold") payload.quali_hold = val === "true";
+      else if (cmd === "quali_auto") payload.quali_auto = val === "true";
+      else if (cmd === "quali_tow_pair") payload.quali_tow_pair = true;
+      else if (cmd === "practice_run") {
+        const resP = await this.apiPost("/api/practice_run", { driver_id: driverId, program: val });
+        if (resP.ok) {
+          this.showToast(`FP FEEDBACK (${this._driverTag(driverId)}): Confidence ${Math.round(resP.confidence)}% · ${resP.feedback?.hint || "Complete"}`);
+          this.fetchFullState();
+          this.lastDomSyncMs = 0;
+        }
+        return;
+      }
 
       const res = await this.apiPost("/api/pit_wall", payload);
       if (res.ok) {
@@ -741,10 +881,60 @@ class F1App {
               this.renderPitWall(this.liveTick);
             }
           }
+        } else if (cmd === "box" && this.liveTick?.cars) {
+          const myCar = this.liveTick.cars.find(c => c.id === driverId);
+          if (myCar) {
+            myCar.box = payload.box_this_lap;
+            this.renderPitWall(this.liveTick);
+          }
         }
         this.lastDomSyncMs = 0;
       }
     });
+
+    const compactBtn = document.getElementById("btn-pw-compact");
+    if (compactBtn) {
+      compactBtn.addEventListener("click", () => this.toggleCompactPitWall());
+    }
+    const hkBtn = document.getElementById("btn-hotkeys");
+    const hkPop = document.getElementById("hotkeys-popover");
+    if (hkBtn && hkPop) {
+      hkBtn.addEventListener("click", () => {
+        hkPop.classList.toggle("hidden");
+        hkBtn.classList.toggle("active", !hkPop.classList.contains("hidden"));
+      });
+    }
+    const focusPills = document.getElementById("pw-focus-pills");
+    if (focusPills) {
+      focusPills.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-focus-idx]");
+        if (!btn) return;
+        this.focusedCarIdx = Number(btn.dataset.focusIdx) || 0;
+        if (this.liveTick) this.renderPitWall(this.liveTick);
+      });
+    }
+    const replayBtn = document.getElementById("btn-replay");
+    if (replayBtn) {
+      replayBtn.addEventListener("click", () => {
+        if (this.replayActive) this.stopReplay();
+        else this.startReplay();
+      });
+    }
+    const exitReplayBtn = document.getElementById("btn-exit-replay");
+    if (exitReplayBtn) {
+      exitReplayBtn.addEventListener("click", () => this.stopReplay());
+    }
+    const exitScenBtn = document.getElementById("btn-exit-scenario");
+    if (exitScenBtn) {
+      exitScenBtn.addEventListener("click", async () => {
+        const res = await this.apiPost("/api/exit_scenario");
+        if (res.ok) {
+          this.stopReplay();
+          this.showToast("SCENARIO EXITED: Returned to Career Championship");
+          this.fetchFullState();
+        }
+      });
+    }
 
     const modal = document.getElementById("team-modal");
     document.getElementById("btn-open-team-modal").addEventListener("click", () => {
@@ -927,12 +1117,245 @@ class F1App {
     }
   }
 
+  toggleCompactPitWall() {
+    this.compactPitWall = !this.compactPitWall;
+    const dock = document.getElementById("pitwall-dock");
+    const btn = document.getElementById("btn-pw-compact");
+    if (dock) dock.classList.toggle("pw-compact", this.compactPitWall);
+    if (btn) btn.classList.toggle("active", this.compactPitWall);
+  }
+
+  startReplay() {
+    if (!this.replayBuffer || this.replayBuffer.length < 4) {
+      this.showToast("REPLAY BUFFERING: Need at least 1s of live telemetry");
+      return;
+    }
+    this.replayActive = true;
+    this.replayIdx = 0;
+    this.renderer.resetInterpolation();
+    document.getElementById("btn-replay")?.classList.add("active");
+    document.getElementById("replay-banner")?.classList.remove("hidden");
+    clearInterval(this._replayTimer);
+    this._replayTimer = setInterval(() => {
+      if (!this.replayActive || this.replayIdx >= this.replayBuffer.length) {
+        this.stopReplay();
+        return;
+      }
+      const frame = this.replayBuffer[this.replayIdx];
+      this.renderer.pushTick(frame);
+      const secLeft = ((this.replayBuffer.length - this.replayIdx) * 0.05).toFixed(1);
+      const offEl = document.getElementById("replay-offset");
+      if (offEl) offEl.textContent = `-${secLeft}s`;
+      this.replayIdx += 1;
+    }, 50);
+  }
+
+  stopReplay() {
+    if (!this.replayActive) return;
+    this.replayActive = false;
+    clearInterval(this._replayTimer);
+    this._replayTimer = null;
+    this.renderer.resetInterpolation();
+    if (this.liveTick) this.renderer.pushTick(this.liveTick);
+    document.getElementById("btn-replay")?.classList.remove("active");
+    document.getElementById("replay-banner")?.classList.add("hidden");
+  }
+
+  _bindHotkeys() {
+    window.addEventListener("keydown", async (e) => {
+      const tag = e.target?.tagName || "";
+      if (["INPUT", "TEXTAREA", "SELECT"].includes(tag) || e.ctrlKey || e.metaKey || e.altKey) return;
+      const key = e.key;
+      const low = key.toLowerCase();
+      const tick = this.liveTick;
+
+      if (key === "Escape") {
+        document.getElementById("hotkeys-popover")?.classList.add("hidden");
+        document.getElementById("btn-hotkeys")?.classList.remove("active");
+        if (this.replayActive) this.stopReplay();
+        return;
+      }
+      if (key === "?" || low === "h") {
+        const pop = document.getElementById("hotkeys-popover");
+        if (pop) {
+          pop.classList.toggle("hidden");
+          document.getElementById("btn-hotkeys")?.classList.toggle("active", !pop.classList.contains("hidden"));
+        }
+        return;
+      }
+      if (low === "c") {
+        this.toggleCompactPitWall();
+        return;
+      }
+      if (low === "r") {
+        if (this.replayActive) this.stopReplay();
+        else this.startReplay();
+        return;
+      }
+      if (key === " ") {
+        e.preventDefault();
+        const nextSpd = tick && tick.sim_speed > 0 ? 0 : 1;
+        await this.apiPost("/api/speed", { speed: nextSpd });
+        return;
+      }
+      if (key === "[" || key === "]") {
+        const speeds = [0, 0.5, 1, 2, 4, 8, 16];
+        const curIdx = tick ? speeds.findIndex((s) => Math.abs(s - tick.sim_speed) < 0.05) : 2;
+        const nextIdx = Math.max(0, Math.min(speeds.length - 1, (curIdx >= 0 ? curIdx : 2) + (key === "]" ? 1 : -1)));
+        await this.apiPost("/api/speed", { speed: speeds[nextIdx] });
+        return;
+      }
+      if (!tick || !tick.cars) return;
+      const myCars = tick.cars.filter((c) => c.tid === tick.player_team_id);
+      if (myCars.length === 0) return;
+
+      if (key === "1" || key === "2") {
+        const idx = key === "1" ? 0 : Math.min(1, myCars.length - 1);
+        this.focusedCarIdx = idx;
+        this.selectDriver(myCars[idx].id);
+        this.renderPitWall(tick);
+        return;
+      }
+
+      const focus = myCars[Math.min(this.focusedCarIdx, myCars.length - 1)];
+      if (!focus) return;
+      const isQuali = tick.phase === "QUALIFYING" || tick.phase === "SPRINT_QUALIFYING";
+      const isRace = (tick.phase === "RACE" || tick.phase === "SPRINT_RACE") && !focus.dnf;
+
+      if (low === "b") {
+        if (isQuali && focus.quali_phase === "GARAGE") {
+          await this.apiPost("/api/pit_wall", { driver_id: focus.id, quali_send_now: true });
+        } else if (isRace) {
+          await this.apiPost("/api/pit_wall", { driver_id: focus.id, box_this_lap: !focus.box });
+        }
+      } else if (low === "p" && isRace) {
+        const paces = ["CONSERVE", "BALANCED", "PUSH", "ATTACK"];
+        const nxt = paces[(paces.indexOf(focus.pace) + 1) % paces.length];
+        await this.apiPost("/api/pit_wall", { driver_id: focus.id, pace_mode: nxt });
+      } else if (low === "e" && isRace) {
+        const ersModes = ["HARVEST", "AUTO", "BOOST", "OVERTAKE"];
+        const nxt = ersModes[(ersModes.indexOf(focus.ers) + 1) % ersModes.length];
+        await this.apiPost("/api/pit_wall", { driver_id: focus.id, ers_mode: nxt });
+      } else if (low === "l" && isRace) {
+        await this.apiPost("/api/pit_wall", { driver_id: focus.id, lift_coast: !focus.lift_coast });
+      } else if (low === "w" && isRace) {
+        const wings = [-1, 0, 1];
+        const nxt = wings[(wings.indexOf(focus.w_adj ?? 0) + 1) % wings.length];
+        await this.apiPost("/api/pit_wall", { driver_id: focus.id, wing_adjust: nxt });
+      }
+    });
+  }
+
   onLiveTick(tick) {
     const prevPhase = this.liveTick ? this.liveTick.phase : "";
+    const prevTick = this.liveTick;
     this.liveTick = tick;
-    this.renderer.pushTick(tick);
+
+    const rKey = `${tick.track_id}:${tick.phase}`;
+    if (rKey !== this._replayKey) {
+      this._replayKey = rKey;
+      this.replayBuffer = [];
+      if (this.replayActive) this.stopReplay();
+    }
+    if (!this.replayActive && tick.sim_speed > 0 && tick.cars && tick.cars.length > 0) {
+      this.replayBuffer.push({
+        tick: tick.tick,
+        phase: tick.phase,
+        flag: tick.flag,
+        wetness: tick.wetness,
+        groove_wetness: tick.groove_wetness,
+        offline_wetness: tick.offline_wetness,
+        track_rubber: tick.track_rubber,
+        player_team_id: tick.player_team_id,
+        sc: tick.sc,
+        cars: tick.cars.map((c) => ({ ...c })),
+      });
+      if (this.replayBuffer.length > 200) this.replayBuffer.shift();
+    }
+
+    if (!this.replayActive) {
+      this.renderer.pushTick(tick);
+    }
     if (this.audio) {
       this.audio.update(tick, this.selectedDriverId, this.renderer.cameraMode);
+      // 1) 5-Red-Lights gantry countdown & Go beep
+      const litNow = (tick.flag === "LIGHTS" && tick.lights > 0) ? Math.min(5, Math.max(1, Math.ceil(6.0 - tick.lights))) : 0;
+      if (litNow > this._lastLightsCount) {
+        this.audio.playStartLightBeep(false);
+      } else if (this._lastLightsCount > 0 && litNow === 0 && tick.flag === "GREEN") {
+        this.audio.playStartLightBeep(true);
+      }
+      this._lastLightsCount = litNow;
+
+      // 2) Flag transition chime
+      if (prevTick && tick.flag !== this._lastFlagSound && ["YELLOW", "VSC", "SC", "RED_FLAG", "CHEQUERED"].includes(tick.flag)) {
+        this.audio.playFlagChime(tick.flag);
+      }
+      this._lastFlagSound = tick.flag;
+
+      // 3) Player car pit stop wrench / air gun sound
+      for (const c of (tick.cars || [])) {
+        if (c.tid === tick.player_team_id) {
+          const prevPh = this._prevPitPhases.get(c.id);
+          if ((prevPh !== "STOPPED" && c.pit_ph === "STOPPED") || (prevPh === "STOPPED" && c.pit_ph === "EXIT")) {
+            this.audio.playPitGun();
+          }
+          this._prevPitPhases.set(c.id, c.pit_ph);
+        }
+      }
+    }
+
+    // 4) New radio chime & instant replay pulse on major incidents
+    const evs = tick.events || [];
+    if (evs.length > 0) {
+      const maxId = evs[evs.length - 1].id;
+      if (this._lastEventSfxId >= 0) {
+        for (const ev of evs) {
+          if (ev.id <= this._lastEventSfxId) continue;
+          if (this.audio && (ev.kind === "RADIO" || ev.kind === "STRATEGY" || ev.kind === "TEAM_ORDER")) {
+            this.audio.playRadioChirp();
+          }
+          if (ev.kind === "CRASH" || ev.kind === "SC" || ev.kind === "RED_FLAG") {
+            const rb = document.getElementById("btn-replay");
+            if (rb) {
+              rb.classList.add("pulse");
+              clearTimeout(this._replayPulseTimer);
+              this._replayPulseTimer = setTimeout(() => rb.classList.remove("pulse"), 5000);
+            }
+          }
+        }
+      }
+      this._lastEventSfxId = maxId;
+    }
+
+    // Telemetry sparkline sample buffer
+    const selCar = (tick.cars || []).find((c) => c.id === this.selectedDriverId) || tick.cars?.[0];
+    if (selCar) {
+      if (selCar.id !== this._telHistDriverId) {
+        this._telHistDriverId = selCar.id;
+        this.telHistory = [];
+      }
+      this.telHistory.push({ kph: selCar.kph, bat: selCar.bat, braking: selCar.braking });
+      if (this.telHistory.length > 60) this.telHistory.shift();
+    }
+
+    // Director cam & Scenario banners
+    const dirPill = document.getElementById("director-pill");
+    if (dirPill) {
+      const showDir = this.renderer.cameraMode === "director" && Boolean(this.renderer.directorStatus);
+      dirPill.classList.toggle("hidden", !showDir);
+      if (showDir) dirPill.textContent = `DIR: ${this.renderer.directorStatus}`;
+    }
+    const scenBan = document.getElementById("scenario-banner");
+    if (scenBan) {
+      const sc = tick.active_scenario;
+      scenBan.classList.toggle("hidden", !sc);
+      if (sc) {
+        const stEl = document.getElementById("scenario-title-text");
+        const sgEl = document.getElementById("scenario-goal-text");
+        if (stEl) stEl.textContent = sc.title;
+        if (sgEl) sgEl.textContent = sc.goal;
+      }
     }
 
     const roundKey = `${tick.season}-${tick.round}-${tick.track_id}`;
@@ -1006,8 +1429,13 @@ class F1App {
       skipBtn.textContent = "LIGHTS OUT >>";
       skipBtn.title = "Skip grid walk countdown and start the 5 Red Lights sequence immediately";
     } else if (tick.phase === "RACE") {
-      skipBtn.textContent = "SIM RACE >>";
-      skipBtn.title = "Fast-simulate the remaining laps of the Grand Prix to the Chequered Flag";
+      if (tick.flag === "RED_FLAG") {
+        skipBtn.textContent = "RESUME RESTART >>";
+        skipBtn.title = "End Red Flag stoppage and start the 5-light Standing Restart";
+      } else {
+        skipBtn.textContent = "SIM RACE >>";
+        skipBtn.title = "Fast-simulate the remaining laps of the Grand Prix to the Chequered Flag";
+      }
     } else if (tick.phase === "PODIUM") {
       skipBtn.textContent = tick.round >= tick.total_rounds ? "OFF-SEASON >>" : "NEXT ROUND >>";
       skipBtn.title = "Skip podium celebration and advance to the next Grand Prix weekend";
@@ -1030,6 +1458,9 @@ class F1App {
     } else if (tick.flag === "SC") {
       flagEl.textContent = tick.sc && tick.sc.in_lap ? "SC IN THIS LAP" : "SAFETY CAR";
       flagEl.classList.add("flag-sc");
+    } else if (tick.flag === "RED_FLAG") {
+      flagEl.textContent = `RED FLAG ${tick.red_flag_timer ? `${tick.red_flag_timer.toFixed(0)}S` : ""}`;
+      flagEl.classList.add("flag-lights");
     } else if (tick.flag === "CHEQUERED") {
       flagEl.textContent = "CHEQUERED FLAG";
       flagEl.classList.add("flag-cheq");
@@ -1046,6 +1477,12 @@ class F1App {
     document.getElementById("hdr-team-stripe").style.background = tick.player_team_color;
     document.getElementById("hdr-team-name").textContent = tick.player_team_short.toUpperCase();
     document.getElementById("hdr-budget").textContent = `$${tick.player_budget_m.toFixed(1)}M`;
+    const brdEl = document.getElementById("hdr-board");
+    if (brdEl && tick.board_confidence != null) {
+      const bc = Number(tick.board_confidence);
+      brdEl.textContent = `BRD ${bc}%`;
+      brdEl.style.color = bc >= 80 ? "#00d26a" : bc >= 55 ? "#00d2be" : bc >= 35 ? "#ffd000" : "#ff3b30";
+    }
     if (this._lastHeaderLogoTeam !== tick.player_team_id) {
       this._lastHeaderLogoTeam = tick.player_team_id;
       document.getElementById("hdr-team-logo").innerHTML = teamLogoSVG(tick.player_team_id, 20);
@@ -1257,43 +1694,111 @@ class F1App {
 
   renderPitWall(tick) {
     const wrap = document.getElementById("pitwall-cards");
+    const dock = document.getElementById("pitwall-dock");
+    if (dock) dock.classList.toggle("pw-compact", Boolean(this.compactPitWall));
     document.getElementById("pw-title").textContent = `${tick.player_team_short.toUpperCase()} STRATEGY WALL`;
 
+    const isQuali = tick.phase === "QUALIFYING" || tick.phase === "SPRINT_QUALIFYING";
+    const isRedFlag = tick.flag === "RED_FLAG";
+    const radarEl = document.getElementById("pw-radar");
+    if (radarEl) {
+      const wr = tick.weather_radar;
+      if (wr && wr.bands && (tick.phase === "RACE" || tick.phase === "SPRINT_RACE")) {
+        radarEl.classList.remove("hidden");
+        const tCol = wr.trend === "APPROACHING" || wr.trend === "RAINING" ? "#ff9f1c" : wr.trend === "CLOUDY" ? "#ffd000" : "#00d2be";
+        const bars = wr.bands.map((b) => {
+          const h = Math.max(2, Math.round((b.pct / 100) * 11));
+          const col = b.pct >= 60 ? "#38bdf8" : b.pct >= 35 ? "#ffd000" : "#00d2be";
+          return `<span class="pw-radar-col" title="${b.label}: ${b.pct}% rain probability"><span class="pw-radar-bar" style="height:${h}px;background:${col}"></span></span>`;
+        }).join("");
+        const pctStr = wr.bands.map((b) => `${b.label}:${b.pct}%`).join(" ");
+        radarEl.innerHTML = `<span style="color:${tCol}">RADAR ${wr.trend}</span><span class="pw-radar-bars">${bars}</span><span style="color:#9ea2bd;font-size:9px">${pctStr}</span>`;
+      } else {
+        radarEl.classList.add("hidden");
+      }
+    }
+
+    const gripEl = document.getElementById("pw-grip");
+    if (gripEl) {
+      if (isQuali && tick.track_evo_pct != null) {
+        gripEl.classList.remove("hidden");
+        gripEl.textContent = `TRACK EVO ${tick.track_evo_pct}%`;
+      } else if ((tick.phase === "RACE" || tick.phase === "SPRINT_RACE") && tick.track_rubber != null) {
+        gripEl.classList.remove("hidden");
+        gripEl.textContent = `RUBBER ${tick.track_rubber}%`;
+      } else {
+        gripEl.classList.add("hidden");
+      }
+    }
+
     const myCars = tick.cars.filter((c) => c.tid === tick.player_team_id);
+    const focusWrap = document.getElementById("pw-focus-pills");
+    if (focusWrap) {
+      if (myCars.length > 0) {
+        if (this.focusedCarIdx >= myCars.length) this.focusedCarIdx = 0;
+        focusWrap.innerHTML = myCars.map((c, idx) =>
+          `<button class="pw-focus-pill ${this.focusedCarIdx === idx ? "active" : ""}" data-focus-idx="${idx}">[${idx + 1}] ${c.code}</button>`
+        ).join("");
+      } else {
+        focusWrap.innerHTML = "";
+      }
+    }
+
     if (myCars.length === 0) {
       if (tick.phase === "PRE_WEEKEND" && this.fullState) {
         const myDrivers = (this.fullState.drivers || []).filter((d) => d.team_id === this.fullState.player_team_id);
         const setups = this.fullState.driver_setups || {};
         const locked = Boolean(tick.parc_ferme);
         const prof = tick.track_profile || this.fullState.track_profile || {};
+        const pState = tick.practice_state || {};
         wrap.innerHTML = myDrivers
-          .map((d) => {
-            const curDf = setups[d.id] != null ? setups[d.id] : (prof.recommended_df || 0);
+          .map((d, idx) => {
+            const curDf = setups[d.id] != null ? setups[d.id] : 0;
+            const ps = pState[d.id] || {};
+            const runsLeft = ps.runs_left ?? (this.fullState.practice_runs_left?.[d.id] ?? 3);
+            const conf = Math.round(ps.confidence ?? (this.fullState.driver_setup_confidence?.[d.id] ?? 55));
+            const fbList = ps.feedback || this.fullState.practice_feedback?.[d.id] || [];
+            const lastFb = fbList.length > 0 ? fbList[fbList.length - 1] : null;
+            const bonuses = ps.bonuses || this.fullState.practice_bonuses?.[d.id] || {};
+            const confCol = conf >= 88 ? "#00d26a" : conf >= 70 ? "#00d2be" : "#ffd000";
             return `
-              <div class="pw-card" style="border-top-color:${d.team_color || "#00d2be"}">
+              <div class="pw-card ${this.focusedCarIdx === idx ? "pw-focused" : ""}" style="border-top-color:${d.team_color || "#00d2be"}">
                 <div class="pw-top">
                   <div class="pw-driver">
+                    <span class="pw-keycap">${idx + 1}</span>
                     ${teamLogoSVG(d.team_id, 16)}
                     <span>#${d.number} ${d.name}</span>
-                    <span class="badge" style="background:#1c2030;color:#00d2be">OVR ${d.overall}</span>
+                    <span class="badge" style="background:#1c2030;color:${confCol}">CONF ${conf}%</span>
+                    <span class="badge" style="background:#141724;color:#9ea2bd">RUNS ${runsLeft}/3</span>
+                    ${bonuses.quali_prep ? `<span class="badge b-ovt">Q-SIM</span>` : ""}
+                    ${bonuses.long_run_prep ? `<span class="badge b-str">LONG-RUN</span>` : ""}
+                    ${bonuses.wet_prep ? `<span class="badge b-drs">WET-PREP</span>` : ""}
                   </div>
                   <div class="pw-metrics">
-                    <span>TRACK <strong>${prof.label || "BALANCED"}</strong></span>
-                    <span>REC WING <strong>${prof.recommended_df != null ? (prof.recommended_df >= 0 ? `+${prof.recommended_df}` : prof.recommended_df) : "0"}</strong></span>
-                    <span style="color:${locked ? "#ff3b30" : "#00d26a"}"><strong>${locked ? "PARC FERME LOCKED" : "GARAGE SETUP OPEN"}</strong></span>
+                    <span>DNA <strong>${prof.category || "BALANCED"}</strong></span>
+                    <span style="color:${locked ? "#ff3b30" : "#00d26a"}"><strong>${locked ? "PARC FERME LOCKED" : "PRACTICE GARAGE"}</strong></span>
                   </div>
                 </div>
                 <div class="pw-controls">
-                  <div class="pw-group" title="Pre-Weekend Wing Downforce (-2 Low Drag Speed .. +2 High Cornering Grip)">
-                    <span class="pw-lbl">WING SETUP</span>
-                    ${[-2, -1, 0, 1, 2]
-                      .map((lvl) => {
-                        const lbl = lvl === 0 ? "0 BAL" : lvl > 0 ? `+${lvl} DF` : `${lvl} SPD`;
-                        return `<button class="pw-btn ${curDf === lvl ? "active" : ""}" ${locked ? "disabled" : ""} data-pw-cmd="setup_df" data-drv="${d.id}" data-val="${lvl}">${lbl}</button>`;
-                      })
-                      .join("")}
+                  <div class="pw-action-row">
+                    <div class="pw-group" title="Practice Programme: gather driver setup feedback &amp; weekend prep bonus">
+                      <span class="pw-lbl">PRACTICE</span>
+                      <button class="pw-btn release-cta" ${locked || runsLeft <= 0 ? "disabled" : ""} data-pw-cmd="practice_run" data-drv="${d.id}" data-val="QUALI_SIM">QUALI SIM</button>
+                      <button class="pw-btn" ${locked || runsLeft <= 0 ? "disabled" : ""} data-pw-cmd="practice_run" data-drv="${d.id}" data-val="LONG_RUN">LONG RUN</button>
+                      <button class="pw-btn" ${locked || runsLeft <= 0 ? "disabled" : ""} data-pw-cmd="practice_run" data-drv="${d.id}" data-val="WET_PREP">WET PREP</button>
+                    </div>
+                    <div class="pw-group" title="Wing Setup (-2 Low Drag .. +2 High Downforce)">
+                      <span class="pw-lbl">WING</span>
+                      ${[-2, -1, 0, 1, 2]
+                        .map((lvl) => {
+                          const lbl = lvl === 0 ? "0" : lvl > 0 ? `+${lvl}` : `${lvl}`;
+                          return `<button class="pw-btn ${curDf === lvl ? "active" : ""}" ${locked ? "disabled" : ""} data-pw-cmd="setup_df" data-drv="${d.id}" data-val="${lvl}">${lbl}</button>`;
+                        })
+                        .join("")}
+                    </div>
                   </div>
                 </div>
+                <div class="pw-prac-fb">${lastFb ? `<strong>${lastFb.hint}:</strong> "${lastFb.quote}"` : "Run Practice Sims to dial in downforce balance before Parc Ferme locks at Qualifying."}</div>
               </div>
             `;
           })
@@ -1304,14 +1809,90 @@ class F1App {
       return;
     }
 
-    wrap.innerHTML = myCars
-      .map((c) => {
+    // INTERACTIVE QUALIFYING PIT WALL
+    if (isQuali) {
+      const qt = tick.quali_traffic || { on_track: 0, sectors: [0, 0, 0], density: "CLEAN" };
+      const densCol = qt.density === "CLEAN" ? "#00d26a" : qt.density === "MODERATE" ? "#ffd000" : "#ff3b30";
+      const anyGarage = myCars.some((c) => !c.elim && c.quali_phase === "GARAGE");
+      const bannerHtml = `
+        <div class="pw-banner-strip">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <span>TRAFFIC: <strong style="color:${densCol}">${qt.density} (${qt.on_track} ON TRACK)</strong></span>
+            <span style="color:#9ea2bd">S1:${qt.sectors[0]} · S2:${qt.sectors[1]} · S3:${qt.sectors[2]}</span>
+            <span style="color:#00d2be">TRACK EVO <strong>+${tick.track_evo_pct ?? 0}%</strong></span>
+          </div>
+          <button class="pw-btn release-cta" ${anyGarage ? "" : "disabled"} data-pw-cmd="quali_tow_pair" data-drv="${myCars[0].id}" title="Release both garage cars 1.65s apart for Qualifying slipstream tow">
+            SEND TOW PAIR
+          </button>
+        </div>
+      `;
+      const cardsHtml = myCars
+        .map((c, idx) => {
+          const tm = TIRE_META[c.comp] || TIRE_META.SOFT;
+          const inGar = c.quali_phase === "GARAGE" && !c.elim;
+          const canSend = inGar && tick.clock > 25;
+          const focusedCls = this.focusedCarIdx === idx ? "pw-focused" : "";
+          const qpCol = c.quali_phase === "PUSH" ? "#00d26a" : c.quali_phase === "OUTLAP" ? "#00d2be" : "#ffd000";
+          return `
+            <div class="pw-card ${focusedCls}" style="border-top-color:${c.tcol}">
+              <div class="pw-top">
+                <div class="pw-driver">
+                  <span class="pw-keycap">${idx + 1}</span>
+                  ${teamLogoSVG(c.tid, 16)}
+                  <span>P${c.pos} #${c.num} ${c.name}</span>
+                  <span class="badge" style="background:#1c2030;color:${qpCol}">${c.elim ? `OUT ${c.estg}` : c.quali_phase}</span>
+                  ${c.q_tow > 0.02 ? `<span class="badge b-ovt">TOW +${c.q_tow.toFixed(2)}s</span>` : ""}
+                </div>
+                <div class="pw-metrics">
+                  <span>BEST <strong>${fmtLap(c.best)}</strong></span>
+                  <span><span class="pirelli-badge" style="border-color:${tm.color};width:14px;height:14px;font-size:8.5px">${tm.code}</span> ${100 - c.wear}%</span>
+                </div>
+              </div>
+              <div class="pw-controls">
+                <div class="pw-action-row">
+                  <div class="pw-group">
+                    <button class="pw-btn release-cta" ${canSend ? "" : "disabled"} data-pw-cmd="quali_send_now" data-drv="${c.id}" title="Release immediately onto Qualifying outlap [B]">SEND NOW [B]</button>
+                    <button class="pw-btn ${c.q_hold ? "hold-active" : ""}" ${c.elim ? "disabled" : ""} data-pw-cmd="quali_hold" data-drv="${c.id}" data-val="${!c.q_hold}">${c.q_hold ? "HOLDING" : "HOLD"}</button>
+                    <button class="pw-btn ${c.q_auto ? "auto-on" : ""}" ${c.elim ? "disabled" : ""} data-pw-cmd="quali_auto" data-drv="${c.id}" data-val="${!c.q_auto}">${c.q_auto ? "AUTO REL" : "MAN REL"}</button>
+                  </div>
+                  <div class="pw-group" title="Garage Qualifying Tyre Compound">
+                    <span class="pw-lbl">TYRE</span>
+                    ${["SOFT", "MEDIUM", "INTER", "WET"]
+                      .map((k) => {
+                        const setsLeft = c.tsets?.[k] ?? 0;
+                        const active = c.comp === k;
+                        const disTyre = !inGar || (!active && setsLeft <= 0);
+                        return `<button class="pw-btn ${active ? "active" : ""}" ${disTyre ? "disabled" : ""} data-pw-cmd="ncomp" data-drv="${c.id}" data-val="${k}" style="color:${active ? "" : TIRE_META[k].color}">${TIRE_META[k].code}(${setsLeft})</button>`;
+                      })
+                      .join("")}
+                  </div>
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+      wrap.innerHTML = bannerHtml + cardsHtml;
+      return;
+    }
+
+    const rfBannerHtml = isRedFlag ? `
+      <div class="pw-banner-strip red-flag">
+        <div>
+          <strong style="color:#ff4d4f">RED FLAG SUSPENDED:</strong>
+          <span>${tick.red_flag_reason || "Track Blocked"} · Wing Repairs Complete · Select FREE restart tyres (${tick.red_flag_timer.toFixed(0)}s)</span>
+        </div>
+        <button class="pw-btn release-cta" data-pw-cmd="resume_red_flag" data-drv="${myCars[0].id}">RESUME RESTART &gt;&gt;</button>
+      </div>
+    ` : "";
+
+    const cardsHtml = myCars
+      .map((c, idx) => {
         const tm = TIRE_META[c.comp] || TIRE_META.MEDIUM;
         const isPreRace = tick.phase === "GRID_WALK"
-          || tick.phase === "PRE_WEEKEND"
           || tick.flag === "GRID"
           || tick.flag === "LIGHTS"
-          || ((tick.phase === "RACE" || tick.phase === "SPRINT_RACE") && (tick.lights > 0 || (c.lap <= 1 && c.kph < 25)));
+          || ((tick.phase === "RACE" || tick.phase === "SPRINT_RACE") && (tick.lights > 0 || (c.lap <= 1 && c.kph < 25 && !isRedFlag)));
         const isRace = (tick.phase === "RACE" || tick.phase === "SPRINT_RACE") && !c.dnf;
         const dis = (isRace || isPreRace) ? "" : "disabled";
         const isV8 = tick.regulations && tick.regulations.era_id === "V8_DRS";
@@ -1320,145 +1901,158 @@ class F1App {
         const aeroColor = (c.aero === "DRS" || c.drs) ? "#00d26a" : (c.aero === "STRAIGHT" ? "#00d2be" : "#ffffff");
         const tCol = getTempColor(c.comp, c.ttemp);
         const tStat = getTempStatus(c.comp, c.ttemp);
+        const wearLeft = Math.max(0, 100 - c.wear);
+        const wearCol = wearLeft <= 25 ? "#ff3b30" : wearLeft <= 50 ? "#ffd000" : "#00d26a";
+        const batPct = Math.min(100, Math.max(0, c.bat));
+        const batCol = c.rech ? "#ffd000" : "#00d2be";
+        const fuelPct = Math.min(100, Math.max(0, c.fuel_pct ?? 100));
         const fuelMargin = c.fuel_margin != null ? c.fuel_margin : 0.0;
         const fuelCol = fuelMargin < -0.15 ? "#ff3b30" : fuelMargin < 0.25 ? "#ffd000" : "#00d26a";
         const trafS = c.rejoin_traffic_s != null ? c.rejoin_traffic_s : null;
         const rejoinCol = trafS != null && trafS < 1.2 ? "#ff3b30" : trafS != null && trafS < 2.2 ? "#ffd000" : "#00d2be";
-        const rejoinBadge = (isRace && c.rejoin_pos != null && !c.in_pit)
-          ? `<span class="pw-rejoin-pill" style="color:${rejoinCol}">REJOIN P${c.rejoin_pos} (${trafS != null && trafS < 2.2 ? `+${trafS.toFixed(1)}s` : "CLEAR"})</span>`
+        const rejoinBadge = (isRace && !isRedFlag && c.rejoin_pos != null && !c.in_pit)
+          ? `<span class="pw-rejoin-pill" style="color:${rejoinCol}">REJOIN P${c.rejoin_pos} (${trafS != null && trafS < 2.2 ? `+${trafS.toFixed(1)}s` : "CLR"})</span>`
           : "";
+        const fcst = c.forecast;
+        const fcstHtml = fcst
+          ? `<span class="pw-fcst ${fcst.type === "CATCH" ? "catch" : "defend"}" title="Pace rate: ${fcst.rate_s}s/lap">${fcst.type} ${fcst.target} ${fcst.laps}L</span>`
+          : "";
+        const morale = c.morale != null ? c.morale : 75;
+        const moraleCol = morale >= 80 ? "#00d26a" : morale >= 50 ? "#9ea2bd" : "#ff6b6b";
+        const wAdj = c.w_adj ?? 0;
+        const advObj = c.advice && typeof c.advice === "object" ? c.advice : null;
+        const showApply = isRace && !isRedFlag && advObj && advObj.action === "BOX" && !c.box && !c.in_pit;
+        const focusedCls = this.focusedCarIdx === idx ? "pw-focused" : "";
+
         return `
-          <div class="pw-card" style="border-top-color:${c.tcol}">
+          <div class="pw-card ${focusedCls}" style="border-top-color:${c.tcol}">
+            <!-- TIER 1: DRIVER IDENTITY & STATUS BADGES -->
             <div class="pw-top">
               <div class="pw-driver">
+                <span class="pw-keycap">${idx + 1}</span>
                 ${teamLogoSVG(c.tid, 16)}
-                <span>P${c.pos}  #${c.num} ${c.name}</span>
-                ${c.man ? `<span class="badge b-man">${c.man}</span>` : ""}
-                ${(c.drs || c.aero === "DRS") ? `<span class="badge b-drs">DRS ACTIVE</span>` : c.drs_elig ? `<span class="badge b-drs-arm">DRS ARMED</span>` : c.ovt ? `<span class="badge b-ovt">OVT DEPLOY</span>` : c.ovt_elig ? `<span class="badge b-elig">OVT ARMED</span>` : ""}
-                ${c.elim ? `<span class="badge b-elim">OUT ${c.estg}</span>` : ""}
-                ${c.pen > 0 ? `<span class="badge b-pen">+${c.pen}S PEN</span>` : ""}
-                ${c.dmg > 15 ? `<span class="badge b-pen">FW DMG (${c.dmg_side || "FW"} -${c.dmg}%)</span>` : ""}
-                ${c.scrubbed ? `<span class="badge" style="background:#2b2714;color:#ffd000">SCRUB</span>` : ""}
+                <span>P${c.pos} #${c.num} ${c.code}</span>
+                ${fcstHtml}
+                <span class="pw-morale" style="color:${moraleCol}" title="Driver Morale">MOR ${morale}%</span>
+                ${(c.drs || c.aero === "DRS") ? `<span class="badge b-drs">DRS</span>` : c.ovt ? `<span class="badge b-ovt">OVT</span>` : ""}
+                ${c.pen > 0 ? `<span class="badge b-pen">+${c.pen}S</span>` : ""}
+                ${c.dmg > 15 ? `<span class="badge b-pen">FW -${c.dmg}%</span>` : ""}
+                ${c.scrubbed ? `<span class="badge" style="background:#2b2714;color:#ffd000">SCR</span>` : ""}
               </div>
               <div class="pw-metrics">
                 <span><strong>${c.kph}</strong> KPH</span>
-                <span>LAT <strong>${c.g_lat != null ? Math.abs(c.g_lat).toFixed(1) : "0.0"}G</strong></span>
                 <span>AERO <strong style="color:${aeroColor}">${aeroLabel}</strong></span>
-                <span>${ersLabel} <strong>${Math.min(100, Math.max(0, c.bat))}%</strong></span>
-                <span>FUEL <strong style="color:${fuelCol}">${c.fuel_pct != null ? c.fuel_pct : 100}% (${fuelMargin >= 0 ? "+" : ""}${fuelMargin.toFixed(1)}L)</strong></span>
-                <span><span class="pirelli-badge" style="border-color:${tm.color};width:14px;height:14px;font-size:8.5px">${tm.code}</span> ${100 - c.wear}% (${c.tage}L) · <strong style="color:${tCol}" title="Tyre Temperature: ${c.ttemp}°C (${tStat})">${c.ttemp}°C</strong></span>
               </div>
             </div>
 
+            <!-- TIER 2: 4-COLUMN LIVE GAUGE STRIP -->
+            <div class="pw-gauges">
+              <div class="pw-gauge" title="Tyre Remaining (${wearLeft}%, ${c.tage}L old) · ${c.ttemp}°C (${tStat})">
+                <div class="pw-gauge-hdr">
+                  <span><span class="pirelli-badge" style="border-color:${tm.color};width:13px;height:13px;font-size:8px">${tm.code}</span> ${wearLeft}%</span>
+                  <strong style="color:${tCol}">${c.ttemp}°C</strong>
+                </div>
+                <div class="pw-gbar"><span style="width:${wearLeft}%;background:${wearCol}"></span></div>
+              </div>
+              <div class="pw-gauge" title="${ersLabel} Charge (${batPct}%)">
+                <div class="pw-gauge-hdr"><span>${ersLabel}</span><strong>${batPct}%</strong></div>
+                <div class="pw-gbar"><span style="width:${batPct}%;background:${batCol}"></span></div>
+              </div>
+              <div class="pw-gauge" title="Fuel Margin (${fuelMargin >= 0 ? "+" : ""}${fuelMargin.toFixed(1)} laps)">
+                <div class="pw-gauge-hdr"><span>FUEL</span><strong style="color:${fuelCol}">${fuelMargin >= 0 ? "+" : ""}${fuelMargin.toFixed(1)}L</strong></div>
+                <div class="pw-gbar"><span style="width:${fuelPct}%;background:${fuelCol}"></span></div>
+              </div>
+              <div class="pw-gauge" title="Wing Setup (${c.setup_df >= 0 ? "+" : ""}${c.setup_df ?? 0}) &amp; Lateral G">
+                <div class="pw-gauge-hdr"><span>WING</span><strong>${c.setup_df >= 0 ? "+" : ""}${c.setup_df ?? 0} · ${c.g_lat != null ? Math.abs(c.g_lat).toFixed(1) : "0.0"}G</strong></div>
+                <div class="pw-gbar"><span style="width:${Math.min(100, Math.abs(c.g_lat || 0) * 20)}%;background:${aeroColor}"></span></div>
+              </div>
+            </div>
+
+            <!-- TIER 3: ACTION & DRIVING CONTROLS -->
             <div class="pw-controls">
-              <div class="pw-group">
-                <button class="pw-btn ${c.auto ? "auto-on" : ""}" ${dis} data-pw-cmd="auto" data-drv="${c.id}" data-val="${!c.auto}" title="Toggle AI Chief Strategist">
-                  ${c.auto ? "STRAT: AUTO" : "STRAT: MAN"}
-                </button>
-                <button class="pw-btn ${c.box ? "box-active" : ""}" ${dis} data-pw-cmd="box" data-drv="${c.id}" data-val="${!c.box}">
-                  ${c.in_pit ? "IN PIT LANE" : c.box ? "BOX CONFIRMED" : "BOX THIS LAP"}
-                </button>
-                <button class="pw-btn ${c.lift_coast ? "lc-on" : ""}" ${isRace ? "" : "disabled"} data-pw-cmd="lift_coast" data-drv="${c.id}" data-val="${!c.lift_coast}" title="Lift-and-Coast saves fuel (~20%) and cools tyres/PU">
-                  ${c.lift_coast ? "L&C: ON" : "L&C"}
-                </button>
+              <div class="pw-action-row">
+                <div class="pw-group">
+                  <button class="pw-btn ${isRedFlag ? "release-cta" : (c.box ? "box-active" : "box-cta")}" ${dis} data-pw-cmd="${isRedFlag ? "rf_comp" : "box"}" data-drv="${c.id}" data-val="${isRedFlag ? c.ncomp : !c.box}">
+                    ${isRedFlag ? "FIT FREE TYRE" : c.in_pit ? "IN PIT LANE" : c.box ? "BOX CONFIRMED" : "BOX THIS LAP"}
+                  </button>
+                  <button class="pw-btn ${c.auto ? "auto-on" : ""}" ${dis} data-pw-cmd="auto" data-drv="${c.id}" data-val="${!c.auto}" title="Toggle AI Chief Strategist">
+                    ${c.auto ? "AUTO" : "MAN"}
+                  </button>
+                  <button class="pw-btn ${c.lift_coast ? "lc-on" : ""}" ${isRace ? "" : "disabled"} data-pw-cmd="lift_coast" data-drv="${c.id}" data-val="${!c.lift_coast}" title="Lift-and-Coast [L]">L&amp;C</button>
+                </div>
+
+                ${isPreRace ? `
+                <div class="pw-group" title="Select Starting Compound">
+                  <span class="pw-lbl">START</span>
+                  ${["SOFT", "MEDIUM", "HARD", "INTER", "WET"]
+                    .map((k) => {
+                      const setsLeft = c.tsets?.[k] ?? 0;
+                      const isActive = c.comp === k;
+                      return `<button class="pw-btn ${isActive ? "active" : ""}" ${isActive || setsLeft > 0 ? "" : "disabled"} data-pw-cmd="start_comp" data-drv="${c.id}" data-val="${k}" style="color:${isActive ? "" : TIRE_META[k].color}">${TIRE_META[k].code}(${setsLeft})</button>`;
+                    })
+                    .join("")}
+                </div>
+                ` : `
+                <div class="pw-group" title="${isRedFlag ? "Free Red Flag Restart Tyre" : "Next Pit-Stop Tyre Compound"}">
+                  <span class="pw-lbl">${isRedFlag ? "FREE" : "NEXT"}</span>
+                  ${["SOFT", "MEDIUM", "HARD", "INTER", "WET"]
+                    .map((k) => {
+                      const setsLeft = c.tsets?.[k] ?? 0;
+                      const isActive = isRedFlag ? c.comp === k : c.ncomp === k;
+                      const canSel = isRace && (isActive || setsLeft > 0);
+                      return `<button class="pw-btn ${isActive ? "active" : ""}" ${canSel ? "" : "disabled"} data-pw-cmd="${isRedFlag ? "rf_comp" : "ncomp"}" data-drv="${c.id}" data-val="${k}" style="color:${isActive ? "" : TIRE_META[k].color}">${TIRE_META[k].code}(${setsLeft})</button>`;
+                    })
+                    .join("")}
+                  <button class="pw-btn ${c.prefer_fresh === false ? "scrub-on" : ""}" ${isRace ? "" : "disabled"} data-pw-cmd="prefer_fresh" data-drv="${c.id}" data-val="${c.prefer_fresh === false}" title="Prefer Fresh or Scrubbed Quali set">
+                    ${c.prefer_fresh === false ? "SCR" : "FR"}
+                  </button>
+                </div>
+                `}
+
+                <div class="pw-group" title="Front-Wing Pit Flap Adjust (-1/0/+1 clicks, +0.75s in stop) [W]">
+                  <span class="pw-lbl">WING</span>
+                  ${[-1, 0, 1]
+                    .map((v) => `<button class="pw-btn ${wAdj === v ? "active" : ""}" ${isRace && !isRedFlag ? "" : "disabled"} data-pw-cmd="wing_adjust" data-drv="${c.id}" data-val="${v}">${v > 0 ? `+${v}` : v}</button>`)
+                    .join("")}
+                </div>
               </div>
 
-              ${isPreRace ? `
-              <div class="pw-group" title="Select Starting Tyre Compound Before Lights Out (Allocations Remaining)">
-                <span class="pw-lbl" style="color:#00d2be;font-weight:900">START TYRE</span>
-                ${["SOFT", "MEDIUM", "HARD", "INTER", "WET"]
-                  .map((k) => {
-                    const setsLeft = (c.tsets && c.tsets[k] != null) ? c.tsets[k] : 0;
-                    const det = c.tsets_detail?.[k];
-                    const fTag = det ? ` (${det.fresh}F+${det.scrubbed}S)` : "";
-                    const isActive = c.comp === k;
-                    const canSelect = isActive || setsLeft > 0;
-                    const btnDis = canSelect ? "" : "disabled";
-                    const btnStyle = isActive
-                      ? ""
-                      : `color:${TIRE_META[k].color};${setsLeft <= 0 ? "opacity:0.35;cursor:not-allowed;" : ""}`;
-                    return `<button class="pw-btn ${isActive ? "active" : ""}" ${btnDis} data-pw-cmd="start_comp" data-drv="${c.id}" data-val="${k}" style="${btnStyle}" title="${k}: ${setsLeft} set${setsLeft === 1 ? '' : 's'} remaining${fTag}">${TIRE_META[k].code} (${setsLeft})</button>`;
-                  })
-                  .join("")}
-                <button class="pw-btn ${c.prefer_fresh === false ? "scrub-on" : ""}" data-pw-cmd="prefer_fresh" data-drv="${c.id}" data-val="${c.prefer_fresh === false}" title="Prefer Fresh or Scrubbed Qualifying sets when available">
-                  ${c.prefer_fresh === false ? "USE SCRUB" : "USE FRESH"}
-                </button>
-              </div>
-              ` : `
-              <div class="pw-group" title="Next Pit-Stop Tyre Compound (Allocations Remaining)">
-                <span class="pw-lbl">TYRE</span>
-                ${["SOFT", "MEDIUM", "HARD", "INTER", "WET"]
-                  .map((k) => {
-                    const setsLeft = (c.tsets && c.tsets[k] != null) ? c.tsets[k] : 0;
-                    const det = c.tsets_detail?.[k];
-                    const fTag = det ? ` (${det.fresh}F+${det.scrubbed}S)` : "";
-                    const isActive = c.ncomp === k;
-                    const canSelect = isRace && (isActive || setsLeft > 0);
-                    const btnDis = canSelect ? "" : "disabled";
-                    const btnStyle = isActive
-                      ? ""
-                      : `color:${TIRE_META[k].color};${setsLeft <= 0 ? "opacity:0.35;cursor:not-allowed;" : ""}`;
-                    return `<button class="pw-btn ${isActive ? "active" : ""}" ${btnDis} data-pw-cmd="ncomp" data-drv="${c.id}" data-val="${k}" style="${btnStyle}" title="${k}: ${setsLeft} set${setsLeft === 1 ? '' : 's'} remaining${fTag}">${TIRE_META[k].code} (${setsLeft})</button>`;
-                  })
-                  .join("")}
-                <button class="pw-btn ${c.prefer_fresh === false ? "scrub-on" : ""}" ${isRace ? "" : "disabled"} data-pw-cmd="prefer_fresh" data-drv="${c.id}" data-val="${c.prefer_fresh === false}" title="Prefer Fresh or Scrubbed Qualifying sets on next stop">
-                  ${c.prefer_fresh === false ? "SCRUB" : "FRESH"}
-                </button>
-              </div>
-              `}
-
-              <div class="pw-group" title="Target Pace Mode">
-                <span class="pw-lbl">PACE</span>
-                ${[
-                  ["CONSERVE", "CON"],
-                  ["BALANCED", "STD"],
-                  ["PUSH", "PUSH"],
-                  ["ATTACK", "MAX"],
-                ]
-                  .map(
-                    ([k, lbl]) =>
-                      `<button class="pw-btn ${c.pace === k ? "active" : ""}" ${dis} data-pw-cmd="pace" data-drv="${c.id}" data-val="${k}">${lbl}</button>`
-                  )
-                  .join("")}
-              </div>
-
-              <div class="pw-group" title="${isV8 ? "120kW KERS Deployment Profile" : "2026 MGU-K Deployment Profile"}">
-                <span class="pw-lbl">${ersLabel}</span>
-                ${[
-                  ["HARVEST", "HRV"],
-                  ["AUTO", "AUTO"],
-                  ["BOOST", "BST"],
-                  ["OVERTAKE", "OVT"],
-                ]
-                  .map(
-                    ([k, lbl]) =>
-                      `<button class="pw-btn ${c.ers === k ? "active" : ""}" ${dis} data-pw-cmd="ers" data-drv="${c.id}" data-val="${k}">${lbl}</button>`
-                  )
-                  .join("")}
-              </div>
-
-              <div class="pw-group" title="Team Orders">
-                ${[
-                  ["FREE", "RACE"],
-                  ["HOLD", "HOLD"],
-                  ["YIELD", "SWAP"],
-                ]
-                  .map(
-                    ([k, lbl]) =>
-                      `<button class="pw-btn ${c.order === k ? "active" : ""}" ${dis} data-pw-cmd="order" data-drv="${c.id}" data-val="${k}">${lbl}</button>`
-                  )
-                  .join("")}
+              <div class="pw-drive-row">
+                <div class="pw-group" title="Target Pace Mode [P]">
+                  <span class="pw-lbl">PACE</span>
+                  ${[["CONSERVE", "CON"], ["BALANCED", "STD"], ["PUSH", "PSH"], ["ATTACK", "MAX"]]
+                    .map(([k, lbl]) => `<button class="pw-btn pace-${k} ${c.pace === k ? "active" : ""}" ${dis} data-pw-cmd="pace" data-drv="${c.id}" data-val="${k}">${lbl}</button>`)
+                    .join("")}
+                </div>
+                <div class="pw-group" title="${isV8 ? "120kW KERS" : "2026 MGU-K"} Deployment [E]">
+                  <span class="pw-lbl">${ersLabel}</span>
+                  ${[["HARVEST", "HRV"], ["AUTO", "AUTO"], ["BOOST", "BST"], ["OVERTAKE", "OVT"]]
+                    .map(([k, lbl]) => `<button class="pw-btn ers-${k} ${c.ers === k ? "active" : ""}" ${dis} data-pw-cmd="ers" data-drv="${c.id}" data-val="${k}">${lbl}</button>`)
+                    .join("")}
+                </div>
+                <div class="pw-group" title="Team Orders">
+                  <span class="pw-lbl">ORD</span>
+                  ${[["FREE", "RACE"], ["HOLD", "HOLD"], ["YIELD", "SWAP"]]
+                    .map(([k, lbl]) => `<button class="pw-btn ${c.order === k ? "active" : ""}" ${dis} data-pw-cmd="order" data-drv="${c.id}" data-val="${k}">${lbl}</button>`)
+                    .join("")}
+                </div>
               </div>
             </div>
+
+            <!-- TIER 4: STRATEGIST CALLOUT + APPLY + REJOIN GHOST -->
             ${(rejoinBadge || c.advice || c.strategy) ? `
             <div class="pw-advice">
-              <span>${fmtAdvice(c.advice) || c.strategy || ""}</span>
-              ${rejoinBadge}
+              <span>${fmtAdvice(c.advice) || c.strategy || ""}${advObj?.undercut_s ? ` (UCUT ${advObj.undercut_s > 0 ? "+" : ""}${advObj.undercut_s.toFixed(1)}s)` : ""}</span>
+              <div style="display:flex;align-items:center;gap:6px">
+                ${showApply ? `<button class="pw-apply-btn" data-pw-cmd="apply_advice" data-drv="${c.id}">APPLY BOX</button>` : ""}
+                ${rejoinBadge}
+              </div>
             </div>` : ""}
           </div>
         `;
       })
       .join("");
+    wrap.innerHTML = rfBannerHtml + cardsHtml;
   }
 
   renderTelemetry(tick) {
@@ -1543,12 +2137,27 @@ class F1App {
         <strong style="color:#ffffff">${Math.min(100, Math.max(0, car.bat))}%</strong>
       </div>
       <div class="bar-meter"><span style="width:${Math.min(100, Math.max(0, car.bat))}%;background:${car.rech ? "#ffd000" : "#00d2be"}"></span></div>
+      ${(() => {
+        const hist = this.telHistory || [];
+        if (hist.length < 3) return "";
+        const W = 220, H = 36;
+        const step = W / Math.max(1, hist.length - 1);
+        const spdPts = hist.map((p, i) => `${(i * step).toFixed(1)},${(H - 3 - Math.min(1, p.kph / 360) * (H - 6)).toFixed(1)}`).join(" ");
+        const batPts = hist.map((p, i) => `${(i * step).toFixed(1)},${(H - 3 - Math.min(1, p.bat / 100) * (H - 6)).toFixed(1)}`).join(" ");
+        const brkRects = hist.map((p, i) => p.braking ? `<rect x="${(i * step).toFixed(1)}" y="0" width="${Math.max(2, step).toFixed(1)}" height="${H}" fill="rgba(255,59,48,0.16)" />` : "").join("");
+        return `<svg class="tel-sparkline" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" title="Live Trace: Speed (Teal), ERS (Gold), Braking (Red)">
+          ${brkRects}
+          <polyline fill="none" stroke="#ffd000" stroke-width="1.2" stroke-opacity="0.7" points="${batPts}" />
+          <polyline fill="none" stroke="#00d2be" stroke-width="1.6" points="${spdPts}" />
+        </svg>`;
+      })()}
 
       <div class="tel-grid">
         <div class="tel-kv"><span>Compound</span><strong>${car.comp}${car.scrubbed ? " (SCRUB)" : ""} (${100 - car.wear}%)</strong></div>
         <div class="tel-kv"><span>Tyre Temp</span><strong style="color:${tCol}">${car.ttemp}°C (${tStat})</strong></div>
         <div class="tel-kv"><span>Fuel Load</span><strong style="color:${fMargin < 0 ? "#ff4d4f" : "#00d26a"}">${fStr}${car.lift_coast ? " [L&amp;C]" : ""}</strong></div>
         <div class="tel-kv"><span>Wing Setup</span><strong>${setupName} (${car.setup_df >= 0 ? "+" : ""}${car.setup_df ?? 0})</strong></div>
+        <div class="tel-kv"><span>Morale / Setup</span><strong>${car.morale ?? 75}% / ${car.s_conf ?? 65}%</strong></div>
         <div class="tel-kv"><span>Tyre Sets Left</span><strong style="color:#00d2be;font-size:10.5px">${car.tsets ? `S:${car.tsets.SOFT ?? 0} M:${car.tsets.MEDIUM ?? 0} H:${car.tsets.HARD ?? 0} I:${car.tsets.INTER ?? 0} W:${car.tsets.WET ?? 0}` : "—"}</strong></div>
         <div class="tel-kv"><span>Maneuver</span><strong style="color:${car.man ? "#ffb366" : "#d4d4e0"}">${manDisplay}</strong></div>
         <div class="tel-kv"><span>Last Lap</span><strong>${fmtLap(car.last)}</strong></div>
@@ -1788,12 +2397,13 @@ class F1App {
         })
         .join("");
       const setupsMap = st.driver_setups || {};
+      const confMap = st.driver_setup_confidence || {};
       const locked = Boolean(st.parc_ferme);
       setupPanel.innerHTML = `
         <div class="circuit-dna-card">
           <div>
             <div style="font-size:10px;color:#8f90a6;font-weight:800;letter-spacing:0.6px">${(st.track?.circuit || "CIRCUIT").toUpperCase()} — CIRCUIT DNA</div>
-            <div style="font-size:14px;font-weight:900;color:#ffffff;margin-top:2px">${prof.label.toUpperCase()} · REC WING ${prof.recommended_df >= 0 ? `+${prof.recommended_df}` : prof.recommended_df}</div>
+            <div style="font-size:14px;font-weight:900;color:#ffffff;margin-top:2px">${prof.label.toUpperCase()}</div>
             <div class="dna-weights">${weightsHtml}</div>
           </div>
           <div>
@@ -1803,10 +2413,11 @@ class F1App {
             </div>
             ${myDriversList
               .map((d) => {
-                const cur = setupsMap[d.id] != null ? setupsMap[d.id] : prof.recommended_df || 0;
+                const cur = setupsMap[d.id] != null ? setupsMap[d.id] : 0;
+                const dConf = Math.round(confMap[d.id] ?? 55);
                 return `
                   <div class="setup-driver-row">
-                    <strong style="font-size:11.5px;color:#ffffff">#${d.number} ${d.code}</strong>
+                    <strong style="font-size:11.5px;color:#ffffff">#${d.number} ${d.code} <small style="color:#00d2be">(CONF ${dConf}%)</small></strong>
                     <div class="setup-btns">
                       ${[-2, -1, 0, 1, 2]
                         .map((lvl) => `<button class="setup-btn ${cur === lvl ? "active" : ""}" data-setup-drv="${d.id}" data-setup-val="${lvl}" ${locked ? "disabled" : ""}>${lvl >= 0 ? `+${lvl}` : lvl}</button>`)
@@ -2010,7 +2621,31 @@ class F1App {
     this.previewTradeValuation();
     this.renderContractNegotiator();
 
-    // 3. Commercial & Finances Tab
+    // 3. Board Objectives & Commercial Finances Tab
+    const boardPanel = document.getElementById("board-objectives-panel");
+    const bs = st.board_state;
+    if (boardPanel && bs) {
+      const pWcc = (st.wcc || []).find((r) => r.id === st.player_team_id);
+      const curRank = pWcc ? pWcc.rank : "-";
+      const curPts = pWcc ? pWcc.points : 0;
+      const bConf = Math.max(0, Math.min(100, Number(bs.confidence ?? 75)));
+      const bCol = bConf >= 80 ? "#00d26a" : bConf >= 55 ? "#00d2be" : bConf >= 35 ? "#ffd000" : "#ff3b30";
+      boardPanel.innerHTML = `
+        <div class="board-card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <strong style="font-size:11.5px;letter-spacing:0.6px;color:#ffffff">BOARD EXPECTATIONS (${st.season} SEASON)</strong>
+            <span style="font-size:11px;font-weight:900;color:${bCol}">${bs.status || "SECURE"} · ${bConf}%</span>
+          </div>
+          <div class="bar-meter" style="margin-bottom:8px"><span style="width:${bConf}%;background:${bCol}"></span></div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:#c8c9d8;flex-wrap:wrap;gap:8px">
+            <span>TARGET WCC: <strong style="color:#ffffff">TOP ${bs.target_wcc}</strong> (NOW P${curRank})</span>
+            <span>TARGET PTS: <strong style="color:#ffffff">${bs.target_points}</strong> (NOW ${curPts})</span>
+            <span>REWARD: <strong style="color:#00d26a">+$${Number(bs.bonus_m || 18).toFixed(1)}M &amp; +1 R&amp;D SLOT</strong></span>
+          </div>
+        </div>
+      `;
+    }
+
     const finances = st.finances;
     const financeSummary = document.getElementById("finance-summary");
     if (finances && financeSummary) {
@@ -2226,6 +2861,32 @@ class F1App {
         }
       });
     });
+
+    const scenGrid = document.getElementById("scenario-picker-grid");
+    if (scenGrid && this.fullState.scenarios) {
+      scenGrid.innerHTML = this.fullState.scenarios
+        .map(
+          (s) => `
+          <button class="scenario-card" data-start-scen="${s.id}">
+            <strong>${s.title}</strong>
+            <span>${s.desc}</span>
+            <small>GOAL: ${s.goal}</small>
+          </button>
+        `
+        )
+        .join("");
+      scenGrid.querySelectorAll("[data-start-scen]").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const res = await this.apiPost("/api/scenario", { scenario_id: btn.dataset.startScen });
+          if (res.ok) {
+            document.getElementById("team-modal").classList.add("hidden");
+            this.stopReplay();
+            this.showToast(`SCENARIO LAUNCHED: ${res.scenario?.title || "CHALLENGE"}`);
+            this.fetchFullState();
+          }
+        });
+      });
+    }
   }
   renderHallOfFame() {
     if (!this.fullState) return;

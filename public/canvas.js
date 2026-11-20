@@ -122,6 +122,11 @@ export class CircuitRenderer {
     this._camTransitElapsed = 0;
     this._prevTargetX = 500;
     this._prevTargetY = 325;
+    this.directorStatus = "";
+    this._directorLockUntil = 0;
+    this._directorPrio = 0;
+    this._directorTargetId = null;
+    this._directorTargetBId = null;
 
     window.addEventListener("resize", () => this.resize());
     this.canvas.addEventListener("click", (e) => this._handleClick(e));
@@ -216,6 +221,12 @@ export class CircuitRenderer {
     this.cameraMode = mode;
     this._camLocked = false;
     this._camTransitElapsed = 0;
+    if (mode !== "director") {
+      this.directorStatus = "";
+      this._directorPrio = 0;
+      this._directorTargetId = null;
+      this._directorTargetBId = null;
+    }
   }
 
   setSelectedDriver(driverId) {
@@ -224,6 +235,16 @@ export class CircuitRenderer {
       this._camLocked = false;
       this._camTransitElapsed = 0;
     }
+  }
+
+  resetInterpolation() {
+    this.carInterp.clear();
+    this.scInterp = null;
+    this.renderTimeInitialized = false;
+    this.renderTickInitialized = false;
+    this.renderTick = 0;
+    this.playbackRate = 1.0;
+    this.particles = [];
   }
 
   pushTick(tick) {
@@ -560,6 +581,66 @@ export class CircuitRenderer {
             targetZoom = 2.35 * zoomRatio;
             currentTargetKey = "team:" + myCars[0].id;
           }
+        }
+      } else if (this.cameraMode === "director") {
+        const now = performance.now();
+        const cars = this.tick.cars || [];
+        const incident = cars.find((c) => c.vis && !c.in_pit && (c.smoke > 1.5 || c.dnf));
+        const myPit = cars.find((c) => c.tid === this.tick.player_team_id && c.in_pit && (c.pit_ph === "ENTRY" || c.pit_ph === "STOPPED"));
+        const myBattle = cars.find((c) => c.tid === this.tick.player_team_id && c.battle && !c.dnf);
+        const topBattle = cars.find((c) => c.battle && !c.dnf && c.pos <= 10);
+        const leaderCar = cars.find((c) => !c.dnf && !c.elim) || cars[0];
+
+        let candPrio = 1;
+        let candA = leaderCar ? leaderCar.id : null;
+        let candB = null;
+        let candZoom = 2.45 * zoomRatio;
+        let candLabel = leaderCar ? `LEADER · ${leaderCar.code}` : "DIRECTOR";
+
+        if (incident) {
+          candPrio = 4;
+          candA = incident.id;
+          candZoom = 2.85 * zoomRatio;
+          candLabel = `INCIDENT · ${incident.code}`;
+        } else if (myPit) {
+          candPrio = 3;
+          candA = myPit.id;
+          candZoom = 3.05 * zoomRatio;
+          candLabel = `PIT BOX · ${myPit.code}`;
+        } else if (myBattle || topBattle) {
+          const bCar = myBattle || topBattle;
+          const rival = cars.find((c) => c.code === bCar.battle && !c.dnf);
+          candPrio = 2;
+          candA = bCar.id;
+          candB = rival ? rival.id : null;
+          candLabel = rival ? `BATTLE · ${bCar.code} vs ${rival.code}` : `BATTLE · ${bCar.code}`;
+        }
+
+        const curCarValid = this._directorTargetId && cars.some((c) => c.id === this._directorTargetId && c.vis);
+        const pitExited = this._directorPrio === 3 && this._directorTargetId && !cars.some((c) => c.id === this._directorTargetId && c.in_pit);
+        if (!curCarValid || pitExited || now > this._directorLockUntil || candPrio > this._directorPrio) {
+          this._directorPrio = candPrio;
+          this._directorTargetId = candA;
+          this._directorTargetBId = candB;
+          this._directorLockUntil = now + (candPrio >= 3 ? 3500 : 4500);
+          this.directorStatus = candLabel;
+        }
+
+        const stA = this._directorTargetId && this.carInterp.get(this._directorTargetId);
+        const stB = this._directorTargetBId && this.carInterp.get(this._directorTargetBId);
+        if (stA && stB) {
+          isTrackingCar = true;
+          targetX = (stA.cx + stB.cx) * 0.5;
+          targetY = (stA.cy + stB.cy) * 0.5;
+          const battleDist = Math.hypot(stA.cx - stB.cx, stA.cy - stB.cy);
+          targetZoom = Math.max(1.6, Math.min(2.75, 2.45 * zoomRatio * (65 / Math.max(45, battleDist))));
+          currentTargetKey = "dir:" + this._directorTargetId + "-" + this._directorTargetBId;
+        } else if (stA) {
+          isTrackingCar = true;
+          targetX = stA.cx;
+          targetY = stA.cy;
+          targetZoom = this._directorPrio === 3 ? 3.05 * zoomRatio : (this._directorPrio === 4 ? 2.85 * zoomRatio : 2.45 * zoomRatio);
+          currentTargetKey = "dir:" + this._directorTargetId;
         }
       } else if (this.cameraMode === "battle") {
         const now = performance.now();
@@ -993,14 +1074,17 @@ export class CircuitRenderer {
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
 
-      // 1. Soft wide rubbered track foundation
+      // 1. Soft wide rubbered track foundation & progressive race rubber
+      const rubberPct = (this.tick && this.tick.track_rubber != null) ? (this.tick.track_rubber / 100) : 0.45;
+      const fAlpha = (wet > 25 ? 0.14 : (0.16 + rubberPct * 0.24)).toFixed(2);
+      const cAlpha = (wet > 25 ? 0.26 : (0.28 + rubberPct * 0.38)).toFixed(2);
       this._traceSmoothClosedPoints(ctx, groove);
-      ctx.strokeStyle = wet > 25 ? "rgba(8, 10, 14, 0.18)" : "rgba(10, 10, 14, 0.32)";
+      ctx.strokeStyle = wet > 25 ? "rgba(8, 10, 14, 0.16)" : `rgba(10, 10, 14, ${fAlpha})`;
       ctx.lineWidth = Math.max(6.5, wPx * 0.38);
       ctx.stroke();
 
       // 2. High-grip dark central rubber groove
-      ctx.strokeStyle = wet > 25 ? "rgba(6, 8, 12, 0.32)" : "rgba(6, 6, 10, 0.58)";
+      ctx.strokeStyle = wet > 25 ? "rgba(6, 8, 12, 0.28)" : `rgba(6, 6, 10, ${cAlpha})`;
       ctx.lineWidth = Math.max(3.6, wPx * 0.20);
       ctx.stroke();
       ctx.restore();
@@ -1353,6 +1437,33 @@ export class CircuitRenderer {
       const st = this.carInterp.get(c.id);
       if (!st) continue;
       this._drawSingleCar(ctx, st.cx, st.cy, st.ch, c, now, st.steer);
+      if (c.in_pit && c.pit_ph === "STOPPED" && c.pit_tot > 0 && c.pit_rem > 0) {
+        const frac = Math.max(0, Math.min(1, 1 - c.pit_rem / c.pit_tot));
+        const ringCol = c.pit_tot <= 2.05 ? "#a855f7" : c.pit_tot > 3.8 ? "#ffd000" : "#00d2be";
+        const sc = Math.max(0.45, this._viewTransform.scale);
+        const rad = 11.0 / sc;
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.18)";
+        ctx.lineWidth = 2.0 / sc;
+        ctx.beginPath();
+        ctx.arc(st.cx, st.cy, rad, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = ringCol;
+        ctx.beginPath();
+        ctx.arc(st.cx, st.cy, rad, -Math.PI * 0.5, -Math.PI * 0.5 + frac * Math.PI * 2);
+        ctx.stroke();
+        const elapsedS = Math.max(0, c.pit_tot - c.pit_rem).toFixed(1) + "s";
+        ctx.font = `800 ${Math.max(8, 9.5 / sc)}px 'Titillium Web', sans-serif`;
+        const bw = ctx.measureText(elapsedS).width + 6 / sc;
+        const bh = 12 / sc;
+        ctx.fillStyle = "rgba(10,12,18,0.9)";
+        ctx.fillRect(st.cx - bw * 0.5, st.cy - rad - bh - 2 / sc, bw, bh);
+        ctx.fillStyle = ringCol;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(elapsedS, st.cx, st.cy - rad - bh * 0.5 - 2 / sc);
+        ctx.restore();
+      }
       if (this._viewTransform.scale < .45) {
         ctx.beginPath();ctx.arc(st.cx,st.cy,2.1/this._viewTransform.scale,0,Math.PI*2);
         ctx.fillStyle=c.tcol;ctx.fill();
