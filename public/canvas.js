@@ -1058,12 +1058,25 @@ export class CircuitRenderer {
         ctx.stroke();
       }
       // Team Pit Stall locations with Constructor Logos & Gantry Graphics
-      for (const g of this.track.pit_garages || []) {
-        const teamId = GARAGE_TEAM_IDS[g.index] || "williams";
-        const cMeta = this.tick?.custom_team_meta;
+      const cMeta = this.tick?.custom_team_meta;
+      const baseGarages = this.track.pit_garages || [];
+      const renderGarages = [...baseGarages];
+      if (cMeta && cMeta.id === "custom" && baseGarages.length >= 2 && baseGarages.length < 12) {
+        const gLast = baseGarages[baseGarages.length - 1];
+        const gPrev = baseGarages[baseGarages.length - 2];
+        renderGarages.push({
+          index: 11,
+          x: gLast.x + (gLast.x - gPrev.x) * 0.85,
+          y: gLast.y + (gLast.y - gPrev.y) * 0.85,
+          tx: gLast.tx,
+          ty: gLast.ty,
+        });
+      }
+      for (const g of renderGarages) {
+        const teamId = g.index === 11 ? "custom" : (GARAGE_TEAM_IDS[g.index] || "williams");
         const isCust = cMeta && cMeta.id === teamId;
         const teamCode = isCust ? (cMeta.code || "MY") : (GARAGE_TEAM_CODES[g.index] || "F1");
-        const teamColor = isCust ? (cMeta.secondary || cMeta.color || "#00d2be") : (TEAM_LIVERY[teamId]?.stripe || "#00d2be");
+        const teamColor = isCust ? (cMeta.color || cMeta.secondary || "#00d2be") : (TEAM_LIVERY[teamId]?.stripe || "#00d2be");
 
         const nx = -g.ty * side, ny = g.tx * side;
         const gx = g.x + nx * apronOff, gy = g.y + ny * apronOff;

@@ -86,7 +86,7 @@ def _garage_s_for_team(track: CompiledTrack, team_id: str) -> float:
         return track.pit_garages[TEAM_GARAGE_INDEX[team_id]]["s_m"]
     last_s = track.pit_garages[-1]["s_m"]
     spacing = getattr(track, "pit_garage_spacing_s", 12.0)
-    return (last_s - spacing * 0.65) % track.length_m
+    return (last_s - spacing * 0.85) % track.length_m
 
 
 def _grid_box_for_slot(track: CompiledTrack, idx: int) -> dict:
