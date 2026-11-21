@@ -125,85 +125,86 @@ export function renderCustomIconSVG(iconId = "shield", code = "F1", primary = "#
   const s = /^#[0-9a-fA-F]{6}$/.test(String(secondary)) ? secondary : "#ffffff";
   switch (iconId) {
     case "koenigsegg":
+      // Real von Koenigsegg heraldic shield: navy frame, red & gold lozenge (diamond) checkerboard
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <path d="M16 2.5 L27.5 6.8 V17.2 C27.5 24 21.8 28 16 30 C10.2 28 4.5 24 4.5 17.2 V6.8 Z" fill="#12141b" stroke="#f5c451" stroke-width="1.8"/>
-        <path d="M16 4.5 L25.4 8 V17 C25.4 22.6 20.8 26 16 27.8 C11.2 26 6.6 22.6 6.6 17 V8 Z" fill="${p}" stroke="${s}" stroke-width="0.8"/>
-        <path d="M9.2 10.2 H22.8 V12.5 H9.2 Z" fill="#ce2b37"/>
-        <path d="M16 8.5 L21.8 15.2 L16 24.2 L10.2 15.2 Z" fill="#f8fafc" stroke="#f5c451" stroke-width="0.9"/>
-        <circle cx="13.8" cy="14.5" r="1.4" fill="#111827"/>
-        <circle cx="18.2" cy="14.5" r="1.4" fill="#111827"/>
-        <path d="M13.2 18.6 Q16 20.6 18.8 18.6" stroke="#ce2b37" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        <defs><clipPath id="k-shield-${safeCode}"><path d="M16 4.5 L25.5 7.8 V17.2 C25.5 22.8 20.8 26.2 16 28 C11.2 26.2 6.5 22.8 6.5 17.2 V7.8 Z"/></clipPath></defs>
+        <path d="M16 2.5 L27.5 6.5 V17.4 C27.5 24 21.8 28 16 30 C10.2 28 4.5 24 4.5 17.4 V6.5 Z" fill="#0f2347" stroke="#d4af37" stroke-width="1.6"/>
+        <g clip-path="url(#k-shield-${safeCode})">
+          <rect x="5" y="4" width="22" height="25" fill="#d99b26"/>
+          <path d="M16 4 L21 9 L16 14 L11 9 Z M16 14 L21 19 L16 24 L11 19 Z M6 9 L11 14 L6 19 Z M26 9 L21 14 L26 19 Z M11 19 L16 24 L11 29 L6 24 Z M21 19 L26 24 L21 29 L16 24 Z" fill="#a81c24"/>
+        </g>
+        <path d="M16 4.5 L25.5 7.8 V17.2 C25.5 22.8 20.8 26.2 16 28 C11.2 26.2 6.5 22.8 6.5 17.2 V7.8 Z" fill="none" stroke="#d4af37" stroke-width="1"/>
+        <rect x="12.5" y="3.2" width="7" height="2.4" rx="0.8" fill="#d4af37" stroke="#0f2347" stroke-width="0.6"/>
       </svg>`;
     case "toyota":
+      // Real Toyota triple-oval metallic emblem on crimson/chrome backing
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <circle cx="16" cy="16" r="14" fill="#11141c" stroke="#eb0a1e" stroke-width="1.8"/>
-        <circle cx="16" cy="16" r="12" fill="${p}" opacity="0.22"/>
-        <ellipse cx="16" cy="16" rx="11.2" ry="7.4" fill="none" stroke="#f1f5f9" stroke-width="2.1"/>
-        <ellipse cx="16" cy="12.9" rx="6.4" ry="3.2" fill="none" stroke="#eb0a1e" stroke-width="1.9"/>
-        <ellipse cx="16" cy="16" rx="3.0" ry="7.4" fill="none" stroke="#f8fafc" stroke-width="1.9"/>
-        <circle cx="16" cy="12.9" r="1.1" fill="${s}"/>
+        <circle cx="16" cy="16" r="14" fill="#151821" stroke="#eb0a1e" stroke-width="1.6"/>
+        <ellipse cx="16" cy="16" rx="11.4" ry="7.6" fill="none" stroke="#e2e8f0" stroke-width="2.1"/>
+        <ellipse cx="16" cy="12.7" rx="6.6" ry="3.1" fill="none" stroke="#eb0a1e" stroke-width="1.9"/>
+        <ellipse cx="16" cy="16" rx="2.9" ry="7.6" fill="none" stroke="#f8fafc" stroke-width="1.9"/>
       </svg>`;
     case "bugatti":
+      // Real Bugatti red oval with white pearl border & reversed E + B monogram
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <ellipse cx="16" cy="16" rx="14" ry="10.2" fill="#e10600" stroke="#f8fafc" stroke-width="1.8"/>
-        <ellipse cx="16" cy="16" rx="12" ry="8.2" fill="none" stroke="#f8fafc" stroke-width="1.3" stroke-dasharray="1.3 1.4"/>
-        <ellipse cx="16" cy="16" rx="10.2" ry="6.6" fill="#0b1f4b" stroke="#d4af37" stroke-width="0.9"/>
-        <text x="16" y="19.6" text-anchor="middle" font-family="Georgia,serif" font-weight="900" font-size="10.2" fill="#ffffff" stroke="${p}" stroke-width="0.3">EB</text>
+        <ellipse cx="16" cy="16" rx="14.2" ry="10.2" fill="#ce1126" stroke="#f8fafc" stroke-width="1.5"/>
+        <ellipse cx="16" cy="16" rx="12.3" ry="8.4" fill="none" stroke="#ffffff" stroke-width="1.4" stroke-dasharray="1.1 1.4"/>
+        <ellipse cx="16" cy="16" rx="10.4" ry="6.7" fill="#b30e20" stroke="#111111" stroke-width="0.6"/>
+        <text x="16" y="19.8" text-anchor="middle" font-family="Georgia,serif" font-weight="900" font-size="10.5" fill="#ffffff">EB</text>
       </svg>`;
     case "pagani":
+      // Real Pagani silver oval badge with blue-accented mirrored P emblem & PAGANI bar
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <ellipse cx="16" cy="16" rx="14" ry="9.8" fill="#151822" stroke="#cbd5e1" stroke-width="1.8"/>
-        <ellipse cx="16" cy="16" rx="12" ry="7.8" fill="${p}" opacity="0.35" stroke="#00a8e8" stroke-width="0.9"/>
-        <rect x="6" y="8.8" width="20" height="1.5" rx="0.7" fill="#009246"/>
-        <rect x="6" y="21.7" width="20" height="1.5" rx="0.7" fill="#ce2b37"/>
-        <ellipse cx="16" cy="16" rx="9.4" ry="5.3" fill="#0f172a" stroke="#f8fafc" stroke-width="1.4"/>
-        <text x="16" y="18.6" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="7.2" fill="${s}">${safeCode}</text>
+        <ellipse cx="16" cy="16" rx="14.2" ry="9.8" fill="#cbd5e1" stroke="#475569" stroke-width="1.5"/>
+        <ellipse cx="16" cy="16" rx="12.3" ry="8" fill="#1e293b" stroke="#f8fafc" stroke-width="0.9"/>
+        <path d="M11.5 10.5 H16 C17.8 10.5 18.6 12.2 16 13.2 H13.2 M20.5 10.5 H16 C14.2 10.5 13.4 12.2 16 13.2 H18.8" fill="none" stroke="#38bdf8" stroke-width="1.4" stroke-linecap="round"/>
+        <rect x="6" y="14.2" width="20" height="4.8" rx="1" fill="#0f172a" stroke="#94a3b8" stroke-width="0.6"/>
+        <text x="16" y="18.1" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="4.4" letter-spacing="0.6" fill="#f8fafc">PAGANI</text>
       </svg>`;
     case "yangwang":
+      // Real Yangwang oracle-bone '电' (electricity) continuous angular zigzag glyph
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <rect x="3.5" y="3.5" width="25" height="25" rx="6" fill="#0b1018" stroke="#d4af37" stroke-width="1.7"/>
-        <rect x="5.3" y="5.3" width="21.4" height="21.4" rx="4.5" fill="${p}" opacity="0.22" stroke="#38bdf8" stroke-width="0.8"/>
-        <g fill="none" stroke="#f8fafc" stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter">
-          <path d="M16 6.2 V25.8"/>
-          <path d="M10.5 9.2 L12.5 11.2 H19.5 L21.5 9.2"/>
-          <path d="M9.5 15.2 H13.5 L16 12.8 L18.5 15.2 H22.5"/>
-          <path d="M10.2 21.2 L13 18.8 H19 L21.8 21.2"/>
-          <path d="M16 25.8 H20.8 L22.5 24.1" stroke="#38bdf8"/>
-        </g>
+        <rect x="4" y="3" width="24" height="26" rx="5.5" fill="#0d111a" stroke="#d8a969" stroke-width="1.5"/>
+        <path d="M16 6.2 V13.8 L10.2 10.6 L21.8 21.4 L16 18.2 V25.8" fill="none" stroke="#e2e8f0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M16 6.2 V13.8 L10.2 10.6 L21.8 21.4 L16 18.2 V25.8" fill="none" stroke="#d8a969" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
       </svg>`;
     case "porsche":
+      // Real Porsche Stuttgart crest: gold #D8A969 shield, black antlers & red/black Württemberg quarters
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <path d="M5.5 4 H26.5 V17 C26.5 23.5 16 28.8 16 28.8 C16 28.8 5.5 23.5 5.5 17 Z" fill="#f5c451" stroke="#111111" stroke-width="1.6"/>
-        <path d="M6.5 5 H16 V15 H6.5 Z" fill="#d97706" opacity="0.5"/>
-        <path d="M16 5 H25.5 V15 H16 Z" fill="#ce2b37"/>
-        <path d="M6.5 15 H16 V26.5 C11 24 6.5 20.5 6.5 15 Z" fill="#111827"/>
-        <path d="M16 15 H25.5 C25.5 20.5 21 24 16 26.5 Z" fill="#ce2b37"/>
-        <path d="M16 4 V28.5 M5.5 15 H26.5" stroke="#f5c451" stroke-width="1.3"/>
-        <rect x="11.5" y="10.8" width="9" height="8.4" rx="1.6" fill="#f8fafc" stroke="#111111" stroke-width="1"/>
-        <text x="16" y="17.2" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="5.5" fill="#111111">${safeCode}</text>
+        <path d="M5.5 4 H26.5 V17 C26.5 23.5 16 28.8 16 28.8 C16 28.8 5.5 23.5 5.5 17 Z" fill="#d8a969" stroke="#111111" stroke-width="1.5"/>
+        <rect x="6.5" y="4.8" width="19" height="3.2" fill="#111111"/>
+        <text x="16" y="7.3" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="3" fill="#d8a969">PORSCHE</text>
+        <path d="M7.5 10.2 H14.5 M8 12.2 H14 M8.5 14.2 H13.5" stroke="#111111" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M16 8 H25.5 V15.5 H16 Z" fill="#d5001c"/>
+        <path d="M16 10.5 H25.5 M16 13.5 H25.5" stroke="#111111" stroke-width="1.3"/>
+        <path d="M6.5 15.5 H16 V27 C11 24.5 6.5 20.8 6.5 15.5 Z" fill="#d5001c"/>
+        <path d="M7.5 18 H16 M9 21 H16" stroke="#111111" stroke-width="1.3"/>
+        <path d="M17.5 18 H24 M17.5 20.5 H23 M17.5 23 H21.5" stroke="#111111" stroke-width="1.2" stroke-linecap="round"/>
+        <path d="M12.5 12.2 H19.5 V18 C19.5 20.8 16 22.5 16 22.5 C16 22.5 12.5 20.8 12.5 18 Z" fill="#d8a969" stroke="#111111" stroke-width="1"/>
+        <path d="M16.2 14 C17.5 14 17.8 15.2 17 16.2 L17.8 18 H16.5 L15.8 16.8 L14.8 18.8 H13.8 L14.5 16.2 Z" fill="#111111"/>
       </svg>`;
     case "lamborghini":
+      // Real Lamborghini black & gold shield with charging golden bull
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <path d="M5.5 4.5 H26.5 L24.2 22.2 L16 28.5 L7.8 22.2 Z" fill="#111318" stroke="#f5c451" stroke-width="2"/>
-        <path d="M7.5 6.5 H24.5 L22.6 20.8 L16 26 L9.4 20.8 Z" fill="${p}" opacity="0.25"/>
-        <path d="M10 11.5 L16 8 L22 11.5 L20.2 19.2 L16 23.2 L11.8 19.2 Z" fill="#f5c451" stroke="#b45309" stroke-width="0.8"/>
-        <path d="M12.5 12.2 L16 10.2 L19.5 12.2" stroke="#111111" stroke-width="1.4" fill="none" stroke-linecap="round"/>
-        <text x="16" y="18.6" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="6.4" fill="#111111">${safeCode}</text>
+        <path d="M5.5 4.2 H26.5 L24.5 22 L16 28.5 L7.5 22 Z" fill="#111111" stroke="#d4af37" stroke-width="2"/>
+        <rect x="8.5" y="6.2" width="15" height="2.4" rx="0.5" fill="#d4af37"/>
+        <path d="M10.5 19.5 L12.5 14 L17 12.8 L20.5 11.2 L22 13 L20.2 15.2 L21.5 21.2 L19.2 21.5 L18 17.8 L14.5 18.2 L12.8 21.5 H10.5 Z" fill="#d4af37" stroke="#f5c451" stroke-width="0.4"/>
       </svg>`;
     case "maserati":
+      // Real Maserati navy/white/crimson oval with iconic trident
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <ellipse cx="16" cy="16" rx="11.5" ry="14" fill="#0b1f4b" stroke="#f8fafc" stroke-width="1.8"/>
-        <ellipse cx="16" cy="16" rx="9.5" ry="12" fill="none" stroke="#e10600" stroke-width="1.1"/>
-        <path d="M16 6.5 V24.5 M10.8 9.8 V15.2 Q10.8 18.4 16 18.4 Q21.2 18.4 21.2 15.2 V9.8" stroke="#f8fafc" stroke-width="2.2" fill="none" stroke-linecap="round"/>
-        <path d="M13 21.5 H19" stroke="#e10600" stroke-width="1.8" stroke-linecap="round"/>
+        <ellipse cx="16" cy="16" rx="11.5" ry="14" fill="#ffffff" stroke="#0c2340" stroke-width="1.8"/>
+        <ellipse cx="16" cy="16" rx="9.5" ry="12" fill="#0c2340" stroke="#ce1126" stroke-width="1"/>
+        <path d="M16 6.2 V24.5 M10.6 9.5 V15.2 Q10.6 18.4 16 18.4 Q21.4 18.4 21.4 15.2 V9.5" stroke="#ffffff" stroke-width="2.1" fill="none" stroke-linecap="round"/>
+        <path d="M12.5 21.8 H19.5" stroke="#ce1126" stroke-width="1.8" stroke-linecap="round"/>
       </svg>`;
     case "genesis":
+      // Real Genesis silver winged crest with black & gold central shield
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <circle cx="16" cy="16" r="13.5" fill="#11141c" stroke="#d4af37" stroke-width="1.7"/>
-        <path d="M3.5 12.5 L13 15.5 L3.5 18.5 M28.5 12.5 L19 15.5 L28.5 18.5" stroke="#f8fafc" stroke-width="2.1" fill="none" stroke-linecap="round"/>
-        <path d="M5 14.5 L12.5 16.5 M27 14.5 L19.5 16.5" stroke="#d4af37" stroke-width="1" stroke-linecap="round"/>
-        <path d="M16 9.5 L21.5 16 L16 22.5 L10.5 16 Z" fill="${p}" stroke="#d4af37" stroke-width="1.3"/>
-        <circle cx="16" cy="16" r="2.2" fill="${s}"/>
+        <circle cx="16" cy="16" r="13.8" fill="#11141c" stroke="#94a3b8" stroke-width="1.2"/>
+        <path d="M2.5 12.2 L12.2 14.5 L12.2 17.8 L3.8 18.8 Z M29.5 12.2 L19.8 14.5 L19.8 17.8 L28.2 18.8 Z" fill="#e2e8f0" stroke="#64748b" stroke-width="0.6"/>
+        <path d="M12 11 H20 L19.2 19.5 L16 22.5 L12.8 19.5 Z" fill="#0f172a" stroke="#d4af37" stroke-width="1.4"/>
+        <text x="16" y="17.8" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="5.2" fill="#d4af37">G</text>
       </svg>`;
     case "shield":
     default:
