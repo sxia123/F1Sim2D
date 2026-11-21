@@ -628,6 +628,8 @@ class F1App {
     this._activeDilemmaId = null;
     this._strategyEditDriverId = null;
     this._lastCustomSig = "";
+    this._parcBreakDraft = {};
+    this._lastPitWallHtml = "";
     this.replayBuffer = [];
     this.replayActive = false;
     this.replayIdx = 0;
@@ -892,17 +894,34 @@ class F1App {
         this.openStrategyModal(driverId);
         return;
       }
+      else if (cmd === "parc_wing") {
+        const cur = this._parcBreakDraft[driverId] || { wing: 0, freshPu: false };
+        this._parcBreakDraft[driverId] = { ...cur, wing: Number(val) };
+        if (this.liveTick) this.renderPitWall(this.liveTick);
+        return;
+      }
+      else if (cmd === "parc_pu") {
+        const cur = this._parcBreakDraft[driverId] || { wing: 0, freshPu: false };
+        this._parcBreakDraft[driverId] = { ...cur, freshPu: !cur.freshPu };
+        if (this.liveTick) this.renderPitWall(this.liveTick);
+        return;
+      }
       else if (cmd === "break_parc_ferme") {
-        const dfEl = document.getElementById(`parc-wing-${driverId}`);
-        const puEl = document.getElementById(`parc-pu-${driverId}`);
-        const dfVal = dfEl ? Number(dfEl.value) : 0;
-        const freshPu = puEl && puEl.checked ? ["ice", "turbo"] : [];
+        const curCar = this.liveTick?.cars?.find((x) => x.id === driverId);
+        const draft = this._parcBreakDraft[driverId] || { wing: curCar?.setup_df ?? 0, freshPu: false };
+        const dfVal = Number(draft.wing ?? 0);
+        const freshPu = draft.freshPu ? ["ice", "turbo"] : [];
         const resB = await this.apiPost("/api/break_parc_ferme", {
           driver_id: driverId,
           setup_df: dfVal,
           fresh_pu: freshPu,
         });
         if (resB.ok) {
+          if (curCar) {
+            curCar.pit_start = true;
+            curCar.setup_df = dfVal;
+          }
+          if (this.liveTick) this.renderPitWall(this.liveTick);
           this.showToast(`PARC FERME BROKEN: ${this._driverTag(driverId)} starting from Pit Lane`);
           this.fetchFullState();
           this.lastDomSyncMs = 0;
@@ -1880,6 +1899,7 @@ class F1App {
     }
 
     if (myCars.length === 0) {
+      this._lastPitWallHtml = "";
       if (tick.phase === "PRE_WEEKEND" && this.fullState) {
         const myDrivers = (this.fullState.drivers || []).filter((d) => d.team_id === this.fullState.player_team_id);
         const setups = this.fullState.driver_setups || {};
@@ -1947,6 +1967,7 @@ class F1App {
 
     // INTERACTIVE QUALIFYING PIT WALL
     if (isQuali) {
+      this._lastPitWallHtml = "";
       const qt = tick.quali_traffic || { on_track: 0, sectors: [0, 0, 0], density: "CLEAN" };
       const densCol = qt.density === "CLEAN" ? "#00d26a" : qt.density === "MODERATE" ? "#ffd000" : "#ff3b30";
       const anyGarage = myCars.some((c) => !c.elim && c.quali_phase === "GARAGE");
@@ -2185,17 +2206,22 @@ class F1App {
                   <button class="pw-btn" ${dis} data-pw-cmd="edit_plan" data-drv="${c.id}">EDIT</button>
                 </div>
               </div>
-              ${tick.phase === "GRID_WALK" && !c.pit_start ? `
+              ${tick.phase === "GRID_WALK" ? (c.pit_start ? `
+              <div class="parc-break-row" style="border-color:rgba(0,210,190,0.55);background:rgba(0,210,190,0.10)">
+                <span style="color:#00d2be;font-weight:800">PIT LANE START ARMED (WING ${c.setup_df >= 0 ? `+${c.setup_df}` : c.setup_df ?? 0})</span>
+                <span style="font-size:10px;color:#cfd2e6">Holding at Pit Exit — releases behind pack</span>
+              </div>` : (() => {
+                const draft = this._parcBreakDraft[c.id] || { wing: c.setup_df ?? 0, freshPu: false };
+                return `
               <div class="parc-break-row">
                 <span style="color:#ffd000;font-weight:800">BREAK PARC FERME -> PIT START</span>
-                <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                  <select id="parc-wing-${c.id}" style="background:#0c0d17;color:#fff;border:1px solid #353856;border-radius:3px;padding:1px 4px;font-size:10px">
-                    ${[-2, -1, 0, 1, 2].map((w) => `<option value="${w}" ${(c.setup_df ?? 0) === w ? "selected" : ""}>Wing ${w >= 0 ? `+${w}` : w}</option>`).join("")}
-                  </select>
-                  <label style="font-size:9.5px;color:#cfd2e6;display:flex;align-items:center;gap:3px"><input type="checkbox" id="parc-pu-${c.id}" /> Fresh ICE/Turbo</label>
+                <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+                  ${[-2, -1, 0, 1, 2].map((w) => `<button class="pw-btn ${Number(draft.wing) === w ? "active" : ""}" data-pw-cmd="parc_wing" data-drv="${c.id}" data-val="${w}">${w >= 0 ? `+${w}` : w}</button>`).join("")}
+                  <button class="pw-btn ${draft.freshPu ? "auto-on" : ""}" data-pw-cmd="parc_pu" data-drv="${c.id}">+FRESH PU</button>
                   <button class="pw-btn box-cta" data-pw-cmd="break_parc_ferme" data-drv="${c.id}">PIT LANE START</button>
                 </div>
-              </div>` : ""}
+              </div>`;
+              })()) : ""}
             </div>
 
             <!-- TIER 4: STRATEGIST CALLOUT + APPLY + REJOIN GHOST -->
@@ -2211,7 +2237,11 @@ class F1App {
         `;
       })
       .join("");
-    wrap.innerHTML = rfBannerHtml + cardsHtml;
+    const nextHtml = rfBannerHtml + cardsHtml;
+    if (this._lastPitWallHtml !== nextHtml) {
+      wrap.innerHTML = nextHtml;
+      this._lastPitWallHtml = nextHtml;
+    }
   }
 
   renderTelemetry(tick) {

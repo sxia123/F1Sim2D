@@ -2406,6 +2406,7 @@ class ChampionshipWorld:
                         fitted_parts.append(PU_COMPONENT_SPECS[comp]["short"])
                 car.pu_pool = copy.deepcopy(pool)
             self.race_session.set_pit_lane_start(driver_id, True)
+            self.phase_timer = max(self.phase_timer, 10.0)
             lbl = SETUP_LEVELS[lvl]["label"]
             pu_note = f" & fresh {'/'.join(fitted_parts)}" if fitted_parts else ""
             self._push_event(

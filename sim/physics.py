@@ -2084,7 +2084,8 @@ class RaceSession:
         car.v = 0.0
         car.d = 2.0 * self.track.pit_side
         car.target_d = car.d
-        rel_ex = max(12.0, self.track.pit_span_m - 16.0 - queue_idx * 10.0)
+        u_exit_line = getattr(self.track, "pit_speed_exit_u", 0.90)
+        rel_ex = max(12.0, min(self.track.pit_span_m - 16.0, u_exit_line * self.track.pit_span_m) - queue_idx * 10.0)
         car.s = (self.track.pit_entry_s + rel_ex) % L
         true_prog = car.s if car.s < L * 0.5 else (car.s - L)
         car._pit_start_dist = true_prog
