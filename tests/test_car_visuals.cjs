@@ -97,4 +97,25 @@ const q3 = sandbox.catmullRomValue(h0, h1, h2, h3, 0.75);
 assert.ok(Math.abs((q1 - h1) - 0.025) < 1e-6);
 assert.ok(Math.abs((h2 - q3) - 0.025) < 1e-6);
 
-console.log('Car visual checks passed: 12 liveries, damage, wet/worn tyres, immutable telemetry, wheel dimensions, balanced drawing state, cached materials, and smooth heading splines.');
+// Smooth tapered pit lane ribbon geometry: no abrupt step widening
+const pitPts = Array.from({ length: 41 }, (_, i) => [i * 15, 0]);
+const wallOffs = pitPts.map(() => -5.0);
+const smoothStep = (t) => t * t * (3 - 2 * t);
+const apronOffs = pitPts.map((_, i) => {
+  const u = i / (pitPts.length - 1);
+  const ramp = u < 0.2 ? smoothStep(u / 0.2) : u > 0.8 ? smoothStep((1 - u) / 0.2) : 1.0;
+  return 5.0 * (1 - ramp) + 15.6 * ramp;
+});
+const wallEdge = draw._buildPitEdgePoints(pitPts, 1, wallOffs);
+const apronEdge = draw._buildPitEdgePoints(pitPts, 1, apronOffs);
+const widths = wallEdge.map((w, i) => Math.hypot(apronEdge[i].x - w.x, apronEdge[i].y - w.y));
+assert.ok(Math.abs(widths[0] - 10.0) < 0.2);
+assert.ok(Math.abs(widths[20] - 20.6) < 0.2);
+assert.ok(Math.abs(widths[40] - 10.0) < 0.2);
+for (let i = 1; i < widths.length; i++) {
+  assert.ok(Math.abs(widths[i] - widths[i - 1]) < 2.2, `Abrupt pit width step at ${i}`);
+}
+const ribbonCtx = context2d();
+draw._tracePitRibbon(ribbonCtx, wallEdge, apronEdge);
+
+console.log('Car visual checks passed: 12 liveries, damage, wet/worn tyres, immutable telemetry, wheel dimensions, balanced drawing state, cached materials, smooth heading splines, and smooth tapered pit ribbon.');

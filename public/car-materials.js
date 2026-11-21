@@ -87,28 +87,48 @@ function sharedSurfaces() {
     ctx.fillRect(-8.5, -4.2, 18, 8.4);
   });
   const floor = surface(ctx => {
-    polygon(ctx, [[3.2,-3.3],[-5.8,-3.2],[-7,-2.2],[-7,2.2],[-5.8,3.2],[3.2,3.3]]);
+    // Sculpted ground-effect Venturi floor with subtle mid-waist coke-bottle curve & rear diffuser edge
+    ctx.beginPath();
+    ctx.moveTo(3.2, -3.28);
+    ctx.lineTo(0.2, -3.22);
+    ctx.quadraticCurveTo(-2.6, -3.02, -5.65, -3.14);
+    ctx.lineTo(-6.95, -2.22);
+    ctx.lineTo(-6.95, 2.22);
+    ctx.lineTo(-5.65, 3.14);
+    ctx.quadraticCurveTo(-2.6, 3.02, 0.2, 3.22);
+    ctx.lineTo(3.2, 3.28);
+    ctx.closePath();
     ctx.save(); ctx.clip();
     ctx.drawImage(carbon, -8.5, -4.2, 18, 8.4);
     const shade = ctx.createLinearGradient(0, -3.3, 0, 3.3);
-    shade.addColorStop(0, "rgba(110,130,148,.16)");
-    shade.addColorStop(.4, "rgba(0,0,0,.2)");
-    shade.addColorStop(1, "rgba(0,0,0,.65)");
-    ctx.fillStyle = shade; ctx.fillRect(-7,-3.3,11,6.6);
+    shade.addColorStop(0, "rgba(128,148,166,.20)");
+    shade.addColorStop(.38, "rgba(0,0,0,.22)");
+    shade.addColorStop(.5, "rgba(18,22,28,.35)");
+    shade.addColorStop(1, "rgba(0,0,0,.68)");
+    ctx.fillStyle = shade; ctx.fillRect(-7.0, -3.35, 10.3, 6.7);
+    // Central titanium plank glint along centerline underside
+    ctx.fillStyle = "rgba(165, 178, 194, 0.14)";
+    ctx.fillRect(-6.8, -0.35, 8.4, 0.7);
     ctx.restore();
-    ctx.strokeStyle = "#414952"; ctx.lineWidth = .1; ctx.stroke();
-    // Machined floor edges and diffuser strakes stay inside the old outline.
-    ctx.strokeStyle = "rgba(151,161,170,.44)"; ctx.lineWidth = .07;
+    ctx.strokeStyle = "#48515c"; ctx.lineWidth = .1; ctx.stroke();
+    // Machined metallic floor-edge winglet stays & Venturi strake channels
+    ctx.strokeStyle = "rgba(175,186,198,.48)"; ctx.lineWidth = .08;
     ctx.beginPath();
     for (const side of [-1, 1]) {
-      ctx.moveTo(2.7, side * 3.13); ctx.lineTo(-5.55, side * 3.02);
-      ctx.lineTo(-6.75, side * 2.04);
+      ctx.moveTo(2.75, side * 3.10); ctx.lineTo(0.4, side * 3.06);
+      ctx.quadraticCurveTo(-2.5, side * 2.86, -5.45, side * 2.98);
+      ctx.lineTo(-6.72, side * 2.06);
+      // Floor-edge winglet slots
+      ctx.moveTo(1.55, side * 2.68); ctx.lineTo(1.05, side * 3.15);
+      ctx.moveTo(-0.35, side * 2.60); ctx.lineTo(-0.85, side * 3.00);
+      ctx.moveTo(-2.55, side * 2.48); ctx.lineTo(-3.05, side * 2.94);
     }
     ctx.stroke();
-    ctx.strokeStyle = "#080b10"; ctx.lineWidth = .18;
+    // Rear diffuser vertical fences / tunnels
+    ctx.strokeStyle = "#07090d"; ctx.lineWidth = .19;
     ctx.beginPath();
-    for (let y = -1.6; y <= 1.6; y += .64) {
-      ctx.moveTo(-6.85, y); ctx.lineTo(-4.7, y * .72);
+    for (let y = -1.75; y <= 1.75; y += .58) {
+      ctx.moveTo(-6.9, y); ctx.lineTo(-4.65, y * .70);
     }
     ctx.stroke();
   }, FLOOR_SURFACE_BOUNDS);
@@ -118,93 +138,172 @@ function sharedSurfaces() {
 
 function paintRelief(ctx, top, bottom) {
   const reflection = ctx.createLinearGradient(0, top, 0, bottom);
-  reflection.addColorStop(0, "rgba(0,0,0,.46)");
-  reflection.addColorStop(.15, "rgba(255,255,255,.3)");
-  reflection.addColorStop(.34, "rgba(255,255,255,.06)");
-  reflection.addColorStop(.48, "rgba(255,255,255,.2)");
-  reflection.addColorStop(.62, "rgba(0,0,0,.07)");
-  reflection.addColorStop(1, "rgba(0,0,0,.58)");
+  reflection.addColorStop(0, "rgba(0,0,0,.48)");
+  reflection.addColorStop(.14, "rgba(255,255,255,.32)");
+  reflection.addColorStop(.34, "rgba(255,255,255,.07)");
+  reflection.addColorStop(.49, "rgba(255,255,255,.22)");
+  reflection.addColorStop(.64, "rgba(0,0,0,.09)");
+  reflection.addColorStop(1, "rgba(0,0,0,.60)");
   ctx.fillStyle = reflection;
   ctx.fillRect(-7, top, 17, bottom - top);
 }
 
 function bodySurface(liv, team, number, retired) {
   return surface(ctx => {
-    // The body and sidepod outlines match the existing vector car exactly.
-    polygon(ctx, [[2.4,-1.3],[1.7,-3.05],[-1.4,-2.95],[-4.8,-1.75],
-                  [-4.8,1.75],[-1.4,2.95],[1.7,3.05],[2.4,1.3]]);
+    // 1. Sculpted 2026 coke-bottle sidepods with smooth curved taper
+    ctx.beginPath();
+    ctx.moveTo(2.4, -1.25);
+    ctx.quadraticCurveTo(2.25, -2.95, 0.8, -3.02);
+    ctx.quadraticCurveTo(-1.8, -2.95, -4.95, -1.55);
+    ctx.lineTo(-5.2, 1.55);
+    ctx.quadraticCurveTo(-1.8, 2.95, 0.8, 3.02);
+    ctx.quadraticCurveTo(2.25, 2.95, 2.4, 1.25);
+    ctx.closePath();
     ctx.fillStyle = retired ? "#444b57" : liv.pod; ctx.fill();
     ctx.save(); ctx.clip();
     paintRelief(ctx, -3.05, 3.05);
     for (const side of [-1, 1]) {
-      // Carbon undercut separates the coloured pod from its exposed floor.
-      polygon(ctx, [[1.8,side*2.85],[-1.5,side*2.78],[-4.65,side*1.72],
-                    [-4.65,side*1.95],[-1.5,side*3.04],[1.8,side*3.12]]);
+      // Carbon sidepod undercut separating coloured bodywork from Venturi floor
+      polygon(ctx, [[1.8,side*2.82],[-1.5,side*2.72],[-4.85,side*1.52],
+                    [-4.85,side*1.92],[-1.5,side*3.04],[1.8,side*3.12]]);
       ctx.fillStyle = "#11161d"; ctx.fill();
       ctx.strokeStyle = retired ? "#69717c" : liv.stripe; ctx.lineWidth = .14;
-      ctx.beginPath(); ctx.moveTo(1.5, side * 2.68);
-      ctx.lineTo(-1.3, side * 2.6); ctx.lineTo(-4.2, side * 1.72); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(1.55, side * 2.66);
+      ctx.quadraticCurveTo(-1.3, side * 2.55, -4.45, side * 1.54);
+      ctx.stroke();
+
+      // Overhead downwash sidepod waterslide channel shading
+      const gully = ctx.createLinearGradient(0, side * 1.35, 0, side * 2.55);
+      gully.addColorStop(0, "rgba(0,0,0,.38)");
+      gully.addColorStop(.55, "rgba(0,0,0,.12)");
+      gully.addColorStop(1, "rgba(255,255,255,.16)");
+      ctx.fillStyle = gully;
+      polygon(ctx, [[1.0, side * 1.55], [-4.3, side * 1.15], [-4.4, side * 1.65], [0.7, side * 2.42]]);
+      ctx.fill();
+
       if (!retired) {
-        // Team-specific panel graphics, rather than a uniform solid fill.
         if (team === "mclaren" || team === "haas" || team === "racingbulls") {
-          polygon(ctx, [[1.1,side*1.58],[-.4,side*2.46],[-3.7,side*1.87],[-2.7,side*1.5]]);
+          polygon(ctx, [[1.15,side*1.58],[-.4,side*2.44],[-3.9,side*1.75],[-2.7,side*1.45]]);
           ctx.fillStyle = team === "racingbulls" ? "#eaf2ff" : "#10151b"; ctx.fill();
         } else if (team === "redbull") {
           ctx.fillStyle = "#e10600";
-          polygon(ctx, [[.9,side*1.65],[-.8,side*2.55],[-3.5,side*1.85],[-2,side*1.5]]); ctx.fill();
-          ctx.fillStyle = "#ffd200"; ctx.beginPath(); ctx.ellipse(-.9,side*2.13,.42,.31,0,0,Math.PI*2); ctx.fill();
+          polygon(ctx, [[.95,side*1.65],[-.8,side*2.52],[-3.6,side*1.75],[-2,side*1.45]]); ctx.fill();
+          ctx.fillStyle = "#ffd200"; ctx.beginPath(); ctx.ellipse(-.9,side*2.08,.44,.32,0,0,Math.PI*2); ctx.fill();
         } else if (team === "williams" || team === "cadillac" || team === "audi") {
-          polygon(ctx, [[.9,side*2.55],[-.2,side*2.55],[-2.5,side*1.64],[-1.55,side*1.59]]);
+          polygon(ctx, [[1.0,side*2.52],[-.2,side*2.52],[-2.6,side*1.60],[-1.55,side*1.55]]);
           ctx.fillStyle = team === "williams" ? "#dceaff" : liv.stripe; ctx.fill();
+        } else if (team === "alpine") {
+          polygon(ctx, [[1.2,side*2.58],[0.1,side*2.62],[-2.8,side*1.52],[-1.7,side*1.48]]);
+          ctx.fillStyle = "#ff87bc"; ctx.fill();
+        } else if (team === "aston") {
+          polygon(ctx, [[1.1,side*2.45],[0.2,side*2.48],[-3.2,side*1.58],[-2.5,side*1.50]]);
+          ctx.fillStyle = "#cedc00"; ctx.fill();
+        } else if (team === "mercedes") {
+          polygon(ctx, [[1.1,side*2.48],[0.4,side*2.52],[-3.4,side*1.52],[-2.8,side*1.45]]);
+          ctx.fillStyle = "#00d2be"; ctx.fill();
+        } else if (team === "ferrari") {
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(-1.8, side * 1.92, 1.5, .26);
+          ctx.fillStyle = "#ffd200";
+          ctx.fillRect(-1.8, side * 1.72, 1.5, .14);
+        } else {
+          polygon(ctx, [[0.8,side*2.42],[0.1,side*2.45],[-2.8,side*1.56],[-2.1,side*1.50]]);
+          ctx.fillStyle = liv.stripe; ctx.fill();
         }
       }
-      // Recessed cooling louvres and their bevelled leading edges.
-      for (let i = 0; i < 6; i++) {
-        const x = -.9 - i * .37, y = side * (1.55 + (5 - i) * .07);
-        ctx.strokeStyle = "rgba(0,0,0,.65)"; ctx.lineWidth = .17;
-        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-.25,y+side*.48); ctx.stroke();
-        ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = .045;
-        ctx.beginPath(); ctx.moveTo(x+.08,y); ctx.lineTo(x-.17,y+side*.48); ctx.stroke();
+      // Recessed engine-cover cooling louvre gills
+      for (let i = 0; i < 7; i++) {
+        const x = -.75 - i * .35, y = side * (1.50 + (6 - i) * .065);
+        ctx.strokeStyle = "rgba(0,0,0,.68)"; ctx.lineWidth = .16;
+        ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-.24,y+side*.46); ctx.stroke();
+        ctx.strokeStyle = "rgba(255,255,255,.20)"; ctx.lineWidth = .045;
+        ctx.beginPath(); ctx.moveTo(x+.08,y); ctx.lineTo(x-.16,y+side*.46); ctx.stroke();
       }
     }
     ctx.restore();
-    // Deep radiator mouths with a metal lip.
+
+    // 2. Sculpted radiator overbite inlets + aerodynamic carbon wing mirrors
     for (const side of [-1, 1]) {
-      ctx.fillStyle = "#070a0d"; ctx.fillRect(1.3, side < 0 ? -2.85 : 1.5, .7, 1.35);
-      ctx.fillStyle = "rgba(193,207,217,.4)"; ctx.fillRect(1.91, side < 0 ? -2.8 : 1.55, .08, 1.23);
+      ctx.fillStyle = "#070a0d"; ctx.fillRect(1.3, side < 0 ? -2.82 : 1.48, .72, 1.34);
+      ctx.fillStyle = "rgba(205,220,232,.46)"; ctx.fillRect(1.94, side < 0 ? -2.76 : 1.53, .09, 1.22);
+      // Carbon mirror stalk & streamlined wing mirror pod
+      ctx.strokeStyle = "#181d25"; ctx.lineWidth = .22;
+      ctx.beginPath(); ctx.moveTo(2.05, side * 1.22); ctx.lineTo(2.22, side * 1.92); ctx.stroke();
+      ctx.fillStyle = retired ? "#4b5260" : "#11151c";
+      ctx.fillRect(1.92, side < 0 ? -2.26 : 1.74, .64, .52);
+      ctx.fillStyle = retired ? "#69717c" : liv.stripe;
+      ctx.fillRect(2.44, side < 0 ? -2.22 : 1.78, .12, .44);
     }
-    polygon(ctx, [[9.1,0],[8.5,-.65],[4,-1.15],[1.2,-1.35],[-5.8,-1.1],[-6.8,-.55],
-                  [-6.8,.55],[-5.8,1.1],[1.2,1.35],[4,1.15],[8.5,.65]]);
+
+    // 3. Monocoque chassis, curved F1 nosecone & tapered engine cover
+    ctx.beginPath();
+    ctx.moveTo(9.1, 0);
+    ctx.quadraticCurveTo(8.7, -.56, 6.9, -.82);
+    ctx.quadraticCurveTo(4.0, -1.16, 1.2, -1.36);
+    ctx.lineTo(-5.8, -1.02);
+    ctx.lineTo(-6.85, -.48);
+    ctx.lineTo(-6.85, .48);
+    ctx.lineTo(-5.8, 1.02);
+    ctx.lineTo(1.2, 1.36);
+    ctx.quadraticCurveTo(4.0, 1.16, 6.9, .82);
+    ctx.quadraticCurveTo(8.7, .56, 9.1, 0);
+    ctx.closePath();
     ctx.fillStyle = retired ? "#545d6b" : liv.body; ctx.fill();
     ctx.save(); ctx.clip();
     paintRelief(ctx, -1.35, 1.35);
     if (!retired) {
       ctx.fillStyle = liv.noseTip;
-      polygon(ctx, [[9.1,0],[7.1,-.72],[7.1,.72]]); ctx.fill();
-      ctx.strokeStyle = liv.stripe; ctx.lineWidth = .38;
-      ctx.beginPath(); ctx.moveTo(-6.1,0); ctx.lineTo(-2.1,0); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(9.1, 0);
+      ctx.quadraticCurveTo(8.3, -.58, 7.05, -.74);
+      ctx.lineTo(7.05, .74);
+      ctx.quadraticCurveTo(8.3, .58, 9.1, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      // Engine cover shark-fin dorsal spine & team accents
+      ctx.strokeStyle = liv.stripe; ctx.lineWidth = .34;
+      ctx.beginPath(); ctx.moveTo(-6.3, 0); ctx.lineTo(-2.1, 0); ctx.stroke();
       if (team === "ferrari") {
         for (const [y, color] of [[-.22,"#008c48"],[-.07,"#ffffff"],[.08,"#d51c31"]]) {
-          ctx.fillStyle = color; ctx.fillRect(-5.8,y,2.4,.15);
+          ctx.fillStyle = color; ctx.fillRect(-5.9, y, 2.5, .15);
         }
+      } else if (team === "williams") {
+        // Classic Duracell copper roll-hoop battery motif
+        ctx.fillStyle = "#d97706";
+        ctx.fillRect(-3.55, -.44, 1.05, .88);
+        ctx.fillStyle = "#0b0e14";
+        ctx.fillRect(-4.35, -.44, .80, .88);
+      } else if (team === "mercedes") {
+        // Subtle INEOS crimson airbox collar
+        ctx.fillStyle = "#e10600";
+        ctx.fillRect(-3.1, -.45, .85, .90);
       }
     }
-    ctx.strokeStyle = "rgba(255,255,255,.32)"; ctx.lineWidth = .09;
-    ctx.beginPath(); ctx.moveTo(-5.8,-.68); ctx.lineTo(-2.4,-.8);
-    ctx.moveTo(2.2,-.91); ctx.lineTo(7,-.39); ctx.stroke();
-    ctx.strokeStyle = "rgba(0,0,0,.45)"; ctx.lineWidth = .08;
-    ctx.beginPath(); ctx.moveTo(2.4,-1.05); ctx.lineTo(2.4,1.05);
-    ctx.moveTo(-4.9,-.95); ctx.lineTo(-4.9,.95); ctx.stroke();
-    // Clear racing numbers, baked once with the livery rather than per frame.
-    ctx.save(); ctx.translate(6.2,0); ctx.rotate(Math.PI*.5);
-    ctx.font = "900 1.12px Arial, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.lineWidth = .16; ctx.strokeStyle = "#10151b"; ctx.fillStyle = "#ffffff";
+    // Panel seams & specular cockpit shoulder contours
+    ctx.strokeStyle = "rgba(255,255,255,.34)"; ctx.lineWidth = .09;
+    ctx.beginPath(); ctx.moveTo(-5.8,-.64); ctx.lineTo(-2.4,-.76);
+    ctx.moveTo(2.2,-.90); ctx.lineTo(7.0,-.36); ctx.stroke();
+    ctx.strokeStyle = "rgba(0,0,0,.48)"; ctx.lineWidth = .08;
+    ctx.beginPath(); ctx.moveTo(2.4,-1.04); ctx.lineTo(2.4,1.04);
+    ctx.moveTo(-4.9,-.92); ctx.lineTo(-4.9,.92); ctx.stroke();
+
+    // Clear shadowed racing number on nose
+    ctx.save(); ctx.translate(6.15, 0); ctx.rotate(Math.PI*.5);
+    ctx.font = "900 1.15px Arial, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.lineWidth = .18; ctx.strokeStyle = "#0b0f14"; ctx.fillStyle = "#ffffff";
     ctx.strokeText(String(number ?? ""),0,0); ctx.fillText(String(number ?? ""),0,0); ctx.restore();
     ctx.restore();
-    // Flush fasteners on the monocoque shoulders.
-    ctx.fillStyle = "rgba(215,222,229,.64)";
-    for (const x of [2.5,3.2]) for (const side of [-1,1]) {
-      ctx.beginPath(); ctx.arc(x,side*.9,.055,0,Math.PI*2); ctx.fill();
+
+    // Twin FIA forward nose camera vane pods & flush titanium fasteners
+    ctx.fillStyle = "#11151b";
+    for (const side of [-1, 1]) {
+      ctx.fillRect(5.45, side < 0 ? -1.04 : .74, .65, .30);
+    }
+    ctx.fillStyle = "rgba(220,228,236,.68)";
+    for (const x of [2.5, 3.25]) for (const side of [-1,1]) {
+      ctx.beginPath(); ctx.arc(x, side*.90, .055, 0, Math.PI*2); ctx.fill();
     }
   }, BODY_SURFACE_BOUNDS);
 }
@@ -212,19 +311,21 @@ function bodySurface(liv, team, number, retired) {
 function rubberSurface(compound, worn) {
   const result = canvas(128,64), ctx = result.getContext("2d");
   const shade = ctx.createLinearGradient(0,0,0,64);
-  for (const [stop,color] of [[0,"#07090c"],[.16,"#272c31"],[.43,"#171b20"],[.7,"#101318"],[1,"#040609"]]) shade.addColorStop(stop,color);
+  for (const [stop,color] of [[0,"#05070a"],[.13,"#282e35"],[.36,"#1b2026"],[.58,"#15191f"],[.86,"#0d1015"],[1,"#040608"]]) shade.addColorStop(stop,color);
   ctx.fillStyle = shade; ctx.fillRect(0,0,128,64);
-  // Stable, deterministic rubber grain: no frame-to-frame random shimmer.
-  for (let i = 0; i < 32; i++) {
-    ctx.fillStyle = `rgba(181,183,174,${worn ? .13 : .055})`;
-    ctx.fillRect((i*37)%119, 8+(i*17)%48, 5+(i%5)*3, .6);
+  // Subtle moulded centre contact sheen & marbling on worn tyres
+  ctx.fillStyle = worn ? "rgba(188,188,176,.14)" : "rgba(255,255,255,.04)";
+  ctx.fillRect(0, 22, 128, 20);
+  for (let i = 0; i < 36; i++) {
+    ctx.fillStyle = `rgba(184,186,178,${worn ? .15 : .06})`;
+    ctx.fillRect((i*37)%118, 8+(i*17)%48, 5+(i%5)*3, .65);
   }
   if (compound === "INTER" || compound === "WET") {
-    ctx.strokeStyle = "#020305"; ctx.lineWidth = compound === "WET" ? 3 : 2;
+    ctx.strokeStyle = "#020305"; ctx.lineWidth = compound === "WET" ? 3.2 : 2.1;
     ctx.beginPath();
-    for (const y of [18,32,46]) { ctx.moveTo(0,y); ctx.lineTo(128,y); }
-    for (let x = -16; x < 144; x += 18) {
-      ctx.moveTo(x,4); ctx.lineTo(x+12,23); ctx.moveTo(x+12,41); ctx.lineTo(x,60);
+    for (const y of [17,32,47]) { ctx.moveTo(0,y); ctx.lineTo(128,y); }
+    for (let x = -16; x < 144; x += 17) {
+      ctx.moveTo(x,3); ctx.lineTo(x+12,23); ctx.moveTo(x+12,41); ctx.lineTo(x,61);
     }
     ctx.stroke();
   }

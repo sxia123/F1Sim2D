@@ -885,50 +885,146 @@ export class CircuitRenderer {
     const ppts = this.track.pit_points || [];
     const pitWidth = this.track.pit_width_px || 32;
     if (ppts.length > 1) {
-      const accessWidth = Math.max(14.0, pitWidth * 0.50);
-      this._traceSmoothOpenPoints(ctx, ppts);
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = "#060609";
-      ctx.lineWidth = accessWidth + 4.4;
-      ctx.stroke();
-
-      // 1b. Single-lane Pit Entry / Exit Access Roads
-      ctx.strokeStyle = "rgba(255,255,255,.42)";
-      ctx.lineWidth = accessWidth + 1.4;
-      ctx.stroke();
-      ctx.strokeStyle = "#161b26";
-      ctx.lineWidth = accessWidth;
-      ctx.stroke();
-
       const side = this.track.pit_side || 1;
       const geom = this.track.car_geometry || { length_m: 5.5, width_m: 1.9, front_axle_m: 1.55, world_units_per_m: 3.2 };
       const ppm = geom.world_units_per_m || 3.2;
       const stallLen = (geom.length_m + 0.9) * ppm;
       const stallWid = (geom.width_m + 0.45) * ppm;
+      const fastOff = this.track.pit_fast_offset_px ?? (-1.6 * ppm);
       const apronOff = this.track.pit_apron_offset_px ?? (3.0 * ppm);
       const laneDividerOff = (apronOff - stallWid * 0.5 - 1.1) * side;
 
       const uSpeedIn = this.track.pit_speed_entry_u ?? 0.1;
       const uSpeedOut = this.track.pit_speed_exit_u ?? 0.9;
+      const pitLenM = Math.max(80, this.track.pit_length_m || 360);
+      const garages = this.track.pit_garages || [];
+      let uGarMin = uSpeedIn + 0.04;
+      let uGarMax = uSpeedOut - 0.04;
+      if (garages.length > 0) {
+        uGarMin = 1.0;
+        uGarMax = 0.0;
+        for (const g of garages) {
+          let bestK = 0;
+          let bestD2 = Infinity;
+          for (let k = 0; k < ppts.length; k++) {
+            const dx = ppts[k][0] - g.x;
+            const dy = ppts[k][1] - g.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 < bestD2) {
+              bestD2 = d2;
+              bestK = k;
+            }
+          }
+          const gu = bestK / Math.max(1, ppts.length - 1);
+          if (gu < uGarMin) uGarMin = gu;
+          if (gu > uGarMax) uGarMax = gu;
+        }
+      }
+
+      const smoothstep = (t) => {
+        const c = Math.max(0, Math.min(1, t));
+        return c * c * (3 - 2 * c);
+      };
+      const taperU = Math.min(36.0, pitLenM * 0.20) / pitLenM;
+      const rampU = Math.min(0.16, Math.max(0.075, 58.0 / pitLenM));
+      const wFull0 = Math.max(0.03, Math.min(uGarMin - 0.025, uSpeedIn + 0.025));
+      const wFull1 = Math.min(0.97, Math.max(uGarMax + 0.025, uSpeedOut - 0.025));
+      const wStart0 = Math.max(0.01, wFull0 - rampU);
+      const wEnd1 = Math.min(0.99, wFull1 + rampU);
+      const fastHalf = Math.max(4.4, 1.95 * ppm);
+      const workingOuter = Math.max(apronOff + stallWid * 0.5 + 2.0, pitWidth * 0.5);
+
+      const nPit = ppts.length;
+      const workRampAt = new Array(nPit);
+      const wallOffs = new Array(nPit);
+      const apronOffs = new Array(nPit);
+      const shadowWallOffs = new Array(nPit);
+      const shadowApronOffs = new Array(nPit);
+      const concInnerOffs = new Array(nPit);
+      const concOuterOffs = new Array(nPit);
+      for (let k = 0; k < nPit; k++) {
+        const u = k / Math.max(1, nPit - 1);
+        const fastFade = Math.min(smoothstep(u / Math.max(0.01, taperU)), smoothstep((1 - u) / Math.max(0.01, taperU)));
+        const fastCenter = fastOff * fastFade;
+        let wr = 1.0;
+        if (u <= wStart0 || u >= wEnd1) wr = 0.0;
+        else if (u < wFull0) wr = smoothstep((u - wStart0) / Math.max(0.01, wFull0 - wStart0));
+        else if (u > wFull1) wr = smoothstep((wEnd1 - u) / Math.max(0.01, wEnd1 - wFull1));
+        workRampAt[k] = wr;
+        const wOff = fastCenter - fastHalf;
+        const aOff = (fastCenter + fastHalf) * (1 - wr) + workingOuter * wr;
+        wallOffs[k] = wOff;
+        apronOffs[k] = aOff;
+        shadowWallOffs[k] = wOff - 2.3;
+        shadowApronOffs[k] = aOff + 2.3;
+        const cIn = fastCenter + fastHalf * 0.45;
+        concInnerOffs[k] = cIn;
+        concOuterOffs[k] = Math.max(cIn, aOff - 0.8);
+      }
+
+      const shWallPts = this._buildPitEdgePoints(ppts, side, shadowWallOffs);
+      const shApronPts = this._buildPitEdgePoints(ppts, side, shadowApronOffs);
+      const wallPts = this._buildPitEdgePoints(ppts, side, wallOffs);
+      const apronPts = this._buildPitEdgePoints(ppts, side, apronOffs);
+
+      // 1. Continuous tapered pit verge shadow
+      this._tracePitRibbon(ctx, shWallPts, shApronPts);
+      ctx.fillStyle = "#060609";
+      ctx.fill();
+
+      // 2. Smooth continuous asphalt ribbon (no abrupt step widening)
+      this._tracePitRibbon(ctx, wallPts, apronPts);
+      ctx.fillStyle = "#161b26";
+      ctx.fill();
+
+      // 3. Contrasting FIA garage apron zone across the flared working bay
+      const wStartIdx = Math.max(0, Math.floor(wStart0 * (nPit - 1)));
+      const wEndIdx = Math.min(nPit - 1, Math.ceil(wEnd1 * (nPit - 1)));
+      if (wEndIdx > wStartIdx + 2) {
+        const concSlice = ppts.slice(wStartIdx, wEndIdx + 1);
+        const cInPts = this._buildPitEdgePoints(concSlice, side, concInnerOffs.slice(wStartIdx, wEndIdx + 1));
+        const cOutPts = this._buildPitEdgePoints(concSlice, side, concOuterOffs.slice(wStartIdx, wEndIdx + 1));
+        this._tracePitRibbon(ctx, cInPts, cOutPts);
+        ctx.fillStyle = "#1e2433";
+        ctx.fill();
+      }
+
+      // 4. Crisp white pit-lane boundary stripes along both tapered edges
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,.46)";
+      ctx.lineWidth = 0.9;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      this._traceSmoothOpenPoints(ctx, wallPts);
+      ctx.stroke();
+      this._traceSmoothOpenPoints(ctx, apronPts);
+      ctx.stroke();
+      ctx.restore();
+
+      // 5. Sleek FIA Pit Wall barrier along working complex edge (towards track side)
+      const fia0 = Math.max(0, Math.floor(wFull0 * (nPit - 1)));
+      const fia1 = Math.min(nPit - 1, Math.ceil(wFull1 * (nPit - 1)));
+      if (fia1 > fia0 + 2) {
+        const pitWallBarPts = this._buildPitEdgePoints(
+          ppts.slice(fia0, fia1 + 1),
+          side,
+          wallOffs.slice(fia0, fia1 + 1).map((o) => o - 1.5),
+        );
+        ctx.save();
+        ctx.lineCap = "butt";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "#343c4e";
+        ctx.lineWidth = 2.0;
+        this._traceSmoothOpenPoints(ctx, pitWallBarPts);
+        ctx.stroke();
+        ctx.strokeStyle = "rgba(225, 6, 0, 0.55)";
+        ctx.lineWidth = 0.6;
+        ctx.stroke();
+        ctx.restore();
+      }
+
       const iDiv0 = Math.max(0, Math.floor(uSpeedIn * (ppts.length - 1)));
       const iDiv1 = Math.min(ppts.length - 1, Math.ceil(uSpeedOut * (ppts.length - 1)));
-      const workingPts = ppts.slice(iDiv0, iDiv1 + 1);
-      if (workingPts.length > 1) {
-        // 2. Dual-lane FIA Working Pit Complex & Speed-Limit Zone
-        this._traceSmoothOpenPoints(ctx, workingPts);
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.strokeStyle = "#060609";
-        ctx.lineWidth = pitWidth + 5.2;
-        ctx.stroke();
-        ctx.strokeStyle = "rgba(255,255,255,.45)";
-        ctx.lineWidth = pitWidth + 1.6;
-        ctx.stroke();
-        ctx.strokeStyle = "#161b26";
-        ctx.lineWidth = pitWidth;
-        ctx.stroke();
-      }
       if (iDiv1 > iDiv0 + 1) {
         ctx.save();
         ctx.strokeStyle = "rgba(255, 255, 255, 0.36)";
@@ -950,14 +1046,15 @@ export class CircuitRenderer {
         ctx.restore();
       }
 
+      // 6. Yellow FIA 80 km/h speed limit entry & exit lines trimmed strictly between asphalt edges
       for (const u of [uSpeedIn, uSpeedOut]) {
-        const i = Math.min(ppts.length-2, Math.floor(u*(ppts.length-1)));
-        const a=ppts[i],b=ppts[i+1],len=Math.hypot(b[0]-a[0],b[1]-a[1])||1;
-        const nx=-(b[1]-a[1])/len,ny=(b[0]-a[0])/len;
+        const i = Math.max(0, Math.min(nPit - 1, Math.round(u * (nPit - 1))));
         ctx.beginPath();
-        ctx.moveTo(a[0]-nx*pitWidth*.48,a[1]-ny*pitWidth*.48);
-        ctx.lineTo(a[0]+nx*pitWidth*.48,a[1]+ny*pitWidth*.48);
-        ctx.strokeStyle="#ffd700";ctx.lineWidth=1.5;ctx.stroke();
+        ctx.moveTo(wallPts[i].x, wallPts[i].y);
+        ctx.lineTo(apronPts[i].x, apronPts[i].y);
+        ctx.strokeStyle = "#ffd700";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       }
       // Team Pit Stall locations with Constructor Logos & Gantry Graphics
       for (const g of this.track.pit_garages || []) {
@@ -1373,6 +1470,54 @@ export class CircuitRenderer {
       ctx.quadraticCurveTo(gx(pts[i]), gy(pts[i]), mx, my);
     }
     ctx.lineTo(gx(pts[n - 1]), gy(pts[n - 1]));
+  }
+
+  _buildPitEdgePoints(ppts, side, offsets) {
+    const n = ppts.length;
+    let pts = new Array(n);
+    for (let k = 0; k < n; k++) {
+      const prev = ppts[Math.max(0, k - 1)];
+      const next = ppts[Math.min(n - 1, k + 1)];
+      const dx = next[0] - prev[0], dy = next[1] - prev[1];
+      const segL = Math.hypot(dx, dy) || 1;
+      const nx = (-dy / segL) * side, ny = (dx / segL) * side;
+      const off = offsets[k] || 0;
+      pts[k] = { x: ppts[k][0] + nx * off, y: ppts[k][1] + ny * off };
+    }
+    for (let pass = 0; pass < 2; pass++) {
+      const nextPts = pts.slice();
+      for (let k = 1; k < n - 1; k++) {
+        nextPts[k] = {
+          x: 0.22 * pts[k - 1].x + 0.56 * pts[k].x + 0.22 * pts[k + 1].x,
+          y: 0.22 * pts[k - 1].y + 0.56 * pts[k].y + 0.22 * pts[k + 1].y,
+        };
+      }
+      pts = nextPts;
+    }
+    return pts;
+  }
+
+  _tracePitRibbon(ctx, sideAPts, sideBPts) {
+    const nA = sideAPts.length;
+    const revB = [...sideBPts].reverse();
+    const nB = revB.length;
+    ctx.beginPath();
+    if (nA < 2 || nB < 2) return;
+    ctx.moveTo(sideAPts[0].x, sideAPts[0].y);
+    for (let i = 1; i < nA - 1; i++) {
+      const mx = (sideAPts[i].x + sideAPts[i + 1].x) * 0.5;
+      const my = (sideAPts[i].y + sideAPts[i + 1].y) * 0.5;
+      ctx.quadraticCurveTo(sideAPts[i].x, sideAPts[i].y, mx, my);
+    }
+    ctx.lineTo(sideAPts[nA - 1].x, sideAPts[nA - 1].y);
+    ctx.lineTo(revB[0].x, revB[0].y);
+    for (let i = 1; i < nB - 1; i++) {
+      const mx = (revB[i].x + revB[i + 1].x) * 0.5;
+      const my = (revB[i].y + revB[i + 1].y) * 0.5;
+      ctx.quadraticCurveTo(revB[i].x, revB[i].y, mx, my);
+    }
+    ctx.lineTo(revB[nB - 1].x, revB[nB - 1].y);
+    ctx.closePath();
   }
 
   _computeSmoothEdgePoints(sts, side, extraWidth = 0) {
@@ -1867,23 +2012,31 @@ export class CircuitRenderer {
     const floorBounds = FLOOR_SURFACE_BOUNDS;
     ctx.drawImage(surfaces.floor, floorBounds.x, floorBounds.y, floorBounds.width, floorBounds.height);
 
-    // 3. Carbon Double-Wishbone Suspension Arms (Front & Rear)
+    // 3. Carbon Double-Wishbone Suspension Arms, Pushrods & Brake-Duct Aero Scoops
     ctx.strokeStyle = "#181a22";
     ctx.lineWidth = 0.85;
     ctx.beginPath();
-    // Front wishbones
-    ctx.moveTo(5.4, -1.0); ctx.lineTo(frontAxle+.1, -frontHub);
-    ctx.moveTo(3.4, -1.2); ctx.lineTo(frontAxle-.1, -frontHub);
-    ctx.moveTo(5.4, 1.0);  ctx.lineTo(frontAxle+.1, frontHub);
-    ctx.moveTo(3.4, 1.2);  ctx.lineTo(frontAxle-.1, frontHub);
-    // Rear wishbones
-    ctx.moveTo(-4.2, -1.2); ctx.lineTo(rearAxle, -rearHub);
-    ctx.moveTo(-6.0, -1.0); ctx.lineTo(rearAxle, -rearHub);
-    ctx.moveTo(-4.2, 1.2);  ctx.lineTo(rearAxle, rearHub);
-    ctx.moveTo(-6.0, 1.0);  ctx.lineTo(rearAxle, rearHub);
+    // Front double wishbones & steering track-rod
+    ctx.moveTo(5.45, -1.0); ctx.lineTo(frontAxle + 0.15, -frontHub);
+    ctx.moveTo(3.45, -1.2); ctx.lineTo(frontAxle - 0.15, -frontHub);
+    ctx.moveTo(4.65, -0.95); ctx.lineTo(frontAxle, -frontHub);
+    ctx.moveTo(5.45, 1.0);  ctx.lineTo(frontAxle + 0.15, frontHub);
+    ctx.moveTo(3.45, 1.2);  ctx.lineTo(frontAxle - 0.15, frontHub);
+    ctx.moveTo(4.65, 0.95); ctx.lineTo(frontAxle, frontHub);
+    // Rear double wishbones & pullrod
+    ctx.moveTo(-4.15, -1.15); ctx.lineTo(rearAxle + 0.12, -rearHub);
+    ctx.moveTo(-6.05, -0.92); ctx.lineTo(rearAxle - 0.12, -rearHub);
+    ctx.moveTo(-4.15, 1.15);  ctx.lineTo(rearAxle + 0.12, rearHub);
+    ctx.moveTo(-6.05, 0.92);  ctx.lineTo(rearAxle - 0.12, rearHub);
     ctx.stroke();
 
-    // 4. Four Sculpted Pirelli F1 Wheels + Steerable Front Hubs + Sidewall Rings
+    // Inner carbon brake-duct scoops beside all four upright hubs
+    ctx.fillStyle = "#11141c";
+    for (const [ax, hb] of [[frontAxle, -frontHub + 0.45], [frontAxle, frontHub - 0.45], [rearAxle, -rearHub + 0.48], [rearAxle, rearHub - 0.48]]) {
+      ctx.fillRect(ax - 0.42, hb - 0.22, 0.84, 0.44);
+    }
+
+    // 4. Four Sculpted Pirelli F1 Wheels + Wheel-Cover Highlight + Sidewall Rings
     const tyreCol = TIRE_COLORS[c.comp] || "#ffffff";
     const wheelSpecs = [
       [frontAxle,-frontHub,geom.front_tyre_diameter_m*ppm,geom.front_tyre_width_m*ppm,true],
@@ -1907,10 +2060,12 @@ export class CircuitRenderer {
       // Texture the contact surface inside the original rounded tyre outline.
       ctx.drawImage(surfaces.rubber, -ww * .43, -wh * .33, ww * .86, wh * .66);
 
-      // Pirelli compound sidewall stripe
+      // Subtle glossy inner rim lip & Pirelli compound sidewall bands
+      ctx.fillStyle = "rgba(198, 210, 224, 0.20)";
+      ctx.fillRect(-ww * 0.28, -wh * 0.11, ww * 0.56, wh * 0.22);
       ctx.fillStyle = tyreCol;
-      ctx.fillRect(-ww * 0.34, -wh * .35, ww * 0.68, wh*.12);
-      ctx.fillRect(-ww * 0.34, wh * .23, ww * 0.68, wh*.12);
+      ctx.fillRect(-ww * 0.36, -wh * .36, ww * 0.72, wh * .12);
+      ctx.fillRect(-ww * 0.36, wh * .24, ww * 0.72, wh * .12);
       ctx.restore();
     }
 
@@ -1958,7 +2113,8 @@ export class CircuitRenderer {
 
     ctx.fillStyle = c.dnf ? "#3f4452" : c.tcol;
     ctx.beginPath();
-    ctx.moveTo(8.5, -0.8);
+    ctx.moveTo(8.75, 0);
+    ctx.quadraticCurveTo(8.55, -0.82, 8.35, -1.05);
     if (hasLeftDmg) {
       // Jagged fractured carbon edge on damaged left side
       ctx.lineTo(7.6, -lSpan * 0.72);
@@ -1966,10 +2122,10 @@ export class CircuitRenderer {
       ctx.lineTo(6.4, -lSpan * 0.9);
       ctx.lineTo(6.6, -lSpan * 0.5);
     } else {
-      ctx.lineTo(7.5, -lSpan);
-      ctx.lineTo(6.3, -lSpan);
+      ctx.quadraticCurveTo(7.95, -lSpan * 0.62, 7.55, -lSpan);
+      ctx.lineTo(6.25, -lSpan);
     }
-    ctx.lineTo(7.1, 0);
+    ctx.lineTo(7.05, 0);
     if (hasRightDmg) {
       // Jagged fractured carbon edge on damaged right side
       ctx.lineTo(6.6, rSpan * 0.5);
@@ -1977,87 +2133,133 @@ export class CircuitRenderer {
       ctx.lineTo(7.3, rSpan);
       ctx.lineTo(7.6, rSpan * 0.72);
     } else {
-      ctx.lineTo(6.3, rSpan);
-      ctx.lineTo(7.5, rSpan);
+      ctx.lineTo(6.25, rSpan);
+      ctx.lineTo(7.55, rSpan);
+      ctx.quadraticCurveTo(7.95, rSpan * 0.62, 8.35, 1.05);
+      ctx.quadraticCurveTo(8.55, 0.82, 8.75, 0);
     }
-    ctx.lineTo(8.5, 0.8);
+    if (hasRightDmg) {
+      ctx.lineTo(8.35, 1.05);
+      ctx.quadraticCurveTo(8.55, 0.82, 8.75, 0);
+    }
     ctx.closePath();
     ctx.fill();
 
-    // Secondary front wing flap (highlights in Straight Active Aero)
+    // Triple stacked carbon flap slot-gap accents (highlights in Straight Active Aero)
     const wingOpacity = ctx.globalAlpha;
-    ctx.globalAlpha *= .65;
+    ctx.globalAlpha *= .68;
     ctx.fillStyle = carbonPaint;
     ctx.fill();
     ctx.globalAlpha = wingOpacity;
-    ctx.strokeStyle = c.aero === "STRAIGHT" ? "#ffffff" : "#0b0d12";
-    ctx.lineWidth = 0.45;
+
+    // Nose mounting pylons anchoring mainplane
+    ctx.fillStyle = "#0e1118";
+    ctx.fillRect(7.45, -0.52, 0.85, 0.22);
+    ctx.fillRect(7.45, 0.30, 0.85, 0.22);
+
+    ctx.strokeStyle = c.aero === "STRAIGHT" ? "#ffffff" : "rgba(255,255,255,0.28)";
+    ctx.lineWidth = c.aero === "STRAIGHT" ? 0.42 : 0.22;
     ctx.beginPath();
-    ctx.moveTo(7.2, -lSpan + 0.3);
-    ctx.lineTo(7.9, 0);
-    ctx.lineTo(7.2, rSpan - 0.3);
+    ctx.moveTo(7.15, -lSpan + 0.32);
+    ctx.quadraticCurveTo(7.72, -lSpan * 0.35, 7.95, 0);
+    ctx.quadraticCurveTo(7.72, rSpan * 0.35, 7.15, rSpan - 0.32);
+    ctx.moveTo(6.68, -lSpan + 0.45);
+    ctx.quadraticCurveTo(7.32, -lSpan * 0.32, 7.52, 0);
+    ctx.quadraticCurveTo(7.32, rSpan * 0.32, 6.68, rSpan - 0.45);
     ctx.stroke();
 
-    // Front wing endplates (only drawn if intact) & fluttering composite shards if damaged
+    // Sculpted outward-flared front wing endplates & corner diveplanes (or composite shards if broken)
     ctx.fillStyle = liv.stripe;
     if (!hasLeftDmg) {
-      ctx.fillRect(6.2, -lSpan - 0.25, 1.5, 0.4);
+      ctx.fillRect(6.15, -lSpan - 0.26, 1.65, 0.42);
+      ctx.fillStyle = "#11151d";
+      ctx.fillRect(6.45, -lSpan - 0.38, 0.95, 0.16);
     } else {
       ctx.fillStyle = "#111216";
       const fl = Math.sin(now * 0.035 + c.num) * 0.25;
       ctx.fillRect(6.3, -lSpan - 0.15 + fl, 0.6, 0.3);
     }
+    ctx.fillStyle = liv.stripe;
     if (!hasRightDmg) {
-      ctx.fillRect(6.2, rSpan - 0.15, 1.5, 0.4);
+      ctx.fillRect(6.15, rSpan - 0.16, 1.65, 0.42);
+      ctx.fillStyle = "#11151d";
+      ctx.fillRect(6.45, rSpan + 0.22, 0.95, 0.16);
     } else {
       ctx.fillStyle = "#111216";
       const fl = Math.cos(now * 0.035 + c.num) * 0.25;
       ctx.fillRect(6.3, rSpan - 0.15 + fl, 0.6, 0.3);
     }
 
-    // 8. Cockpit Opening, Airbox Intake, Driver Helmet & Titanium Y-Halo
+    // 8. Cockpit Opening, HANS Suit Shoulders, Roll-Hoop T-Cam, Helmet & Titanium Halo
+    ctx.strokeStyle = "#1e2430";
+    ctx.lineWidth = 0.22;
     ctx.fillStyle = "#06070a";
     ctx.beginPath();
-    ctx.ellipse(-0.3, 0, 2.05, 0.98, 0, 0, Math.PI * 2);
+    ctx.ellipse(-0.3, 0, 2.08, 1.00, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Driver flame-retardant race suit shoulders inside cockpit tub
+    ctx.fillStyle = c.dnf ? "#323742" : (c.tcol || "#182030");
+    ctx.beginPath();
+    ctx.ellipse(-0.75, 0, 0.72, 0.78, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Roll-hoop airbox intake behind helmet
+    // Roll-hoop airbox intake + FIA Broadcast T-Cam pod above roll-hoop
     ctx.fillStyle = "#050608";
-    ctx.fillRect(-2.4, -0.55, 0.85, 1.1);
+    ctx.fillRect(-2.45, -0.56, 0.90, 1.12);
+    ctx.fillStyle = "#161a24";
+    ctx.fillRect(-2.42, -0.18, 0.38, 0.36);
+    ctx.fillStyle = (c.num % 2 === 0) ? "#e5e7eb" : "#ffd200";
+    ctx.fillRect(-2.34, -0.78, 0.22, 1.56);
 
-    // Driver Helmet + Dark Visor
+    // Driver Helmet + Crown Accent Stripe + Glossy Reflective Visor
     ctx.fillStyle = c.helm;
     ctx.beginPath();
-    ctx.arc(-0.35, 0, 0.88, 0, Math.PI * 2);
+    ctx.arc(-0.32, 0, 0.88, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,.32)";
+    ctx.strokeStyle = liv.stripe;
+    ctx.lineWidth = 0.18;
     ctx.beginPath();
-    ctx.ellipse(-.6,-.3,.37,.18,-.35,0,Math.PI*2);
+    ctx.moveTo(-0.98, 0);
+    ctx.lineTo(0.18, 0);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,.35)";
+    ctx.beginPath();
+    ctx.ellipse(-0.56, -0.30, 0.38, 0.18, -0.35, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = "#111318";
     ctx.beginPath();
-    ctx.arc(-0.05, 0, 0.55, -0.9, 0.9);
+    ctx.arc(-0.04, 0, 0.56, -0.92, 0.92);
     ctx.fill();
 
-    // 3-Point Titanium Halo Structure
+    // 3-Point Titanium Halo Structure with specular highlight
     ctx.strokeStyle = "#2b303c";
-    ctx.lineWidth = 0.55;
+    ctx.lineWidth = 0.56;
     ctx.beginPath();
-    ctx.moveTo(-1.1, -0.88);
-    ctx.quadraticCurveTo(0.85, -0.75, 1.55, 0);
-    ctx.quadraticCurveTo(0.85, 0.75, -1.1, 0.88);
-    ctx.moveTo(1.55, 0);
+    ctx.moveTo(-1.12, -0.88);
+    ctx.quadraticCurveTo(0.86, -0.76, 1.58, 0);
+    ctx.quadraticCurveTo(0.86, 0.76, -1.12, 0.88);
+    ctx.moveTo(1.58, 0);
     ctx.lineTo(0.45, 0);
     ctx.stroke();
-    ctx.strokeStyle = "rgba(193,204,215,.65)";
-    ctx.lineWidth = .14;
+    ctx.strokeStyle = "rgba(205,216,228,.72)";
+    ctx.lineWidth = .16;
     ctx.stroke();
 
-    // 9. 2026 Multi-Element Active Rear Wing (Opens Slot Gap in Straight Mode!)
+    // 9. Lower Carbon Beam Wing, Swan-Neck Pylon & 2026 Multi-Element Active Rear Wing
+    ctx.fillStyle = "#12161e";
+    ctx.fillRect(-6.85, -2.35, 0.75, 4.70); // Lower beam wing
+
     ctx.fillStyle = "#0b0d13";
     ctx.fillRect(-8.0, -3.45, 1.85, 6.9); // Rear wing mainplane
     ctx.fillStyle = carbonPaint;
     ctx.fillRect(-8.0,-3.45,1.85,6.9);
+
+    // Central swan-neck DRS actuator pod
+    ctx.fillStyle = "#1b202b";
+    ctx.fillRect(-7.35, -0.32, 1.35, 0.64);
+
     if ((c.aero === "STRAIGHT" || c.aero === "DRS" || c.ovt || c.drs) && !c.dnf) {
       // Open low-drag DRS slot gap profile revealing white leading edge & green DRS status LED
       ctx.fillStyle = "#f0f4f8";
@@ -2068,10 +2270,13 @@ export class CircuitRenderer {
       ctx.fillStyle = c.dnf ? "#3f4452" : c.tcol;
       ctx.fillRect(-7.55, -3.25, 1.05, 6.5);
     }
-    // Rear wing endplates
+    // Sculpted rear wing endplates with livery outer trim
     ctx.fillStyle = c.tcol;
-    ctx.fillRect(-8.15, -3.65, 2.15, 0.42);
-    ctx.fillRect(-8.15, 3.23, 2.15, 0.42);
+    ctx.fillRect(-8.15, -3.65, 2.20, 0.44);
+    ctx.fillRect(-8.15, 3.21, 2.20, 0.44);
+    ctx.fillStyle = liv.stripe;
+    ctx.fillRect(-8.10, -3.65, 2.05, 0.14);
+    ctx.fillRect(-8.10, 3.51, 2.05, 0.14);
 
     // Central FIA Rear Rain / ERS Strobe Light
     if ((c.rech || c.ovt) && Math.floor(now / 110) % 2 === 0 && !c.dnf) {
