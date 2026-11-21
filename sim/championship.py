@@ -2342,38 +2342,53 @@ class ChampionshipWorld:
                 return {"ok": True, "academy_drivers": list(self.academy_drivers), "budget_m": team["budget_m"]}
             return {"ok": False, "error": f"Unknown academy action '{action}'."}
 
+    @staticmethod
+    def _validate_team_branding(
+        name: str, short: str, code: str, color: str, secondary: str, engine: str
+    ) -> tuple[dict | None, str | None]:
+        """Validate custom constructor branding fields and return normalized dict or error string."""
+        nm = str(name or "").strip()[:32]
+        sh = str(short or "").strip()[:16]
+        cd = re.sub(r"[^A-Z0-9]", "", str(code or "").upper())[:3]
+        col = str(color or "").strip()
+        sec = str(secondary or "").strip()
+        eng = str(engine or "").strip()
+        if not nm or not sh or len(cd) < 2:
+            return None, "Provide team name, short name, and 2-3 character code."
+        hex_re = re.compile(r"^#[0-9a-fA-F]{6}$")
+        if not hex_re.match(col) or not hex_re.match(sec):
+            return None, "Primary and secondary colors must be 6-digit hex codes (#rrggbb)."
+        if eng not in ENGINE_SUPPLIERS:
+            return None, f"Engine supplier must be one of: {', '.join(ENGINE_SUPPLIERS)}."
+        return {
+            "name": nm,
+            "short": sh,
+            "code": cd,
+            "color": col.lower(),
+            "secondary": sec.lower(),
+            "engine": eng,
+        }, None
+
     def customize_team(self, name: str, short: str, code: str, color: str, secondary: str, engine: str) -> dict:
         """Customize the player constructor identity in place (keeps 11 teams / 22 cars intact)."""
         with self.lock:
-            nm = str(name or "").strip()[:32]
-            sh = str(short or "").strip()[:16]
-            cd = re.sub(r"[^A-Z0-9]", "", str(code or "").upper())[:3]
-            col = str(color or "").strip()
-            sec = str(secondary or "").strip()
-            eng = str(engine or "").strip()
-            if not nm or not sh or len(cd) < 2:
-                return {"ok": False, "error": "Provide team name, short name, and 2-3 character code."}
-            hex_re = re.compile(r"^#[0-9a-fA-F]{6}$")
-            if not hex_re.match(col) or not hex_re.match(sec):
-                return {"ok": False, "error": "Primary and secondary colors must be 6-digit hex codes (#rrggbb)."}
-            if eng not in ENGINE_SUPPLIERS:
-                return {"ok": False, "error": f"Engine supplier must be one of: {', '.join(ENGINE_SUPPLIERS)}."}
+            parsed, err = self._validate_team_branding(name, short, code, color, secondary, engine)
+            if err or not parsed:
+                return {"ok": False, "error": err or "Invalid branding."}
             team = self._teams_by_id()[self.player_team_id]
-            team["name"] = nm
-            team["short"] = sh
-            team["code"] = cd
-            team["color"] = col.lower()
-            team["secondary"] = sec.lower()
-            team["engine"] = eng
+            team.update(parsed)
             team["is_custom"] = True
             for sess in (self.race_session, self.quali_session):
                 if sess:
                     for c in sess.cars:
                         if c.team_id == self.player_team_id:
-                            c.team_short = sh
+                            c.team_short = parsed["short"]
                             c.team_color = team["color"]
                             c.secondary_color = team["secondary"]
-            self._push_event("NEWS", f"CONSTRUCTOR REBRAND: {nm} ({cd}) unveils custom livery powered by {eng}!")
+            self._push_event(
+                "NEWS",
+                f"CONSTRUCTOR REBRAND: {parsed['name']} ({parsed['code']}) unveils custom livery powered by {parsed['engine']}!",
+            )
             self._save_state()
             return {"ok": True, "team": dict(team)}
 
@@ -3300,6 +3315,108 @@ class ChampionshipWorld:
             self._begin_weekend()
             self._save_state()
             return {"ok": True, "season_year": self.season_year}
+
+    def create_custom_season(self, cfg: dict) -> dict:
+        """Start a fresh Round 1 season playing as a newly created custom constructor."""
+        parsed, err = self._validate_team_branding(
+            cfg.get("name", ""),
+            cfg.get("short", ""),
+            cfg.get("code", ""),
+            cfg.get("color", "#00d2be"),
+            cfg.get("secondary", "#ffffff"),
+            cfg.get("engine", "Mercedes"),
+        )
+        if err or not parsed:
+            return {"ok": False, "error": err or "Invalid constructor configuration."}
+
+        d1_req = str(cfg.get("driver1_id") or "").strip() or None
+        d2_req = str(cfg.get("driver2_id") or "").strip() or None
+        if d1_req and d2_req and d1_req == d2_req:
+            return {"ok": False, "error": "Select two different drivers for your constructor."}
+
+        tier = str(cfg.get("tier") or "slot").strip().lower()
+        year = 2028 if int(cfg.get("year", cfg.get("start_year", 2026))) == 2028 else 2026
+        base_id = str(cfg.get("base_team_id") or "williams").strip()
+
+        with self.lock:
+            t_id = base_id if base_id in self._teams_by_id() else "williams"
+            self._init_fresh_career(t_id, start_year=year)
+            team = self._teams_by_id()[self.player_team_id]
+            team.update(parsed)
+            team["is_custom"] = True
+
+            # Optional starting performance tier override
+            tier_specs = {
+                "backmarker": (5 if year == 2028 else 4, 125.0),
+                "midfield": (6, 150.0),
+                "contender": (7, 180.0),
+            }
+            if tier in tier_specs:
+                lvl, base_budget = tier_specs[tier]
+                for dept in UPGRADE_DEPARTMENTS:
+                    team["upgrades"][dept] = lvl
+                team["budget_m"] = round(base_budget + (100.0 if year == 2028 else 0.0), 2)
+
+            # Assign chosen drivers cleanly while keeping all 11 constructors at 2 drivers (22 active)
+            if d1_req or d2_req:
+                dmap = self._drivers_by_id()
+                current_pair = [d for d in self.drivers if d.get("team_id") == t_id]
+                desired_ids: list[str] = []
+                for req_id in (d1_req, d2_req):
+                    drv = dmap.get(req_id) if req_id else None
+                    if drv and not drv.get("is_legend") and drv["id"] not in desired_ids:
+                        desired_ids.append(drv["id"])
+                for cur in current_pair:
+                    if len(desired_ids) >= 2:
+                        break
+                    if cur["id"] not in desired_ids:
+                        desired_ids.append(cur["id"])
+
+                displaced = [d for d in current_pair if d["id"] not in desired_ids]
+                free_agents = sorted(
+                    [
+                        d
+                        for d in self.drivers
+                        if not d.get("team_id") and not d.get("is_legend") and d["id"] not in desired_ids
+                    ],
+                    key=lambda d: int(d.get("ovr", 70)),
+                    reverse=True,
+                )
+                for did in desired_ids[:2]:
+                    drv = dmap[did]
+                    other_tid = drv.get("team_id")
+                    if other_tid and other_tid != t_id:
+                        replacement = displaced.pop(0) if displaced else (free_agents.pop(0) if free_agents else None)
+                        if replacement:
+                            replacement["team_id"] = other_tid
+                            replacement["contract_years"] = 1
+                    drv["team_id"] = t_id
+                    drv["contract_years"] = 2
+                    drv["morale"] = max(75, int(drv.get("morale", 75)))
+
+                for rem in displaced:
+                    rem["team_id"] = None
+                    rem["contract_years"] = 0
+
+                # Sync tire allocations, tire sets, and PU pools to the updated active roster
+                active_ids = {d["id"] for d in self.drivers if d.get("team_id")}
+                for aid in active_ids:
+                    self.tire_allocations.setdefault(aid, dict(DEFAULT_WEEKEND_TIRE_SETS))
+                    self.tire_sets.setdefault(aid, create_weekend_tire_sets())
+                    self.pu_pools.setdefault(aid, create_pu_pool())
+                for old_id in list(self.tire_allocations.keys()):
+                    if old_id not in active_ids:
+                        self.tire_allocations.pop(old_id, None)
+                        self.tire_sets.pop(old_id, None)
+                        self.pu_pools.pop(old_id, None)
+
+            self._begin_weekend()
+            self._push_event(
+                "NEWS",
+                f"NEW CONSTRUCTOR ENTRY: {parsed['name']} ({parsed['code']}) joins the {self.season_year} F1 grid with {parsed['engine']} power!",
+            )
+            self._save_state()
+            return {"ok": True, "season_year": self.season_year, "team": dict(team)}
 
     def start_scenario(self, scenario_id: str) -> dict:
         """Launch a quick-play Pit-Wall tactical scenario without modifying the saved career."""

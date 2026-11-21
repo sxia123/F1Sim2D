@@ -3213,6 +3213,19 @@ class F1App {
     if (custWrap && this.fullState.player_team) {
       const pt = this.fullState.player_team;
       const supps = this.fullState.engine_suppliers || ["Mercedes", "Ferrari", "Honda RBPT", "Audi"];
+      const teams = this.fullState.teams || [];
+      const drivers = (this.fullState.drivers || [])
+        .filter((d) => !d.is_legend)
+        .slice()
+        .sort((a, b) => (b.ovr || 0) - (a.ovr || 0));
+      const drvOpts = [
+        `<option value="">Keep Slot Driver</option>`,
+        ...drivers.map((d) => {
+          const tag = d.team_id ? d.team_id.toUpperCase() : "FREE";
+          return `<option value="${d.id}">${d.name} (${d.ovr || 75} OVR · ${tag})</option>`;
+        }),
+      ].join("");
+
       custWrap.innerHTML = `
         <div class="custom-form-grid">
           <div><label>TEAM NAME</label><input id="ct-name" value="${pt.name}" maxlength="32" /></div>
@@ -3224,27 +3237,80 @@ class F1App {
             <select id="ct-eng">${supps.map((e) => `<option value="${e}" ${pt.engine === e ? "selected" : ""}>${e}</option>`).join("")}</select>
           </div>
         </div>
-        <button class="btn-primary btn-sm" id="btn-save-custom-team">APPLY CONSTRUCTOR BRANDING</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn-primary btn-sm" id="btn-save-custom-team">APPLY CONSTRUCTOR BRANDING</button>
+        </div>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)">
+          <div style="font-size:11px;font-weight:800;letter-spacing:0.6px;color:#00e5ff;margin-bottom:8px">START NEW SEASON AS CUSTOM CONSTRUCTOR (ROUND 1)</div>
+          <div class="custom-form-grid">
+            <div><label>SEASON ERA</label>
+              <select id="cc-year">
+                <option value="2026" ${this.fullState.season_year === 2026 ? "selected" : ""}>2026 Hybrid &amp; Active Aero</option>
+                <option value="2028" ${this.fullState.season_year === 2028 ? "selected" : ""}>2028 2.4L V8 &amp; DRS</option>
+              </select>
+            </div>
+            <div><label>REPLACES GRID SLOT</label>
+              <select id="cc-slot">${teams.map((t) => `<option value="${t.id}" ${t.id === pt.id ? "selected" : ""}>${t.short} (${t.engine})</option>`).join("")}</select>
+            </div>
+            <div><label>STARTING TIER</label>
+              <select id="cc-tier">
+                <option value="slot">Match Replaced Slot</option>
+                <option value="backmarker">Backmarker Underdog ($125M)</option>
+                <option value="midfield">Midfield Challenger ($150M)</option>
+                <option value="contender">Works Contender ($180M)</option>
+              </select>
+            </div>
+            <div><label>DRIVER 1</label><select id="cc-d1">${drvOpts}</select></div>
+            <div><label>DRIVER 2</label><select id="cc-d2">${drvOpts}</select></div>
+          </div>
+          <button class="btn-primary btn-sm" id="btn-create-custom-season" style="margin-top:8px;background:linear-gradient(135deg,#00e5ff,#0095ff);color:#06101b">CREATE CONSTRUCTOR &amp; START ROUND 1</button>
+        </div>
       `;
+      const syncCustomTeamLogo = (team) => {
+        if (typeof registerCustomTeamLogo === "function") {
+          registerCustomTeamLogo(team.id, team.code, team.color, team.secondary);
+        }
+        this._lastCustomSig = `${team.id}_${team.code}_${team.color}_${team.secondary}`;
+      };
+      const readBrandingPayload = () => ({
+        name: document.getElementById("ct-name").value,
+        short: document.getElementById("ct-short").value,
+        code: document.getElementById("ct-code").value,
+        color: document.getElementById("ct-col").value,
+        secondary: document.getElementById("ct-sec").value,
+        engine: document.getElementById("ct-eng").value,
+      });
+
       const saveCust = document.getElementById("btn-save-custom-team");
       if (saveCust) {
         saveCust.addEventListener("click", async () => {
-          const payload = {
-            name: document.getElementById("ct-name").value,
-            short: document.getElementById("ct-short").value,
-            code: document.getElementById("ct-code").value,
-            color: document.getElementById("ct-col").value,
-            secondary: document.getElementById("ct-sec").value,
-            engine: document.getElementById("ct-eng").value,
-          };
-          const res = await this.apiPost("/api/custom_team", payload);
+          const res = await this.apiPost("/api/custom_team", readBrandingPayload());
           if (res.ok && res.team) {
-            if (typeof registerCustomTeamLogo === "function") {
-              registerCustomTeamLogo(res.team.id, res.team.code, res.team.color, res.team.secondary);
-            }
-            this._lastCustomSig = `${res.team.id}_${res.team.code}_${res.team.color}_${res.team.secondary}`;
+            syncCustomTeamLogo(res.team);
             document.getElementById("team-modal").classList.add("hidden");
             this.showToast(`MY TEAM UPDATED: ${res.team.name} (${res.team.engine})`);
+            this.fetchFullState();
+          }
+        });
+      }
+
+      const createCust = document.getElementById("btn-create-custom-season");
+      if (createCust) {
+        createCust.addEventListener("click", async () => {
+          const payload = {
+            ...readBrandingPayload(),
+            year: Number(document.getElementById("cc-year").value),
+            base_team_id: document.getElementById("cc-slot").value,
+            tier: document.getElementById("cc-tier").value,
+            driver1_id: document.getElementById("cc-d1").value || null,
+            driver2_id: document.getElementById("cc-d2").value || null,
+          };
+          const res = await this.apiPost("/api/create_constructor", payload);
+          if (res.ok && res.team) {
+            syncCustomTeamLogo(res.team);
+            document.getElementById("team-modal").classList.add("hidden");
+            this.stopReplay();
+            this.showToast(`NEW CONSTRUCTOR ${res.team.name} (${res.season_year || payload.year}) — ROUND 1`);
             this.fetchFullState();
           }
         });

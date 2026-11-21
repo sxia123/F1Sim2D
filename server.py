@@ -304,6 +304,8 @@ class F1RequestHandler(BaseHTTPRequestHandler):
             team_id = str(body.get("team_id", "williams"))
             start_year = int(body.get("year", body.get("start_year", 2026)))
             res = self.world.reset_career(team_id, start_year=start_year)
+        elif path == "/api/create_constructor":
+            res = self.world.create_custom_season(body)
         else:
             self._send_json({"ok": False, "error": "Unknown API endpoint."}, 404)
             return
