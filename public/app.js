@@ -676,11 +676,19 @@ class F1App {
       const data = await res.json();
       this.fullState = data;
       const ptMeta = data.player_team;
-      if (ptMeta?.is_custom && typeof registerCustomTeamLogo === "function") {
-        const sig = `${ptMeta.id}_${ptMeta.code}_${ptMeta.color}_${ptMeta.secondary}`;
-        if (sig !== this._lastCustomSig) {
-          this._lastCustomSig = sig;
-          registerCustomTeamLogo(ptMeta.id, ptMeta.code, ptMeta.color, ptMeta.secondary);
+      const customTeams = (data.teams || []).filter((t) => t.is_custom);
+      if (ptMeta?.is_custom && !customTeams.some((t) => t.id === ptMeta.id)) customTeams.push(ptMeta);
+      if (typeof registerCustomTeamLogo === "function") {
+        for (const ct of customTeams) {
+          const iconId = ct.icon || "shield";
+          registerCustomTeamLogo(ct.id, ct.code, ct.color, ct.secondary, iconId);
+          if (ct.id === data.player_team_id) {
+            const sig = `${ct.id}_${ct.code}_${ct.color}_${ct.secondary}_${iconId}`;
+            if (sig !== this._lastCustomSig) {
+              this._lastCustomSig = sig;
+              this._lastHeaderLogoKey = null;
+            }
+          }
         }
       }
       if (data.track) {
@@ -1470,7 +1478,9 @@ class F1App {
       const sig = `${cm.id}_${cm.code}_${cm.color}_${cm.secondary}_${cm.icon || "shield"}`;
       if (sig !== this._lastCustomSig) {
         this._lastCustomSig = sig;
+        this._lastHeaderLogoKey = null;
         registerCustomTeamLogo(cm.id, cm.code, cm.color, cm.secondary, cm.icon || "shield");
+        if (this.fullState) this.renderManagementViews();
       }
     }
 
@@ -1619,8 +1629,9 @@ class F1App {
       brdEl.textContent = `BRD ${bc}%`;
       brdEl.style.color = bc >= 80 ? "#00d26a" : bc >= 55 ? "#00d2be" : bc >= 35 ? "#ffd000" : "#ff3b30";
     }
-    if (this._lastHeaderLogoTeam !== tick.player_team_id) {
-      this._lastHeaderLogoTeam = tick.player_team_id;
+    const hdrKey = `${tick.player_team_id}_${this._lastCustomSig || ""}`;
+    if (this._lastHeaderLogoKey !== hdrKey) {
+      this._lastHeaderLogoKey = hdrKey;
       document.getElementById("hdr-team-logo").innerHTML = teamLogoSVG(tick.player_team_id, 20);
     }
 
@@ -3301,6 +3312,7 @@ class F1App {
           registerCustomTeamLogo(team.id, team.code, team.color, team.secondary, team.icon || "shield");
         }
         this._lastCustomSig = `${team.id}_${team.code}_${team.color}_${team.secondary}_${team.icon || "shield"}`;
+        this._lastHeaderLogoKey = null;
       };
       const readBrandingPayload = () => ({
         name: document.getElementById("ct-name").value,
