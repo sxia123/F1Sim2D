@@ -161,10 +161,15 @@ export function renderCustomIconSVG(iconId = "shield", code = "F1", primary = "#
       </svg>`;
     case "yangwang":
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <rect x="3.5" y="3.5" width="25" height="25" rx="6.5" fill="#0b1220" stroke="#f5c451" stroke-width="1.8"/>
-        <rect x="5.5" y="5.5" width="21" height="21" rx="4.8" fill="${p}" opacity="0.28" stroke="#00e5ff" stroke-width="0.9"/>
-        <path d="M8.5 10.5 H23.5 M8.5 21.5 H23.5" stroke="#f5c451" stroke-width="1.5" stroke-linecap="round"/>
-        <path d="M16 6.8 L10.8 16 H17.2 L12.8 25.2 L22.2 13.8 H15.8 Z" fill="#00e5ff" stroke="#ffffff" stroke-width="0.7"/>
+        <rect x="3.5" y="3.5" width="25" height="25" rx="6" fill="#0b1018" stroke="#d4af37" stroke-width="1.7"/>
+        <rect x="5.3" y="5.3" width="21.4" height="21.4" rx="4.5" fill="${p}" opacity="0.22" stroke="#38bdf8" stroke-width="0.8"/>
+        <g fill="none" stroke="#f8fafc" stroke-width="1.9" stroke-linecap="square" stroke-linejoin="miter">
+          <path d="M16 6.2 V25.8"/>
+          <path d="M10.5 9.2 L12.5 11.2 H19.5 L21.5 9.2"/>
+          <path d="M9.5 15.2 H13.5 L16 12.8 L18.5 15.2 H22.5"/>
+          <path d="M10.2 21.2 L13 18.8 H19 L21.8 21.2"/>
+          <path d="M16 25.8 H20.8 L22.5 24.1" stroke="#38bdf8"/>
+        </g>
       </svg>`;
     case "porsche":
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
