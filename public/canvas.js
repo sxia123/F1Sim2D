@@ -888,11 +888,12 @@ export class CircuitRenderer {
       const side = this.track.pit_side || 1;
       const geom = this.track.car_geometry || { length_m: 5.5, width_m: 1.9, front_axle_m: 1.55, world_units_per_m: 3.2 };
       const ppm = geom.world_units_per_m || 3.2;
-      const stallLen = (geom.length_m + 0.9) * ppm;
-      const stallWid = (geom.width_m + 0.45) * ppm;
+      const stallLen = (geom.length_m + 1.4) * ppm;
+      const stallWid = (geom.width_m + 0.85) * ppm;
       const fastOff = this.track.pit_fast_offset_px ?? (-1.6 * ppm);
       const apronOff = this.track.pit_apron_offset_px ?? (3.0 * ppm);
-      const laneDividerOff = (apronOff - stallWid * 0.5 - 1.1) * side;
+      const laneDividerAbs = apronOff - stallWid * 0.5 - 1.0;
+      const laneDividerOff = laneDividerAbs * side;
 
       const uSpeedIn = this.track.pit_speed_entry_u ?? 0.1;
       const uSpeedOut = this.track.pit_speed_exit_u ?? 0.9;
@@ -931,8 +932,8 @@ export class CircuitRenderer {
       const wFull1 = Math.min(0.97, Math.max(uGarMax + 0.025, uSpeedOut - 0.025));
       const wStart0 = Math.max(0.01, wFull0 - rampU);
       const wEnd1 = Math.min(0.99, wFull1 + rampU);
-      const fastHalf = Math.max(4.4, 1.95 * ppm);
-      const workingOuter = Math.max(apronOff + stallWid * 0.5 + 2.0, pitWidth * 0.5);
+      const fastHalf = Math.max(5.5, 2.40 * ppm);
+      const workingOuter = Math.max(apronOff + stallWid * 0.5 + 1.8, pitWidth * 0.5);
 
       const nPit = ppts.length;
       const workRampAt = new Array(nPit);
@@ -957,9 +958,9 @@ export class CircuitRenderer {
         apronOffs[k] = aOff;
         shadowWallOffs[k] = wOff - 2.3;
         shadowApronOffs[k] = aOff + 2.3;
-        const cIn = fastCenter + fastHalf * 0.45;
+        const cIn = laneDividerAbs;
         concInnerOffs[k] = cIn;
-        concOuterOffs[k] = Math.max(cIn, aOff - 0.8);
+        concOuterOffs[k] = Math.max(cIn, aOff - 0.6);
       }
 
       const shWallPts = this._buildPitEdgePoints(ppts, side, shadowWallOffs);
@@ -1600,7 +1601,7 @@ export class CircuitRenderer {
         const frac = Math.max(0, Math.min(1, 1 - c.pit_rem / c.pit_tot));
         const ringCol = c.pit_tot <= 2.05 ? "#a855f7" : c.pit_tot > 3.8 ? "#ffd000" : "#00d2be";
         const sc = Math.max(0.45, this._viewTransform.scale);
-        const rad = 11.0 / sc;
+        const rad = Math.min(10.5, 9.5 / sc);
         ctx.save();
         ctx.strokeStyle = "rgba(255,255,255,0.18)";
         ctx.lineWidth = 2.0 / sc;
@@ -1624,7 +1625,7 @@ export class CircuitRenderer {
         ctx.restore();
       }
       if (this._viewTransform.scale < .45) {
-        ctx.beginPath();ctx.arc(st.cx,st.cy,2.1/this._viewTransform.scale,0,Math.PI*2);
+        ctx.beginPath();ctx.arc(st.cx,st.cy,Math.min(4.8,1.65/this._viewTransform.scale),0,Math.PI*2);
         ctx.fillStyle=c.tcol;ctx.fill();
       }
     }

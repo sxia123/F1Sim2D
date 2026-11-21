@@ -1176,7 +1176,15 @@ class QualifyingSession:
             avail["in_use"] = True
 
     def _place_in_garage_for_run(self, car: CarState, wave_idx: int, first_run: bool = False) -> None:
-        garage_s = self.track.pit_garages[TEAM_GARAGE_INDEX.get(car.team_id, 5)]["s_m"]
+        base_garage_s = self.track.pit_garages[TEAM_GARAGE_INDEX.get(car.team_id, 5)]["s_m"]
+        if not hasattr(car, "_garage_slot_sign"):
+            has_tm = any(o is not car and o.team_id == car.team_id for o in self.cars)
+            car._garage_slot_sign = 1.0 if has_tm else -1.0
+        stagger_s = car._garage_slot_sign * 0.18 * getattr(self.track, "pit_garage_spacing_s", 0.0)
+        L = self.track.length_m
+        rel = (base_garage_s - self.track.pit_entry_s + stagger_s) % L
+        rel = max(4.0, min(self.track.pit_span_m - 4.0, rel))
+        garage_s = (self.track.pit_entry_s + rel) % L
         car._garage_s = garage_s
         car.in_pits = True
         car.pit_phase = "STOPPED"
