@@ -3384,6 +3384,7 @@ class ChampionshipWorld:
 
         with self.lock:
             self._init_fresh_career("williams", start_year=year)
+            total_budget = round(base_budget + (100.0 if year == 2028 else 0.0), 2)
             new_team = {
                 "id": "custom",
                 "name": parsed["name"],
@@ -3394,7 +3395,9 @@ class ChampionshipWorld:
                 "engine": parsed["engine"],
                 "icon": icon_id,
                 "is_custom": True,
-                "budget_m": round(base_budget + (100.0 if year == 2028 else 0.0), 2),
+                "budget_m": total_budget,
+                "annual_budget_m": total_budget,
+                "sponsor_id": SPONSORS[0]["id"],
                 "upgrades": {dept: lvl for dept in UPGRADE_DEPARTMENTS},
                 "wind_tunnel_hours": 70,
                 "cfd_runs": 40,

@@ -37,7 +37,7 @@ LEGACY_SALARIES = dict(zip(
 def annual_budget_m(team):
     if "annual_budget_m" in team:
         return float(team["annual_budget_m"])
-    return float(next(t["budget_m"] for t in INITIAL_TEAMS if t["id"] == team["id"]))
+    return float(next((t["budget_m"] for t in INITIAL_TEAMS if t["id"] == team["id"]), team.get("budget_m", 150.0)))
 
 
 def team_finances(team, drivers, race_count, rounds_remaining=None):
@@ -45,7 +45,7 @@ def team_finances(team, drivers, race_count, rounds_remaining=None):
     annual = annual_budget_m(team)
     payroll = sum(d["salary_m"] for d in drivers if d.get("team_id") == team["id"])
     operations = annual * ANNUAL_OPERATIONS_SHARE
-    sponsor = next((s for s in SPONSORS if s["id"] == team["sponsor_id"]), SPONSORS[0])
+    sponsor = next((s for s in SPONSORS if s["id"] == team.get("sponsor_id")), SPONSORS[0])
     remaining = races if rounds_remaining is None else max(0, min(races, rounds_remaining))
     # Guaranteed commercial income offsets committed costs. Performance bonuses
     # and championship prizes cannot be relied on to meet payroll.
@@ -63,7 +63,7 @@ def team_finances(team, drivers, race_count, rounds_remaining=None):
 
 def season_allocation_m(team, race_count, championship_prize_m=0.0):
     """Owner/core funding completes the annual envelope after sponsors and prize."""
-    sponsor = next((s for s in SPONSORS if s["id"] == team["sponsor_id"]), SPONSORS[0])
+    sponsor = next((s for s in SPONSORS if s["id"] == team.get("sponsor_id")), SPONSORS[0])
     return round(max(0.0, annual_budget_m(team) - sponsor["base_per_race_m"] * race_count - championship_prize_m), 2)
 
 

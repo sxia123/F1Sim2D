@@ -354,6 +354,11 @@ class TestAdvancedFeatures(unittest.TestCase):
             self.assertEqual(pt["icon"], "koenigsegg")
             self.assertEqual(pt["engine"], "Honda RBPT")
             self.assertEqual(pt["budget_m"], 150.0)
+            full_payload = w.build_full_state_payload()
+            self.assertEqual(full_payload["player_team_id"], "custom")
+            self.assertIn("finances", full_payload)
+            tick_payload = w.build_live_tick_payload()
+            self.assertEqual(tick_payload["custom_team_meta"]["icon"], "koenigsegg")
 
             # Cannot start Qualifying until 2 drivers are signed
             blocked = w.skip_session()

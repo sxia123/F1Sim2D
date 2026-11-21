@@ -162,11 +162,12 @@ export function renderCustomIconSVG(iconId = "shield", code = "F1", primary = "#
         <text x="16" y="18.1" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="4.4" letter-spacing="0.6" fill="#f8fafc">PAGANI</text>
       </svg>`;
     case "yangwang":
-      // Real Yangwang oracle-bone '电' (electricity) continuous angular zigzag glyph
+      // Real Yangwang emblem (from uploaded reference): tall dark badge, flowing white S-spine with upper-left & lower-right hooks
       return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-        <rect x="4" y="3" width="24" height="26" rx="5.5" fill="#0d111a" stroke="#d8a969" stroke-width="1.5"/>
-        <path d="M16 6.2 V13.8 L10.2 10.6 L21.8 21.4 L16 18.2 V25.8" fill="none" stroke="#e2e8f0" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-        <path d="M16 6.2 V13.8 L10.2 10.6 L21.8 21.4 L16 18.2 V25.8" fill="none" stroke="#d8a969" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+        <rect x="6" y="2" width="20" height="28" rx="3" fill="#090b10" stroke="#d4af37" stroke-width="1.3"/>
+        <path d="M12.5 2.5 C15 6.5 17.5 10.5 16.5 14.5 C15.4 18.2 12.2 19.8 13 23.8 C13.5 26 16.2 28.2 18.8 29.8" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round"/>
+        <path d="M8.5 8.8 C9.8 13.5 12.6 13.8 15.6 8.8" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
+        <path d="M15.2 24.5 C18.6 18.2 21.8 18.8 23.6 23.5" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round"/>
       </svg>`;
     case "porsche":
       // Real Porsche Stuttgart crest: gold #D8A969 shield, black antlers & red/black Württemberg quarters
