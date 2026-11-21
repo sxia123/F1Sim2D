@@ -2710,3 +2710,43 @@ select, input[type="range"] {
   font-size: 11px;
   font-family: inherit;
 }
+.strategy-deg-card {
+  background: #0d0f19;
+  border: 1px solid #26293f;
+  border-radius: 5px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.strategy-deg-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.strategy-deg-meta {
+  font-size: 10px;
+  color: #9ea2bd;
+  font-weight: 700;
+}
+.strategy-stint-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.stint-proj-chip {
+  background: #141727;
+  border: 1px solid #2b2f47;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #e4e6f2;
+}
+.stint-proj-chip.cliff-warn {
+  border-color: #ff4d4f;
+  background: rgba(255, 59, 48, 0.14);
+  color: #ffb3b3;
+}

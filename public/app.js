@@ -3,11 +3,11 @@ import { CircuitRenderer } from "/canvas.js";
 import { teamLogoSVG, registerCustomTeamLogo } from "/logos.js";
 
 const TIRE_META = {
-  SOFT:   { code: "S", color: "#ff2800", optMin: 90, optMax: 106 },
-  MEDIUM: { code: "M", color: "#ffd200", optMin: 95, optMax: 113 },
-  HARD:   { code: "H", color: "#f0f2f5", optMin: 100, optMax: 120 },
-  INTER:  { code: "I", color: "#38b000", optMin: 70, optMax: 92 },
-  WET:    { code: "W", color: "#0096ff", optMin: 60, optMax: 85 },
+  SOFT:   { code: "S", color: "#ff2800", optMin: 90,  optMax: 106, wearKm: 0.0112, cliff: 0.68 },
+  MEDIUM: { code: "M", color: "#ffd200", optMin: 95,  optMax: 113, wearKm: 0.0074, cliff: 0.74 },
+  HARD:   { code: "H", color: "#f0f2f5", optMin: 100, optMax: 120, wearKm: 0.0049, cliff: 0.80 },
+  INTER:  { code: "I", color: "#38b000", optMin: 70,  optMax: 92,  wearKm: 0.0088, cliff: 0.75 },
+  WET:    { code: "W", color: "#0096ff", optMin: 60,  optMax: 85,  wearKm: 0.0070, cliff: 0.80 },
 };
 
 function getTempColor(comp, ttemp) {
@@ -3705,6 +3705,112 @@ class F1App {
     const plansCopy = JSON.parse(JSON.stringify(entry.plans || {}));
     if (titleEl) titleEl.textContent = `STRATEGY PLANNER — ${this._driverTag(driverId)} (${totalLaps} LAPS)`;
 
+    const trkObj = this.fullState?.track || {};
+    const kmPerLap = Math.max(2.5, Number(trkObj.length_m || 5200) / 1000.0);
+    const abrasion = Number(trkObj.tire_abrasion ?? 1.0);
+    const drvObj = this.fullState?.drivers?.find((d) => d.id === driverId);
+    const tireMgmt = Number(drvObj?.tire_mgmt ?? 85);
+    const chassisLvl = Number(this.fullState?.player_team?.upgrades?.chassis ?? 5);
+    const driverCarMult = Math.max(0.65, (1.0 - (tireMgmt - 85) * 0.012) * (1.0 - (chassisLvl - 5) * 0.018));
+
+    const wearRatePerLap = (comp) => {
+      const tm = TIRE_META[comp] || TIRE_META.MEDIUM;
+      return Math.max(0.004, kmPerLap * tm.wearKm * abrasion * driverCarMult);
+    };
+
+    const renderDegChart = () => {
+      const chartEl = document.getElementById("strategy-deg-chart");
+      const metaEl = document.getElementById("strategy-deg-meta");
+      const sumEl = document.getElementById("strategy-stint-summary");
+      if (!chartEl || !sumEl) return;
+
+      const W = 680, H = 185, padL = 38, padR = 16, padT = 16, padB = 24;
+      const xOf = (lap) => padL + ((lap - 1) / Math.max(1, totalLaps - 1)) * (W - padL - padR);
+      const yOf = (lifePct) => padT + ((100 - Math.max(0, Math.min(100, lifePct))) / 100) * (H - padT - padB);
+
+      if (metaEl) {
+        const abrTxt = abrasion >= 1.15 ? "HIGH ABRASION" : abrasion <= 0.85 ? "LOW ABRASION" : "MED ABRASION";
+        metaEl.textContent = `${(trkObj.circuit || trkObj.name || "CIRCUIT").toUpperCase()} · ${kmPerLap.toFixed(2)}KM/LAP · ${abrTxt} (${abrasion.toFixed(2)}x) · PLAN ${entry.active}`;
+      }
+
+      const grid = [];
+      for (const pct of [100, 75, 50, 25, 0]) {
+        const y = yOf(pct);
+        grid.push(`<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W - padR}" y2="${y.toFixed(1)}" stroke="rgba(255,255,255,0.07)" stroke-width="1" />`);
+        grid.push(`<text x="${padL - 5}" y="${(y + 3).toFixed(1)}" fill="#8f90a6" font-size="9" text-anchor="end">${pct}%</text>`);
+      }
+      const lapStep = Math.max(1, Math.ceil(totalLaps / 10));
+      for (let l = 1; l <= totalLaps; l += lapStep) {
+        grid.push(`<text x="${xOf(l).toFixed(1)}" y="${H - 6}" fill="#8f90a6" font-size="9" text-anchor="middle">L${l}</text>`);
+      }
+
+      // Faint single-stint reference degradation curves for Soft / Medium / Hard
+      const refCurves = ["SOFT", "MEDIUM", "HARD"].map((cp) => {
+        const tm = TIRE_META[cp];
+        const perLap = wearRatePerLap(cp);
+        const pts = [];
+        for (let l = 1; l <= totalLaps; l++) {
+          const wear = (l - 1) * perLap;
+          const life = Math.max(0, (1 - wear) * 100);
+          pts.push(`${xOf(l).toFixed(1)},${yOf(life).toFixed(1)}`);
+          if (life <= 0) break;
+        }
+        const cliffLife = (1 - tm.cliff) * 100;
+        const cliffLap = Math.min(totalLaps, Math.max(1, Math.round(1 + tm.cliff / perLap)));
+        return `
+          <polyline fill="none" stroke="${tm.color}" stroke-width="1.25" stroke-dasharray="3,3" opacity="0.42" points="${pts.join(" ")}" />
+          <circle cx="${xOf(cliffLap).toFixed(1)}" cy="${yOf(cliffLife).toFixed(1)}" r="2.6" fill="${tm.color}" opacity="0.65" />
+          <text x="${Math.min(W - 38, xOf(cliffLap) + 4).toFixed(1)}" y="${Math.max(12, yOf(cliffLife) - 4).toFixed(1)}" fill="${tm.color}" font-size="8.5" font-weight="800" opacity="0.85">${tm.code} CLIFF L${cliffLap}</text>
+        `;
+      }).join("");
+
+      // Active Plan multi-stint curve & pit markers
+      const activeList = plansCopy[entry.active] || [];
+      let curStart = 1;
+      const stintSvg = [];
+      const summaryChips = [];
+      for (let i = 0; i < activeList.length; i++) {
+        const st = activeList[i];
+        const cp = st.compound || "MEDIUM";
+        const tm = TIRE_META[cp] || TIRE_META.MEDIUM;
+        const isLast = i === activeList.length - 1;
+        const pitLap = isLast ? totalLaps + 1 : Math.max(curStart + 1, Math.min(totalLaps - 1, Number(st.pit_lap || st.end_lap + 1 || totalLaps)));
+        const endLap = isLast ? totalLaps : pitLap - 1;
+        const perLap = wearRatePerLap(cp);
+
+        const pts = [];
+        let minLife = 100;
+        for (let l = curStart; l <= endLap; l++) {
+          const wear = (l - curStart) * perLap;
+          const life = Math.max(1, (1 - wear) * 100);
+          minLife = Math.min(minLife, life);
+          pts.push(`${xOf(l).toFixed(1)},${yOf(life).toFixed(1)}`);
+        }
+        const hitCliff = (100 - minLife) / 100 >= tm.cliff;
+        stintSvg.push(`<polyline fill="none" stroke="${tm.color}" stroke-width="2.6" stroke-linejoin="round" points="${pts.join(" ")}" />`);
+        if (!isLast) {
+          const px = xOf(pitLap);
+          stintSvg.push(`
+            <line x1="${px.toFixed(1)}" y1="${padT}" x2="${px.toFixed(1)}" y2="${H - padB}" stroke="#00d2be" stroke-width="1.2" stroke-dasharray="4,2" />
+            <text x="${(px + 3).toFixed(1)}" y="${padT + 10}" fill="#00d2be" font-size="9" font-weight="900">BOX L${pitLap}</text>
+          `);
+        }
+        if (hitCliff) {
+          stintSvg.push(`<circle cx="${xOf(endLap).toFixed(1)}" cy="${yOf(minLife).toFixed(1)}" r="4" fill="#ff3b30" stroke="#ffffff" stroke-width="1" />`);
+        }
+        summaryChips.push(`
+          <span class="stint-proj-chip ${hitCliff ? "cliff-warn" : ""}" style="border-left:3px solid ${tm.color}">
+            S${i + 1}: ${cp} L${curStart}-L${endLap} (${endLap - curStart + 1}L) · ${Math.round(minLife)}% LEFT${hitCliff ? " · CLIFF!" : ""}
+          </span>
+        `);
+        curStart = pitLap;
+        if (curStart > totalLaps) break;
+      }
+
+      chartEl.innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid.join("")}${refCurves}${stintSvg.join("")}</svg>`;
+      sumEl.innerHTML = summaryChips.join("");
+    };
+
     const renderPlans = () => {
       const comps = ["SOFT", "MEDIUM", "HARD", "INTER", "WET"];
       editor.innerHTML = ["A", "B", "C"].map((pk) => {
@@ -3737,15 +3843,19 @@ class F1App {
         });
       });
       editor.querySelectorAll("[data-plan-pk]").forEach((el) => {
-        el.addEventListener("change", () => {
+        const syncField = () => {
           const pk = el.dataset.planPk;
           const idx = Number(el.dataset.stintIdx);
           const fld = el.dataset.field;
           if (plansCopy[pk]?.[idx]) {
             plansCopy[pk][idx][fld] = fld === "pit_lap" ? Number(el.value) : el.value;
+            renderDegChart();
           }
-        });
+        };
+        el.addEventListener("change", syncField);
+        if (el.tagName === "INPUT") el.addEventListener("input", syncField);
       });
+      renderDegChart();
       const saveBtn = document.getElementById("btn-save-strategy-plans");
       if (saveBtn) {
         saveBtn.addEventListener("click", async () => {

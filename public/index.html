@@ -584,12 +584,20 @@
 
   <!-- MODAL: STRATEGY PLANNER (PLAN A / B / C) -->
   <div class="modal-backdrop hidden" id="strategy-modal">
-    <div class="modal-box" style="width:min(620px,92vw)">
+    <div class="modal-box" style="width:min(740px,94vw);max-height:90vh;overflow-y:auto">
       <div class="modal-hdr">
         <h3 id="strategy-modal-title">RACE STRATEGY PLANNER</h3>
         <button class="btn-outline btn-sm" id="btn-close-strategy">CLOSE</button>
       </div>
       <p class="muted-note">Configure Plan A / B / C pit windows and compound sequences. Active plans box automatically at the target lap.</p>
+      <div id="strategy-deg-wrap" class="strategy-deg-card">
+        <div class="strategy-deg-hdr">
+          <span class="sec-title" style="margin:0">TYRE DEGRADATION CURVES &amp; CLIFF PROJECTION</span>
+          <span id="strategy-deg-meta" class="strategy-deg-meta"></span>
+        </div>
+        <div id="strategy-deg-chart"></div>
+        <div id="strategy-stint-summary" class="strategy-stint-summary"></div>
+      </div>
       <div id="strategy-plan-editor"></div>
     </div>
   </div>
