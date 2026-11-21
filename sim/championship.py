@@ -3376,9 +3376,9 @@ class ChampionshipWorld:
         year = 2028 if int(cfg.get("year", cfg.get("start_year", 2026))) == 2028 else 2026
 
         tier_specs = {
-            "backmarker": (5 if year == 2028 else 4, 125.0),
-            "midfield": (6, 150.0),
-            "contender": (7, 180.0),
+            "backmarker": (5 if year == 2028 else 4, 340.0),
+            "midfield": (6, 390.0),
+            "contender": (7, 450.0),
         }
         lvl, base_budget = tier_specs.get(tier, tier_specs["midfield"])
 

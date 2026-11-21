@@ -3259,9 +3259,9 @@ class F1App {
             </div>
             <div><label>STARTING TIER</label>
               <select id="cc-tier">
-                <option value="backmarker">Backmarker Underdog ($125M)</option>
-                <option value="midfield" selected>Midfield Challenger ($150M)</option>
-                <option value="contender">Works Contender ($180M)</option>
+                <option value="backmarker">Backmarker Underdog ($340M)</option>
+                <option value="midfield" selected>Midfield Challenger ($390M)</option>
+                <option value="contender">Works Contender ($450M)</option>
               </select>
             </div>
           </div>

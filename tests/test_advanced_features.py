@@ -353,7 +353,7 @@ class TestAdvancedFeatures(unittest.TestCase):
             self.assertEqual(pt["code"], "KOE")
             self.assertEqual(pt["icon"], "koenigsegg")
             self.assertEqual(pt["engine"], "Honda RBPT")
-            self.assertEqual(pt["budget_m"], 150.0)
+            self.assertEqual(pt["budget_m"], 390.0)
             full_payload = w.build_full_state_payload()
             self.assertEqual(full_payload["player_team_id"], "custom")
             self.assertIn("finances", full_payload)
@@ -404,7 +404,7 @@ class TestAdvancedFeatures(unittest.TestCase):
             self.assertEqual(w.season_year, 2028)
             self.assertEqual(w.player_team_id, "custom")
             self.assertEqual(len(w.teams), 12)
-            self.assertEqual(w._teams_by_id()["custom"]["budget_m"], 280.0)
+            self.assertEqual(w._teams_by_id()["custom"]["budget_m"], 550.0)
             self.assertEqual(w._teams_by_id()["custom"]["icon"], "toyota")
 
 
