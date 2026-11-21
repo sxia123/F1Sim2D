@@ -329,63 +329,78 @@ class TestAdvancedFeatures(unittest.TestCase):
     def test_create_constructor_start_of_season(self):
         with tempfile.TemporaryDirectory() as td:
             w = self._new_world(td)
-            # 1) Create a 2026 custom constructor replacing Haas with a picked grid driver + free agent
-            fa = next(d for d in w.drivers if d["team_id"] is None and not d.get("is_legend"))
+            # 1) Create a 2026 12th custom constructor with Koenigsegg icon (no teams replaced, 0 drivers initially)
             res = w.create_custom_season({
-                "name": "ApexWorks Racing",
-                "short": "ApexWorks",
-                "code": "APW",
+                "name": "Koenigsegg F1",
+                "short": "Koenigsegg",
+                "code": "KOE",
                 "color": "#00e5ff",
                 "secondary": "#101820",
                 "engine": "Honda RBPT",
+                "icon": "koenigsegg",
                 "year": 2026,
-                "base_team_id": "haas",
                 "tier": "midfield",
-                "driver1_id": "leclerc",
-                "driver2_id": fa["id"],
             })
             self.assertTrue(res["ok"])
             self.assertEqual(w.season_year, 2026)
             self.assertEqual(w.current_round, 1)
             self.assertEqual(w.phase, "PRE_WEEKEND")
-            self.assertEqual(w.player_team_id, "haas")
+            self.assertEqual(w.player_team_id, "custom")
+            self.assertEqual(len(w.teams), 12)
 
-            pt = w._teams_by_id()[w.player_team_id]
-            self.assertEqual(pt["name"], "ApexWorks Racing")
-            self.assertEqual(pt["code"], "APW")
+            pt = w._teams_by_id()["custom"]
+            self.assertEqual(pt["name"], "Koenigsegg F1")
+            self.assertEqual(pt["code"], "KOE")
+            self.assertEqual(pt["icon"], "koenigsegg")
             self.assertEqual(pt["engine"], "Honda RBPT")
             self.assertEqual(pt["budget_m"], 150.0)
-            self.assertEqual(len(w.teams), 11)
 
-            # Every constructor must still have exactly 2 active drivers (22 total)
+            # Cannot start Qualifying until 2 drivers are signed
+            blocked = w.skip_session()
+            self.assertFalse(blocked["ok"])
+
+            # Sign 2 drivers after team creation (1 free agent + 1 contract negotiation)
+            fa1 = next(d for d in w.drivers if d["team_id"] is None and not d.get("legend"))
+            s1 = w.sign_free_agent(None, fa1["id"])
+            self.assertTrue(s1["ok"])
+
+            neg = w.execute_contract_negotiation("leclerc", 35.0, 2, release_driver_id=None)
+            self.assertTrue(neg["ok"])
+
+            # All 12 constructors now have exactly 2 active drivers (24 total)
             active = [d for d in w.drivers if d.get("team_id") is not None]
-            self.assertEqual(len(active), 22)
+            self.assertEqual(len(active), 24)
             for t in w.teams:
                 t_drvs = [d for d in active if d["team_id"] == t["id"]]
                 self.assertEqual(len(t_drvs), 2, f"Team {t['id']} should have 2 drivers")
-            my_ids = {d["id"] for d in active if d["team_id"] == w.player_team_id}
-            self.assertEqual(my_ids, {"leclerc", fa["id"]})
 
-            # 2) Start a 2028 custom constructor as Contender keeping slot drivers
+            # Qualifying & Race grid support 24 cars (P23/P24 staggered behind P22 + 12th pit box)
+            q_res = w.skip_session()
+            self.assertTrue(q_res.get("ok", True))
+            self.assertIsNotNone(w.quali_session)
+            self.assertEqual(len(w.quali_session.cars), 24)
+            w._prepare_race_grid()
+            self.assertIsNotNone(w.race_session)
+            self.assertEqual(len(w.race_session.cars), 24)
+
+            # 2) Start a 2028 12th custom constructor with Toyota icon
             res28 = w.create_custom_season({
-                "name": "Valkyrie F1 Team",
-                "short": "Valkyrie",
-                "code": "VLK",
+                "name": "Toyota Gazoo F1",
+                "short": "Toyota",
+                "code": "TOY",
                 "color": "#ff2255",
                 "secondary": "#ffffff",
                 "engine": "Ferrari",
+                "icon": "toyota",
                 "year": 2028,
-                "base_team_id": "williams",
                 "tier": "contender",
             })
             self.assertTrue(res28["ok"])
             self.assertEqual(w.season_year, 2028)
-            self.assertEqual(w.current_round, 1)
-            self.assertEqual(w.phase, "PRE_WEEKEND")
-            self.assertEqual(w.player_team_id, "williams")
-            pt28 = w._teams_by_id()["williams"]
-            self.assertEqual(pt28["budget_m"], 280.0)
-            self.assertEqual(len([d for d in w.drivers if d.get("team_id") is not None]), 22)
+            self.assertEqual(w.player_team_id, "custom")
+            self.assertEqual(len(w.teams), 12)
+            self.assertEqual(w._teams_by_id()["custom"]["budget_m"], 280.0)
+            self.assertEqual(w._teams_by_id()["custom"]["icon"], "toyota")
 
 
 if __name__ == "__main__":

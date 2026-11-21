@@ -2369,14 +2369,18 @@ class ChampionshipWorld:
             "engine": eng,
         }, None
 
-    def customize_team(self, name: str, short: str, code: str, color: str, secondary: str, engine: str) -> dict:
-        """Customize the player constructor identity in place (keeps 11 teams / 22 cars intact)."""
+    def customize_team(
+        self, name: str, short: str, code: str, color: str, secondary: str, engine: str, icon: str = ""
+    ) -> dict:
+        """Customize the player constructor identity in place."""
         with self.lock:
             parsed, err = self._validate_team_branding(name, short, code, color, secondary, engine)
             if err or not parsed:
                 return {"ok": False, "error": err or "Invalid branding."}
             team = self._teams_by_id()[self.player_team_id]
             team.update(parsed)
+            if icon:
+                team["icon"] = re.sub(r"[^a-z0-9_-]", "", str(icon).lower())[:24] or "shield"
             team["is_custom"] = True
             for sess in (self.race_session, self.quali_session):
                 if sess:
@@ -2739,11 +2743,16 @@ class ChampionshipWorld:
             else:
                 window_ok = self.is_transfer_window_open()
                 my_drivers = [d for d in self._active_drivers() if d["team_id"] == self.player_team_id]
-                rel = dmap.get(release_driver_id) if release_driver_id else (min(my_drivers, key=driver_overall) if my_drivers else None)
-                if not rel or rel.get("team_id") != self.player_team_id:
-                    return {"ok": False, "error": "Select one of your active drivers to make room on the roster."}
-                release_driver_id = rel["id"]
-                rel_buyout = round(rel["salary_m"] * max(1, rel["contract_years"]) * 0.25, 2)
+                has_open_seat = len(my_drivers) < 2
+                if has_open_seat:
+                    release_driver_id = None
+                    rel_buyout = 0.0
+                else:
+                    rel = dmap.get(release_driver_id) if release_driver_id else (min(my_drivers, key=driver_overall) if my_drivers else None)
+                    if not rel or rel.get("team_id") != self.player_team_id:
+                        return {"ok": False, "error": "Select one of your active drivers to make room on the roster."}
+                    release_driver_id = rel["id"]
+                    rel_buyout = round(rel["salary_m"] * max(1, rel["contract_years"]) * 0.25, 2)
                 if drv.get("team_id") is None:
                     buyout_m = rel_buyout
                     signing_fee_m = 0.0 if driver_id in self.academy_drivers else round(drv["value_m"] * 0.28, 2)
@@ -2816,7 +2825,7 @@ class ChampionshipWorld:
                 self._save_state()
                 return {"ok": True, "message": ev["reason"], "evaluation": ev}
 
-            rel = dmap[ev["release_driver_id"]]
+            rel = dmap.get(ev["release_driver_id"]) if ev.get("release_driver_id") else None
             prev_team_id = drv.get("team_id")
             upfront = ev["total_upfront_m"]
             my_team["budget_m"] = round(my_team["budget_m"] - upfront, 2)
@@ -2824,8 +2833,25 @@ class ChampionshipWorld:
                 poach_credit = round(ev["buyout_m"] * 0.65, 2)
                 tmap[prev_team_id]["budget_m"] = round(tmap[prev_team_id]["budget_m"] + poach_credit, 2)
 
-            rel["team_id"] = None
-            rel["contract_years"] = 0
+            if rel is not None:
+                rel["team_id"] = None
+                rel["contract_years"] = 0
+            elif prev_team_id and prev_team_id in tmap:
+                # Keep the poached constructor at 2 active drivers using the best non-legend free agent
+                free_pool = sorted(
+                    [d for d in self.drivers if d.get("team_id") is None and not d.get("legend") and d["id"] != drv["id"]],
+                    key=driver_overall,
+                    reverse=True,
+                )
+                if free_pool:
+                    repl = free_pool[0]
+                    repl["team_id"] = prev_team_id
+                    repl["contract_years"] = 1
+                    self.driver_points.setdefault(repl["id"], 0)
+                    self.driver_wins.setdefault(repl["id"], 0)
+                    self.driver_podiums.setdefault(repl["id"], 0)
+                    self.driver_poles.setdefault(repl["id"], 0)
+                    self.driver_dnfs.setdefault(repl["id"], 0)
             drv["team_id"] = self.player_team_id
             drv["salary_m"] = sal
             drv["contract_years"] = years
@@ -2838,10 +2864,11 @@ class ChampionshipWorld:
             self.driver_dnfs.setdefault(drv["id"], 0)
             self._ensure_component_pools()
 
-            self._log_ledger("SIGNING", f"Signed {drv['name']} ({years}yr, released {rel['code']})", -upfront)
+            rel_tag = f"released {rel['code']}" if rel else "open seat"
+            self._log_ledger("SIGNING", f"Signed {drv['name']} ({years}yr, {rel_tag})", -upfront)
             self._push_event(
                 "TRANSFER",
-                f"CONTRACT SIGNED: {my_team['short']} signs #{drv.get('number', 0)} {drv['name']} ({years} yrs @ ${sal:.1f}M/yr), releasing {rel['name']}!",
+                f"CONTRACT SIGNED: {my_team['short']} signs #{drv.get('number', 0)} {drv['name']} ({years} yrs @ ${sal:.1f}M/yr)" + (f", releasing {rel['name']}!" if rel else "!"),
             )
             self._save_state()
             return {"ok": True, "message": ev["reason"], "evaluation": ev}
@@ -2945,7 +2972,7 @@ class ChampionshipWorld:
             self._save_state()
             return {"ok": True, "message": f"{tgt_drv['name']} signed! Takes the wheel starting next session."}
 
-    def sign_free_agent(self, release_driver_id: str, free_agent_id: str) -> dict:
+    def sign_free_agent(self, release_driver_id: str | None, free_agent_id: str) -> dict:
         with self.lock:
             if not self.is_transfer_window_open():
                 return {
@@ -2954,17 +2981,26 @@ class ChampionshipWorld:
                 }
             dmap = self._drivers_by_id()
             tmap = self._teams_by_id()
-            rel = dmap.get(release_driver_id)
             fa = dmap.get(free_agent_id)
-            if not rel or not fa:
+            if not fa:
                 return {"ok": False, "error": "Driver not found."}
-            if rel["team_id"] != self.player_team_id:
-                return {"ok": False, "error": "Outgoing driver is not on your team."}
             if fa["team_id"] is not None:
                 return {"ok": False, "error": "Driver is already contracted to a team."}
 
+            my_drivers = [d for d in self._active_drivers() if d["team_id"] == self.player_team_id]
+            has_open_seat = len(my_drivers) < 2
+            rel = dmap.get(release_driver_id) if release_driver_id else None
+            if not has_open_seat:
+                if not rel:
+                    return {"ok": False, "error": "Select one of your drivers to release."}
+                if rel["team_id"] != self.player_team_id:
+                    return {"ok": False, "error": "Outgoing driver is not on your team."}
+                buyout_m = round(rel["salary_m"] * max(1, rel["contract_years"]) * 0.25, 2)
+            else:
+                rel = None
+                buyout_m = 0.0
+
             my_team = tmap[self.player_team_id]
-            buyout_m = round(rel["salary_m"] * max(1, rel["contract_years"]) * 0.25, 2)
             signing_fee_m = round(fa["value_m"] * 0.30, 2)
             total_cost_m = round(buyout_m + signing_fee_m, 2)
 
@@ -2975,8 +3011,9 @@ class ChampionshipWorld:
                 }
 
             my_team["budget_m"] = round(my_team["budget_m"] - total_cost_m, 2)
-            rel["team_id"] = None
-            rel["contract_years"] = 0
+            if rel is not None:
+                rel["team_id"] = None
+                rel["contract_years"] = 0
             fa["team_id"] = self.player_team_id
             fa["contract_years"] = 2
 
@@ -2985,15 +3022,14 @@ class ChampionshipWorld:
             self.driver_podiums.setdefault(fa["id"], 0)
             self.driver_poles.setdefault(fa["id"], 0)
             self.driver_dnfs.setdefault(fa["id"], 0)
+            self._ensure_component_pools()
 
-            self._log_ledger(
-                "SIGNING",
-                f"Signed {fa['name']} & bought out {rel['name']} (-${total_cost_m:.1f}M)",
-                -total_cost_m,
-            )
+            rel_note = f" & bought out {rel['name']}" if rel else " (open seat)"
+            self._log_ledger("SIGNING", f"Signed {fa['name']}{rel_note} (-${total_cost_m:.1f}M)", -total_cost_m)
             self._push_event(
                 "TRANSFER",
-                f"DRIVER SIGNING: {my_team['short']} signs Free Agent #{fa['number']} {fa['name']}, releasing {rel['name']}!",
+                f"DRIVER SIGNING: {my_team['short']} signs Free Agent #{fa['number']} {fa['name']}"
+                + (f", releasing {rel['name']}!" if rel else "!"),
             )
             self._save_state()
             return {"ok": True, "cost_m": total_cost_m}
@@ -3254,6 +3290,12 @@ class ChampionshipWorld:
         """Advance current session or knockout stage immediately (works in every phase, even when paused)."""
         with self.lock:
             if self.phase == "PRE_WEEKEND":
+                my_drivers = [d for d in self._active_drivers() if d["team_id"] == self.player_team_id]
+                if len(my_drivers) < 2:
+                    return {
+                        "ok": False,
+                        "error": f"Sign 2 drivers in the Driver Market before starting the weekend ({len(my_drivers)}/2 signed).",
+                    }
                 if self.current_track.is_sprint:
                     self._start_sprint_qualifying()
                 else:
@@ -3317,7 +3359,7 @@ class ChampionshipWorld:
             return {"ok": True, "season_year": self.season_year}
 
     def create_custom_season(self, cfg: dict) -> dict:
-        """Start a fresh Round 1 season playing as a newly created custom constructor."""
+        """Start a fresh Round 1 season as a 12th custom constructor (sign drivers after creation)."""
         parsed, err = self._validate_team_branding(
             cfg.get("name", ""),
             cfg.get("short", ""),
@@ -3329,94 +3371,47 @@ class ChampionshipWorld:
         if err or not parsed:
             return {"ok": False, "error": err or "Invalid constructor configuration."}
 
-        d1_req = str(cfg.get("driver1_id") or "").strip() or None
-        d2_req = str(cfg.get("driver2_id") or "").strip() or None
-        if d1_req and d2_req and d1_req == d2_req:
-            return {"ok": False, "error": "Select two different drivers for your constructor."}
-
-        tier = str(cfg.get("tier") or "slot").strip().lower()
+        icon_id = re.sub(r"[^a-z0-9_-]", "", str(cfg.get("icon") or "shield").lower())[:24] or "shield"
+        tier = str(cfg.get("tier") or "midfield").strip().lower()
         year = 2028 if int(cfg.get("year", cfg.get("start_year", 2026))) == 2028 else 2026
-        base_id = str(cfg.get("base_team_id") or "williams").strip()
+
+        tier_specs = {
+            "backmarker": (5 if year == 2028 else 4, 125.0),
+            "midfield": (6, 150.0),
+            "contender": (7, 180.0),
+        }
+        lvl, base_budget = tier_specs.get(tier, tier_specs["midfield"])
 
         with self.lock:
-            t_id = base_id if base_id in self._teams_by_id() else "williams"
-            self._init_fresh_career(t_id, start_year=year)
-            team = self._teams_by_id()[self.player_team_id]
-            team.update(parsed)
-            team["is_custom"] = True
-
-            # Optional starting performance tier override
-            tier_specs = {
-                "backmarker": (5 if year == 2028 else 4, 125.0),
-                "midfield": (6, 150.0),
-                "contender": (7, 180.0),
+            self._init_fresh_career("williams", start_year=year)
+            new_team = {
+                "id": "custom",
+                "name": parsed["name"],
+                "short": parsed["short"],
+                "code": parsed["code"],
+                "color": parsed["color"],
+                "secondary": parsed["secondary"],
+                "engine": parsed["engine"],
+                "icon": icon_id,
+                "is_custom": True,
+                "budget_m": round(base_budget + (100.0 if year == 2028 else 0.0), 2),
+                "upgrades": {dept: lvl for dept in UPGRADE_DEPARTMENTS},
+                "wind_tunnel_hours": 70,
+                "cfd_runs": 40,
+                "aero_testing_pct": 100,
+                "base_pit_s": 2.35,
             }
-            if tier in tier_specs:
-                lvl, base_budget = tier_specs[tier]
-                for dept in UPGRADE_DEPARTMENTS:
-                    team["upgrades"][dept] = lvl
-                team["budget_m"] = round(base_budget + (100.0 if year == 2028 else 0.0), 2)
-
-            # Assign chosen drivers cleanly while keeping all 11 constructors at 2 drivers (22 active)
-            if d1_req or d2_req:
-                dmap = self._drivers_by_id()
-                current_pair = [d for d in self.drivers if d.get("team_id") == t_id]
-                desired_ids: list[str] = []
-                for req_id in (d1_req, d2_req):
-                    drv = dmap.get(req_id) if req_id else None
-                    if drv and not drv.get("is_legend") and drv["id"] not in desired_ids:
-                        desired_ids.append(drv["id"])
-                for cur in current_pair:
-                    if len(desired_ids) >= 2:
-                        break
-                    if cur["id"] not in desired_ids:
-                        desired_ids.append(cur["id"])
-
-                displaced = [d for d in current_pair if d["id"] not in desired_ids]
-                free_agents = sorted(
-                    [
-                        d
-                        for d in self.drivers
-                        if not d.get("team_id") and not d.get("is_legend") and d["id"] not in desired_ids
-                    ],
-                    key=lambda d: int(d.get("ovr", 70)),
-                    reverse=True,
-                )
-                for did in desired_ids[:2]:
-                    drv = dmap[did]
-                    other_tid = drv.get("team_id")
-                    if other_tid and other_tid != t_id:
-                        replacement = displaced.pop(0) if displaced else (free_agents.pop(0) if free_agents else None)
-                        if replacement:
-                            replacement["team_id"] = other_tid
-                            replacement["contract_years"] = 1
-                    drv["team_id"] = t_id
-                    drv["contract_years"] = 2
-                    drv["morale"] = max(75, int(drv.get("morale", 75)))
-
-                for rem in displaced:
-                    rem["team_id"] = None
-                    rem["contract_years"] = 0
-
-                # Sync tire allocations, tire sets, and PU pools to the updated active roster
-                active_ids = {d["id"] for d in self.drivers if d.get("team_id")}
-                for aid in active_ids:
-                    self.tire_allocations.setdefault(aid, dict(DEFAULT_WEEKEND_TIRE_SETS))
-                    self.tire_sets.setdefault(aid, create_weekend_tire_sets())
-                    self.pu_pools.setdefault(aid, create_pu_pool())
-                for old_id in list(self.tire_allocations.keys()):
-                    if old_id not in active_ids:
-                        self.tire_allocations.pop(old_id, None)
-                        self.tire_sets.pop(old_id, None)
-                        self.pu_pools.pop(old_id, None)
-
+            self.teams.append(new_team)
+            self.player_team_id = "custom"
+            self.board_state = self._build_board_objectives("custom")
+            self._reset_season_tallies()
             self._begin_weekend()
             self._push_event(
                 "NEWS",
-                f"NEW CONSTRUCTOR ENTRY: {parsed['name']} ({parsed['code']}) joins the {self.season_year} F1 grid with {parsed['engine']} power!",
+                f"12TH CONSTRUCTOR ENTRY: {parsed['name']} ({parsed['code']}) joins the {self.season_year} F1 grid with {parsed['engine']} power! Sign 2 drivers in the Driver Market.",
             )
             self._save_state()
-            return {"ok": True, "season_year": self.season_year, "team": dict(team)}
+            return {"ok": True, "season_year": self.season_year, "team": dict(new_team)}
 
     def start_scenario(self, scenario_id: str) -> dict:
         """Launch a quick-play Pit-Wall tactical scenario without modifying the saved career."""
@@ -4226,6 +4221,7 @@ class ChampionshipWorld:
                     "code": p_team["code"],
                     "color": p_team["color"],
                     "secondary": p_team["secondary"],
+                    "icon": p_team.get("icon", "shield"),
                     "is_custom": bool(p_team.get("is_custom", False)),
                 } if p_team.get("is_custom") else None,
                 "cars": cars_payload,

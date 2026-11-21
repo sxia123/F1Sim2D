@@ -94,16 +94,95 @@ export function getTeamLogoImage(teamId) {
   return img;
 }
 
-export function registerCustomTeamLogo(teamId, code = "F1", primary = "#00d2be", secondary = "#ffffff") {
-  if (!teamId) return;
+export const CUSTOM_ICON_PRESETS = [
+  { id: "shield", label: "Apex Shield" },
+  { id: "koenigsegg", label: "Koenigsegg" },
+  { id: "toyota", label: "Toyota" },
+  { id: "bugatti", label: "Bugatti" },
+  { id: "pagani", label: "Pagani" },
+  { id: "yangwang", label: "Yangwang" },
+  { id: "porsche", label: "Porsche" },
+  { id: "lamborghini", label: "Lamborghini" },
+  { id: "maserati", label: "Maserati" },
+  { id: "genesis", label: "Genesis" },
+];
+
+export function renderCustomIconSVG(iconId = "shield", code = "F1", primary = "#00d2be", secondary = "#ffffff") {
   const safeCode = String(code || "F1").toUpperCase().slice(0, 3).replace(/[^A-Z0-9]/g, "") || "F1";
   const p = /^#[0-9a-fA-F]{6}$/.test(String(primary)) ? primary : "#00d2be";
   const s = /^#[0-9a-fA-F]{6}$/.test(String(secondary)) ? secondary : "#ffffff";
-  LOGO_SVGS[teamId] = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-    <path d="M5 6 H27 L24.5 22 L16 27.5 L7.5 22 Z" fill="${p}" stroke="${s}" stroke-width="2"/>
-    <path d="M9 11 L23 11 L21 14 L11 14 Z" fill="${s}" opacity="0.9"/>
-    <text x="16" y="21.5" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="8.2" fill="${s}">${safeCode}</text>
-  </svg>`;
+  switch (iconId) {
+    case "koenigsegg":
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <path d="M16 3 L27 7 V17 C27 23.5 21.5 27.5 16 29.5 C10.5 27.5 5 23.5 5 17 V7 Z" fill="${p}" stroke="${s}" stroke-width="2"/>
+        <path d="M16 7 L22 14 L16 23 L10 14 Z" fill="${s}" opacity="0.92"/>
+        <circle cx="13.5" cy="13.5" r="1.4" fill="${p}"/>
+        <circle cx="18.5" cy="13.5" r="1.4" fill="${p}"/>
+        <path d="M13 18 Q16 20 19 18" stroke="${p}" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+      </svg>`;
+    case "toyota":
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <circle cx="16" cy="16" r="13.5" fill="${p}" stroke="${s}" stroke-width="1.6"/>
+        <ellipse cx="16" cy="16" rx="11" ry="7.2" fill="none" stroke="${s}" stroke-width="2"/>
+        <ellipse cx="16" cy="13" rx="6.2" ry="3.2" fill="none" stroke="${s}" stroke-width="1.9"/>
+        <ellipse cx="16" cy="16" rx="2.9" ry="7.2" fill="none" stroke="${s}" stroke-width="1.9"/>
+      </svg>`;
+    case "bugatti":
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <ellipse cx="16" cy="16" rx="13.5" ry="9.5" fill="${p}" stroke="${s}" stroke-width="2"/>
+        <ellipse cx="16" cy="16" rx="11" ry="7.2" fill="none" stroke="${s}" stroke-width="1" stroke-dasharray="1.5 1.5"/>
+        <text x="16" y="19.5" text-anchor="middle" font-family="Georgia,serif" font-weight="900" font-size="10.5" fill="${s}">EB</text>
+      </svg>`;
+    case "pagani":
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <ellipse cx="16" cy="16" rx="13.5" ry="9" fill="${p}" stroke="${s}" stroke-width="2"/>
+        <path d="M5 16 H27" stroke="${s}" stroke-width="1.2" opacity="0.65"/>
+        <ellipse cx="16" cy="16" rx="9.5" ry="5.5" fill="none" stroke="${s}" stroke-width="1.5"/>
+        <text x="16" y="18.6" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="7.2" fill="${s}">${safeCode}</text>
+      </svg>`;
+    case "yangwang":
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <rect x="4" y="4" width="24" height="24" rx="6" fill="${p}" stroke="${s}" stroke-width="1.8"/>
+        <path d="M16 7 L11 16 H17 L13 25 L22 14 H16 Z" fill="${s}"/>
+        <path d="M9 11 H23 M9 21 H23" stroke="${s}" stroke-width="1.3" opacity="0.7" stroke-linecap="round"/>
+      </svg>`;
+    case "porsche":
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <path d="M6 5 H26 V17 C26 23 16 28 16 28 C16 28 6 23 6 17 Z" fill="${p}" stroke="${s}" stroke-width="2"/>
+        <path d="M16 5 V28 M6 15 H26" stroke="${s}" stroke-width="1.6"/>
+        <rect x="12" y="11" width="8" height="8" rx="1.5" fill="${s}"/>
+        <text x="16" y="17.3" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="5.5" fill="${p}">${safeCode}</text>
+      </svg>`;
+    case "lamborghini":
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <path d="M6 5 H26 L24 22 L16 28 L8 22 Z" fill="${p}" stroke="${s}" stroke-width="2"/>
+        <path d="M10 11 L16 8 L22 11 L20 19 L16 23 L12 19 Z" fill="${s}" opacity="0.9"/>
+        <text x="16" y="18" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="6.4" fill="${p}">${safeCode}</text>
+      </svg>`;
+    case "maserati":
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <ellipse cx="16" cy="16" rx="11" ry="13.5" fill="${p}" stroke="${s}" stroke-width="2"/>
+        <path d="M16 7 V24 M11 10 V15 Q11 18 16 18 Q21 18 21 15 V10" stroke="${s}" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      </svg>`;
+    case "genesis":
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <circle cx="16" cy="16" r="13" fill="${p}" stroke="${s}" stroke-width="1.6"/>
+        <path d="M4 13 L13 16 L4 19 M28 13 L19 16 L28 19" stroke="${s}" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <path d="M16 10 L21 16 L16 22 L11 16 Z" fill="${s}"/>
+      </svg>`;
+    case "shield":
+    default:
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+        <path d="M5 6 H27 L24.5 22 L16 27.5 L7.5 22 Z" fill="${p}" stroke="${s}" stroke-width="2"/>
+        <path d="M9 11 L23 11 L21 14 L11 14 Z" fill="${s}" opacity="0.9"/>
+        <text x="16" y="21.5" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="8.2" fill="${s}">${safeCode}</text>
+      </svg>`;
+  }
+}
+
+export function registerCustomTeamLogo(teamId, code = "F1", primary = "#00d2be", secondary = "#ffffff", iconId = "shield") {
+  if (!teamId) return;
+  LOGO_SVGS[teamId] = renderCustomIconSVG(iconId, code, primary, secondary);
   IMAGE_CACHE.delete(teamId);
   getTeamLogoImage(teamId);
 }

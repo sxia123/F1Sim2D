@@ -274,6 +274,7 @@ class F1RequestHandler(BaseHTTPRequestHandler):
                 str(body.get("color", "")),
                 str(body.get("secondary", "")),
                 str(body.get("engine", "")),
+                icon=str(body.get("icon", "")),
             )
         elif path == "/api/break_parc_ferme":
             fpu = body.get("fresh_pu")

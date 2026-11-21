@@ -9,7 +9,7 @@ MAX_UPGRADES_PER_RACE = 3
 UPGRADE_PRICE_MULTIPLIER = 1.10
 
 # 2026 FIA Constructor Prize Pool at end of season ($ Millions)
-WCC_PRIZE_POOL_M = [162.0, 148.0, 136.0, 125.0, 115.0, 106.0, 97.0, 89.0, 82.0, 75.0, 69.0]
+WCC_PRIZE_POOL_M = [162.0, 148.0, 136.0, 125.0, 115.0, 106.0, 97.0, 89.0, 82.0, 75.0, 69.0, 64.0]
 
 TIRE_COMPOUNDS = {
     "SOFT": {

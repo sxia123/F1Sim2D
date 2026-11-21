@@ -1,6 +1,6 @@
 // FOM Broadcast & Pit Wall Controller — Zero Emojis, Vector Team Logos & Live 20Hz SSE
 import { CircuitRenderer } from "/canvas.js";
-import { teamLogoSVG, registerCustomTeamLogo } from "/logos.js";
+import { teamLogoSVG, registerCustomTeamLogo, CUSTOM_ICON_PRESETS, renderCustomIconSVG } from "/logos.js";
 
 const TIRE_META = {
   SOFT:   { code: "S", color: "#ff2800", optMin: 90,  optMax: 106, wearKm: 0.0112, cliff: 0.68 },
@@ -1467,10 +1467,10 @@ class F1App {
 
     if (tick.custom_team_meta && typeof registerCustomTeamLogo === "function") {
       const cm = tick.custom_team_meta;
-      const sig = `${cm.id}_${cm.code}_${cm.color}_${cm.secondary}`;
+      const sig = `${cm.id}_${cm.code}_${cm.color}_${cm.secondary}_${cm.icon || "shield"}`;
       if (sig !== this._lastCustomSig) {
         this._lastCustomSig = sig;
-        registerCustomTeamLogo(cm.id, cm.code, cm.color, cm.secondary);
+        registerCustomTeamLogo(cm.id, cm.code, cm.color, cm.secondary, cm.icon || "shield");
       }
     }
 
@@ -2836,9 +2836,15 @@ class F1App {
     if (rivalDrivers.some((d) => d.id === prevTgt)) tgtSel.value = prevTgt;
 
     const relSel = document.getElementById("fa-release-driver");
-    relSel.innerHTML = myDrivers
-      .map((d) => `<option value="${d.id}">#${d.number} ${d.name} (BUYOUT FEE: $${d.buyout_m.toFixed(2)}M)</option>`)
-      .join("");
+    if (myDrivers.length < 2) {
+      relSel.innerHTML = `<option value="">OPEN SEAT (${2 - myDrivers.length} VACANT — NO BUYOUT)</option>`;
+      relSel.disabled = true;
+    } else {
+      relSel.disabled = false;
+      relSel.innerHTML = myDrivers
+        .map((d) => `<option value="${d.id}">#${d.number} ${d.name} (BUYOUT FEE: $${d.buyout_m.toFixed(2)}M)</option>`)
+        .join("");
+    }
 
     document.getElementById("free-agent-list").innerHTML = freeAgents
       .map(
@@ -3213,18 +3219,14 @@ class F1App {
     if (custWrap && this.fullState.player_team) {
       const pt = this.fullState.player_team;
       const supps = this.fullState.engine_suppliers || ["Mercedes", "Ferrari", "Honda RBPT", "Audi"];
-      const teams = this.fullState.teams || [];
-      const drivers = (this.fullState.drivers || [])
-        .filter((d) => !d.is_legend)
-        .slice()
-        .sort((a, b) => (b.ovr || 0) - (a.ovr || 0));
-      const drvOpts = [
-        `<option value="">Keep Slot Driver</option>`,
-        ...drivers.map((d) => {
-          const tag = d.team_id ? d.team_id.toUpperCase() : "FREE";
-          return `<option value="${d.id}">${d.name} (${d.ovr || 75} OVR · ${tag})</option>`;
-        }),
-      ].join("");
+      const activeIcon = pt.icon || "shield";
+      const iconBtnsHtml = CUSTOM_ICON_PRESETS.map((ic) => {
+        const sel = ic.id === activeIcon;
+        return `<button type="button" class="btn-outline btn-sm cc-icon-btn ${sel ? "active" : ""}" data-cc-icon="${ic.id}" title="${ic.label}" style="display:inline-flex;align-items:center;gap:5px;padding:4px 8px;${sel ? "border-color:#00e5ff;background:rgba(0,229,255,0.14);color:#fff" : ""}">
+          <span class="cc-icon-svg" style="display:inline-flex;width:20px;height:20px">${renderCustomIconSVG(ic.id, pt.code, pt.color, pt.secondary || pt.color)}</span>
+          <span style="font-size:10px">${ic.label}</span>
+        </button>`;
+      }).join("");
 
       custWrap.innerHTML = `
         <div class="custom-form-grid">
@@ -3237,11 +3239,17 @@ class F1App {
             <select id="ct-eng">${supps.map((e) => `<option value="${e}" ${pt.engine === e ? "selected" : ""}>${e}</option>`).join("")}</select>
           </div>
         </div>
+        <div style="margin-top:8px">
+          <label style="display:block;font-size:10px;font-weight:800;color:#8f90a6;margin-bottom:5px">CONSTRUCTOR EMBLEM / ICON</label>
+          <input type="hidden" id="ct-icon" value="${activeIcon}" />
+          <div id="cc-icon-grid" style="display:flex;flex-wrap:wrap;gap:6px">${iconBtnsHtml}</div>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
           <button class="btn-primary btn-sm" id="btn-save-custom-team">APPLY CONSTRUCTOR BRANDING</button>
         </div>
         <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.08)">
-          <div style="font-size:11px;font-weight:800;letter-spacing:0.6px;color:#00e5ff;margin-bottom:8px">START NEW SEASON AS CUSTOM CONSTRUCTOR (ROUND 1)</div>
+          <div style="font-size:11px;font-weight:800;letter-spacing:0.6px;color:#00e5ff;margin-bottom:6px">ENTER AS 12TH CONSTRUCTOR — START NEW SEASON (ROUND 1)</div>
+          <p class="muted-note" style="margin:0 0 8px 0">Adds your constructor as the 12th team on the grid (all 11 existing teams stay intact). Sign your 2 drivers right after in Driver Contracts &amp; Trades.</p>
           <div class="custom-form-grid">
             <div><label>SEASON ERA</label>
               <select id="cc-year">
@@ -3249,28 +3257,50 @@ class F1App {
                 <option value="2028" ${this.fullState.season_year === 2028 ? "selected" : ""}>2028 2.4L V8 &amp; DRS</option>
               </select>
             </div>
-            <div><label>REPLACES GRID SLOT</label>
-              <select id="cc-slot">${teams.map((t) => `<option value="${t.id}" ${t.id === pt.id ? "selected" : ""}>${t.short} (${t.engine})</option>`).join("")}</select>
-            </div>
             <div><label>STARTING TIER</label>
               <select id="cc-tier">
-                <option value="slot">Match Replaced Slot</option>
                 <option value="backmarker">Backmarker Underdog ($125M)</option>
-                <option value="midfield">Midfield Challenger ($150M)</option>
+                <option value="midfield" selected>Midfield Challenger ($150M)</option>
                 <option value="contender">Works Contender ($180M)</option>
               </select>
             </div>
-            <div><label>DRIVER 1</label><select id="cc-d1">${drvOpts}</select></div>
-            <div><label>DRIVER 2</label><select id="cc-d2">${drvOpts}</select></div>
           </div>
-          <button class="btn-primary btn-sm" id="btn-create-custom-season" style="margin-top:8px;background:linear-gradient(135deg,#00e5ff,#0095ff);color:#06101b">CREATE CONSTRUCTOR &amp; START ROUND 1</button>
+          <button class="btn-primary btn-sm" id="btn-create-custom-season" style="margin-top:8px;background:linear-gradient(135deg,#00e5ff,#0095ff);color:#06101b">CREATE 12TH CONSTRUCTOR &amp; SIGN DRIVERS</button>
         </div>
       `;
+
+      const refreshIconPreviews = () => {
+        const curCode = document.getElementById("ct-code")?.value || pt.code;
+        const curCol = document.getElementById("ct-col")?.value || pt.color;
+        const curSec = document.getElementById("ct-sec")?.value || pt.secondary || pt.color;
+        const selIcon = document.getElementById("ct-icon")?.value || "shield";
+        custWrap.querySelectorAll("[data-cc-icon]").forEach((btn) => {
+          const icId = btn.dataset.ccIcon;
+          const isSel = icId === selIcon;
+          btn.style.borderColor = isSel ? "#00e5ff" : "";
+          btn.style.background = isSel ? "rgba(0,229,255,0.14)" : "";
+          btn.style.color = isSel ? "#fff" : "";
+          const wrap = btn.querySelector(".cc-icon-svg");
+          if (wrap) wrap.innerHTML = renderCustomIconSVG(icId, curCode, curCol, curSec);
+        });
+      };
+
+      custWrap.querySelectorAll("[data-cc-icon]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const hid = document.getElementById("ct-icon");
+          if (hid) hid.value = btn.dataset.ccIcon;
+          refreshIconPreviews();
+        });
+      });
+      ["ct-code", "ct-col", "ct-sec"].forEach((id) => {
+        document.getElementById(id)?.addEventListener("input", refreshIconPreviews);
+      });
+
       const syncCustomTeamLogo = (team) => {
         if (typeof registerCustomTeamLogo === "function") {
-          registerCustomTeamLogo(team.id, team.code, team.color, team.secondary);
+          registerCustomTeamLogo(team.id, team.code, team.color, team.secondary, team.icon || "shield");
         }
-        this._lastCustomSig = `${team.id}_${team.code}_${team.color}_${team.secondary}`;
+        this._lastCustomSig = `${team.id}_${team.code}_${team.color}_${team.secondary}_${team.icon || "shield"}`;
       };
       const readBrandingPayload = () => ({
         name: document.getElementById("ct-name").value,
@@ -3279,6 +3309,7 @@ class F1App {
         color: document.getElementById("ct-col").value,
         secondary: document.getElementById("ct-sec").value,
         engine: document.getElementById("ct-eng").value,
+        icon: document.getElementById("ct-icon")?.value || "shield",
       });
 
       const saveCust = document.getElementById("btn-save-custom-team");
@@ -3300,17 +3331,15 @@ class F1App {
           const payload = {
             ...readBrandingPayload(),
             year: Number(document.getElementById("cc-year").value),
-            base_team_id: document.getElementById("cc-slot").value,
             tier: document.getElementById("cc-tier").value,
-            driver1_id: document.getElementById("cc-d1").value || null,
-            driver2_id: document.getElementById("cc-d2").value || null,
           };
           const res = await this.apiPost("/api/create_constructor", payload);
           if (res.ok && res.team) {
             syncCustomTeamLogo(res.team);
             document.getElementById("team-modal").classList.add("hidden");
             this.stopReplay();
-            this.showToast(`NEW CONSTRUCTOR ${res.team.name} (${res.season_year || payload.year}) — ROUND 1`);
+            this.showToast(`12TH CONSTRUCTOR ${res.team.name} CREATED — Sign 2 drivers below!`);
+            document.querySelector('[data-tab="drivers"]')?.click();
             this.fetchFullState();
           }
         });
@@ -3672,14 +3701,19 @@ class F1App {
     if ([...myDrivers, ...otherDrivers].some((d) => d.id === prevDrv)) drvSel.value = prevDrv;
 
     const prevRel = relSel.value;
-    relSel.innerHTML = myDrivers.map((d) => `<option value="${d.id}">#${d.number} ${d.name} (OVR ${d.overall})</option>`).join("");
-    if (myDrivers.some((d) => d.id === prevRel)) relSel.value = prevRel;
+    if (myDrivers.length < 2) {
+      relSel.innerHTML = `<option value="">OPEN SEAT (${2 - myDrivers.length} VACANT — NO RELEASE)</option>`;
+    } else {
+      relSel.innerHTML = myDrivers.map((d) => `<option value="${d.id}">#${d.number} ${d.name} (OVR ${d.overall})</option>`).join("");
+      if (myDrivers.some((d) => d.id === prevRel)) relSel.value = prevRel;
+    }
 
     const syncVisibilityAndDefault = () => {
       const target = st.drivers.find((d) => d.id === drvSel.value);
       const isOwn = target && target.team_id === st.player_team_id;
-      if (relWrap) relWrap.style.opacity = isOwn ? "0.4" : "1.0";
-      relSel.disabled = Boolean(isOwn);
+      const openSeat = myDrivers.length < 2;
+      if (relWrap) relWrap.style.opacity = isOwn || openSeat ? "0.45" : "1.0";
+      relSel.disabled = Boolean(isOwn || openSeat);
     };
     syncVisibilityAndDefault();
 

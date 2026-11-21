@@ -80,6 +80,34 @@ TEAM_GARAGE_INDEX = {
 }
 
 
+def _garage_s_for_team(track: CompiledTrack, team_id: str) -> float:
+    """Return pit-garage station s_m for any team, giving a 12th custom team its own slot."""
+    if team_id in TEAM_GARAGE_INDEX:
+        return track.pit_garages[TEAM_GARAGE_INDEX[team_id]]["s_m"]
+    last_s = track.pit_garages[-1]["s_m"]
+    spacing = getattr(track, "pit_garage_spacing_s", 12.0)
+    return (last_s - spacing * 0.65) % track.length_m
+
+
+def _grid_box_for_slot(track: CompiledTrack, idx: int) -> dict:
+    """Return starting grid box for slot idx, extending behind P22 for 23-24 car grids."""
+    if idx < len(track.grid_boxes):
+        return track.grid_boxes[idx]
+    pitch = float(getattr(track, "grid_spacing_m", 8.0) or 8.0)
+    offset = float(getattr(track, "start_line_s", 0.0))
+    distance = 10.0 + idx * pitch
+    progress = offset - distance
+    pole_side = int(getattr(track, "grid_pole_side", 1) or 1)
+    d = 0.62 * pole_side * (1 if idx % 2 == 0 else -1)
+    return {
+        "pos": idx + 1,
+        "slot_offset": distance,
+        "progress_m": progress,
+        "s_m": progress % track.length_m,
+        "d": d,
+    }
+
+
 def build_speed_envelope(track: CompiledTrack) -> tuple[list[float], list[bool]]:
     """Precompute reference cornering + backward-integrated 4.5G braking speed envelope (m/s)."""
     m = track.NUM_STATIONS
@@ -1176,7 +1204,7 @@ class QualifyingSession:
             avail["in_use"] = True
 
     def _place_in_garage_for_run(self, car: CarState, wave_idx: int, first_run: bool = False) -> None:
-        base_garage_s = self.track.pit_garages[TEAM_GARAGE_INDEX.get(car.team_id, 5)]["s_m"]
+        base_garage_s = _garage_s_for_team(self.track, car.team_id)
         if not hasattr(car, "_garage_slot_sign"):
             has_tm = any(o is not car and o.team_id == car.team_id for o in self.cars)
             car._garage_slot_sign = 1.0 if has_tm else -1.0
@@ -1472,7 +1500,7 @@ class QualifyingSession:
                     rel = (car.s - self.track.pit_entry_s) % L
                     if rel > L - 150.0:
                         rel -= L
-                    garage_s = self.track.pit_garages[TEAM_GARAGE_INDEX.get(car.team_id, 5)]["s_m"]
+                    garage_s = _garage_s_for_team(self.track, car.team_id)
                     rel_box = (garage_s - self.track.pit_entry_s) % L
                     ds_pit = car.v * dt * self.track.pit_distance_scale * speed_scale
                     if rel + ds_pit >= rel_box:
@@ -1701,7 +1729,7 @@ class QualifyingSession:
                     car.v = 0.0
                     car.aero_mode = "CORNER"
                     car.d = 2.0 * self.track.pit_side
-                    car.total_dist = self.track.pit_garages[TEAM_GARAGE_INDEX.get(car.team_id,5)]['s_m']
+                    car.total_dist = _garage_s_for_team(self.track, car.team_id)
                     car.s = car.total_dist
                     self._update_xy(car)
                     eliminated_codes.append(f"P{pos} {car.code}")
@@ -1995,7 +2023,7 @@ class RaceSession:
             )
             car.max_battery_mj = float(self.regulations.get("max_battery_mj", 4.0))
             car.battery_mj = car.max_battery_mj
-            gb = track.grid_boxes[idx]
+            gb = _grid_box_for_slot(track, idx)
             car.total_dist = gb['progress_m']
             car.s = gb['s_m']
             car.d = gb['d']
@@ -2405,8 +2433,7 @@ class RaceSession:
         return out
 
     def _team_pit_box_s(self, car: CarState) -> float:
-        t_idx = TEAM_GARAGE_INDEX.get(car.team_id, 5)
-        return self.track.pit_garages[t_idx]['s_m']
+        return _garage_s_for_team(self.track, car.team_id)
 
     def _update_xy(self, car: CarState) -> None:
         if car.in_pits:
@@ -2838,7 +2865,7 @@ class RaceSession:
         running = [c for c in self.standings if not c.dnf and not c.finished]
         base_laps = max(1, max((c.laps_completed for c in running), default=1))
         for idx, c in enumerate(running):
-            gb = self.track.grid_boxes[min(idx, len(self.track.grid_boxes) - 1)]
+            gb = _grid_box_for_slot(self.track, idx)
             c.in_pits = False
             c.pit_phase = "NONE"
             c.pit_apron = 0.0
