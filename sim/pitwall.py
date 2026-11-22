@@ -452,6 +452,30 @@ class RivalPitWall:
                     event_cb("TEAM_ORDER", f"PIT WALL ({car.team_short} / #{car.number} {car.code}): '{car.code}, release the faster {other.code}; reassess in clean air.'")
                     break
 
+        # AI DRS Escort coordination: protect top-10 double finish late in race when rival threatens trailing car
+        for tid in {c.team_id for c in race.cars if c.team_id != race.player_team_id}:
+            t_cars = sorted(
+                [c for c in race.cars if c.team_id == tid and not c.dnf and not c.finished and not c.in_pits],
+                key=lambda c: c.total_dist,
+                reverse=True,
+            )
+            cur_tactic = race.team_tactics.get(tid, "FREE")
+            if len(t_cars) == 2 and car.laps_completed >= int(race.total_laps * 0.65):
+                ahead, behind = t_cars[0], t_cars[1]
+                pair_gap = (ahead.total_dist - behind.total_dist) / self.mean_speed
+                rival_threat = any(
+                    o.team_id != tid and not o.dnf and not o.in_pits
+                    and 0.0 < (behind.total_dist - o.total_dist) / self.mean_speed < 1.15
+                    for o in race.cars
+                )
+                if cur_tactic == "FREE" and ahead.pos <= 10 and 0.25 < pair_gap < 0.95 and rival_threat and behind.team_order == "FREE":
+                    race.team_tactics[tid] = "DRS_ESCORT"
+                    behind.team_order = "HOLD"
+                elif cur_tactic == "DRS_ESCORT" and (pair_gap > 1.8 or not rival_threat):
+                    race.team_tactics[tid] = "FREE"
+                    if behind.team_order == "HOLD":
+                        behind.team_order = "FREE"
+
     def _review_queued_stop(self, car, event_cb):
         if car.drive_through_pending:
             return

@@ -41,6 +41,7 @@ class TestAdvancedFeatures(unittest.TestCase):
             self.assertEqual(res["strategy"]["plans"]["A"][0]["pit_lap"], 3)
 
             w._prepare_race_grid()
+            w.phase = "RACE"
             rs = w.race_session
             assert rs is not None
             rs.lights_out = True
@@ -167,6 +168,7 @@ class TestAdvancedFeatures(unittest.TestCase):
             self.assertTrue(w.hire_staff("chief_meteorologist", target_tier=3)["ok"])
             self.assertAlmostEqual(w._staff_bonuses()["radar_noise_mult"], 0.12, places=2)
             w._prepare_race_grid()
+            w.phase = "RACE"
             rs = w.race_session
             assert rs is not None
             self.assertLessEqual(abs(rs._radar_noise_s), 90.0 * 0.12 + 0.01)
@@ -229,6 +231,7 @@ class TestAdvancedFeatures(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             w = self._new_world(td)
             w._prepare_race_grid()
+            w.phase = "RACE"
             rs = w.race_session
             assert rs is not None
             rs.lights_out = True
@@ -406,6 +409,70 @@ class TestAdvancedFeatures(unittest.TestCase):
             self.assertEqual(len(w.teams), 12)
             self.assertEqual(w._teams_by_id()["custom"]["budget_m"], 550.0)
             self.assertEqual(w._teams_by_id()["custom"]["icon"], "toyota")
+
+    def test_driver_coordination_and_teamwork(self):
+        with tempfile.TemporaryDirectory() as td:
+            w = self._new_world(td)
+            p_drvs = [d["id"] for d in w.drivers if d.get("team_id") == w.player_team_id]
+            d1, d2 = p_drvs[0], p_drvs[1]
+
+            # 1) Practice Telemetry Sharing boosts teammate setup confidence & chemistry
+            w.driver_setup_confidence[d1] = 75.0
+            w.driver_setup_confidence[d2] = 55.0
+            w.weekend_setup_target[d1] = int(w.driver_setups.get(d1, 0))
+            chem_before = w.team_chemistry[w.player_team_id]
+            fp = w.run_practice_program(d1, "QUALI_SIM")
+            self.assertTrue(fp["ok"])
+            self.assertGreater(w.driver_setup_confidence[d2], 55.0)
+            self.assertGreater(w.team_chemistry[w.player_team_id], chem_before)
+
+            # 2) Paired Pit Wall Tactics & Swap Compliance Dilemma
+            w._prepare_race_grid()
+            w.phase = "RACE"
+            rs = w.race_session
+            assert rs is not None
+            rs.lights_out = True
+            rs.flag_state = "GREEN"
+            c1 = rs.cars_by_id[d1]
+            c2 = rs.cars_by_id[d2]
+            c1.pos, c2.pos = 1, 2
+            c1.total_dist, c2.total_dist = 1500.0, 1465.0
+
+            esc = w.pit_wall_command(d1, {"team_tactic": "DRS_ESCORT"})
+            self.assertTrue(esc["ok"])
+            self.assertEqual(rs.team_tactics[w.player_team_id], "DRS_ESCORT")
+            self.assertEqual(c2.team_order, "HOLD")
+
+            sp = w.pit_wall_command(d1, {"team_tactic": "SPLIT_STRATEGY"})
+            self.assertTrue(sp["ok"])
+            self.assertEqual(c1.pace_mode, "PUSH")
+            self.assertEqual(c2.pace_mode, "CONSERVE")
+
+            # Low-morale podium leader triggers TEAM_ORDER_PUSHBACK dilemma on SWAP
+            c1.morale = 50
+            sw = w.pit_wall_command(d1, {"team_tactic": "SWAP"})
+            self.assertTrue(sw.get("pushback"))
+            self.assertIsNotNone(rs.active_dilemma)
+            self.assertEqual(rs.active_dilemma["kind"], "TEAM_ORDER_PUSHBACK")
+
+            # Insist (Option A) forces YIELD & applies -8 chemistry delta
+            res_dil = w.resolve_dilemma("A")
+            self.assertTrue(res_dil["ok"])
+            self.assertEqual(c1.team_order, "YIELD")
+            self.assertEqual(rs.chemistry_deltas[w.player_team_id], -8)
+
+            # Yield completion auto-clears SWAP back to FREE and awards +2 chemistry
+            c2.total_dist = c1.total_dist + 5.0
+            rs._complete_team_yield(c1, c2, w._push_event)
+            self.assertEqual(c1.team_order, "FREE")
+            self.assertEqual(rs.team_tactics[w.player_team_id], "FREE")
+            self.assertEqual(rs.chemistry_deltas[w.player_team_id], -6)
+
+            # Live tick exposes teamwork telemetry fields
+            tick = w.build_live_tick_payload()
+            self.assertEqual(tick["team_tactic"], "FREE")
+            self.assertIsInstance(tick["team_chemistry"], int)
+            self.assertIsNotNone(tick["teammate_gap_s"])
 
 
 if __name__ == "__main__":

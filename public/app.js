@@ -874,6 +874,7 @@ class F1App {
       else if (cmd === "pace") payload.pace_mode = val;
       else if (cmd === "ers") payload.ers_mode = val;
       else if (cmd === "order") payload.team_order = val;
+      else if (cmd === "team_tactic") payload.team_tactic = val;
       else if (cmd === "wing_adjust") payload.wing_adjust = Number(val);
       else if (cmd === "apply_advice") payload.apply_advice = true;
       else if (cmd === "resume_red_flag") payload.resume_red_flag = true;
@@ -948,6 +949,14 @@ class F1App {
               this.renderPitWall(this.liveTick);
             }
           }
+        } else if (cmd === "team_tactic" && this.liveTick) {
+          if (res.pushback) {
+            this.showToast("DRIVER RADIO PUSHBACK — resolve dilemma on Pit Wall!");
+          } else {
+            this.liveTick.team_tactic = res.tactic || val;
+            this.showToast(`TEAMWORK TACTIC: ${(res.tactic || val).replace("_", " ")}`);
+          }
+          this.renderPitWall(this.liveTick);
         } else if (cmd === "box" && this.liveTick?.cars) {
           const myCar = this.liveTick.cars.find(c => c.id === driverId);
           if (myCar) {
@@ -2054,6 +2063,33 @@ class F1App {
       </div>
     ` : "";
 
+    const chem = tick.team_chemistry ?? 72;
+    const chemCol = chem >= 75 ? "#00d26a" : chem >= 50 ? "#ffd000" : "#ff4d4f";
+    const curTactic = tick.team_tactic || "FREE";
+    const gapTag = tick.teammate_gap_s != null
+      ? `<span style="color:${tick.teammate_gap_s <= 1.0 ? "#00e5ff" : "#cfd2e6"};font-weight:800">GAP ${tick.teammate_gap_s.toFixed(2)}s${tick.teammate_gap_s <= 1.0 ? " (TOW/DRS)" : ""}</span>`
+      : `<span style="color:#8f90a6">GAP --</span>`;
+    const isRacePair = (tick.phase === "RACE" || tick.phase === "SPRINT_RACE") && !isRedFlag;
+    const teamCoordHtml = myCars.length >= 2 ? `
+      <div class="pw-banner-strip" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;padding:6px 10px;background:rgba(16,20,34,0.9);border:1px solid rgba(255,255,255,0.09);border-radius:6px">
+        <div style="display:flex;align-items:center;gap:10px;font-size:10.5px">
+          <strong style="color:#fff;letter-spacing:0.5px">TEAMWORK</strong>
+          ${gapTag}
+          <span style="color:${chemCol};font-weight:800">CHEM ${chem}%</span>
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${[
+            ["FREE", "FREE"],
+            ["HOLD", "HOLD"],
+            ["SWAP", "SWAP"],
+            ["DRS_ESCORT", "DRS ESCORT"],
+            ["BACK_UP", "BACK UP"],
+            ["SPLIT_STRATEGY", "SPLIT STRAT"],
+          ].map(([tk, lbl]) => `<button class="pw-btn ${curTactic === tk ? "active" : ""}" ${isRacePair ? "" : "disabled"} data-pw-cmd="team_tactic" data-drv="${myCars[0].id}" data-val="${tk}">${lbl}</button>`).join("")}
+        </div>
+      </div>
+    ` : "";
+
     const cardsHtml = myCars
       .map((c, idx) => {
         const tm = TIRE_META[c.comp] || TIRE_META.MEDIUM;
@@ -2248,7 +2284,7 @@ class F1App {
         `;
       })
       .join("");
-    const nextHtml = rfBannerHtml + cardsHtml;
+    const nextHtml = rfBannerHtml + teamCoordHtml + cardsHtml;
     if (this._lastPitWallHtml !== nextHtml) {
       wrap.innerHTML = nextHtml;
       this._lastPitWallHtml = nextHtml;

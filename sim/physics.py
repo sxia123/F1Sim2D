@@ -1582,15 +1582,26 @@ class QualifyingSession:
             car.total_dist += ds
             car.s = car.total_dist % L
 
-            # Etiquette & Traffic: slow OUTLAP/INLAP cars yield off racing line for PUSH cars
+            # Etiquette & Traffic: slow OUTLAP/INLAP cars yield off racing line for PUSH cars,
+            # while an OUTLAP teammate on a straight stays in-line briefly to deliver a tow before braking.
             base_d = smp.get("racing_line_d", 0.0) + car.driver_line_bias
             if car.quali_run_phase in ("OUTLAP", "INLAP"):
+                tm_push = next(
+                    (
+                        o for o in self.cars
+                        if o is not car and o.team_id == car.team_id and not o.eliminated and not o.in_pits
+                        and o.quali_run_phase == "PUSH" and 18.0 < ((car.s - o.s) % L) < 95.0
+                    ),
+                    None,
+                )
                 push_behind = any(
                     o is not car and not o.eliminated and not o.in_pits
                     and o.quali_run_phase == "PUSH" and 0.0 < ((car.s - o.s) % L) < 95.0
                     for o in self.cars
                 )
-                if push_behind:
+                if tm_push is not None and car.quali_run_phase == "OUTLAP" and smp["straight_mode"] and ((car.s - tm_push.s) % L) > 26.0:
+                    base_d = tm_push.d
+                elif push_behind:
                     base_d = 0.78 * self.track.pit_side
             elif car.quali_run_phase == "PUSH":
                 blocked = any(
@@ -1846,6 +1857,7 @@ class RaceSession:
         rivalries: dict[str, int] | None = None,
         staff_bonuses: dict[str, Any] | None = None,
         strategy_plans: dict[str, dict] | None = None,
+        team_chemistry: dict[str, int] | None = None,
     ):
         self.track = track
         self.player_team_id = player_team_id
@@ -1877,6 +1889,9 @@ class RaceSession:
         self.rivalry_increments: dict[str, int] = {}
         self.staff_bonuses: dict[str, Any] = dict(staff_bonuses or {})
         self._init_strategy_plans = dict(strategy_plans or {})
+        self.team_chemistry: dict[str, int] = dict(team_chemistry or {})
+        self.chemistry_deltas: dict[str, int] = {}
+        self.team_tactics: dict[str, str] = {}
         self.gap_history: list[dict[str, Any]] = []
         self.active_dilemma: dict[str, Any] | None = None
         self._dilemma_cooldown: float = 42.0
@@ -2199,11 +2214,132 @@ class RaceSession:
                     car.pace_mode = "PUSH"
                     car.strategy_status = "Go long / Overcut push"
                     summary = f"{car.code} extends stint and attacks on overcut"
+            elif kind == "TEAM_ORDER_PUSHBACK":
+                tid = dil.get("team_id", self.player_team_id)
+                if ch == "A":
+                    self.set_team_tactic(tid, "SWAP", event_cb=event_cb, force=True)
+                    self.chemistry_deltas[tid] = self.chemistry_deltas.get(tid, 0) - 8
+                    car.morale = max(15, int(getattr(car, "morale", 75)) - 6)
+                    summary = f"{car.code} reluctantly yields after pit-wall insistence (-8 Chem)"
+                else:
+                    self.set_team_tactic(tid, "FREE", event_cb=event_cb)
+                    self.chemistry_deltas[tid] = self.chemistry_deltas.get(tid, 0) + 4
+                    car.morale = min(100, int(getattr(car, "morale", 75)) + 5)
+                    summary = f"Drivers stay FREE TO RACE (+4 Chem)"
         self.active_dilemma = None
         self._dilemma_cooldown = 95.0
         if event_cb and summary:
             event_cb("RADIO", f"PIT WALL DECISION: {summary}.")
         return {"kind": kind, "choice": ch, "summary": summary}
+
+    def set_team_tactic(self, team_id: str, tactic: str, event_cb=None, force: bool = False) -> dict:
+        """Apply a coordinated two-car Pit Wall tactic for team_id."""
+        t = str(tactic or "FREE").upper()
+        if t == "YIELD":
+            t = "SWAP"
+        if t not in ("FREE", "HOLD", "SWAP", "DRS_ESCORT", "BACK_UP", "SPLIT_STRATEGY"):
+            return {"ok": False, "error": f"Unknown team tactic '{tactic}'."}
+        team_cars = sorted(
+            [c for c in self.cars if c.team_id == team_id and not c.dnf and not c.finished],
+            key=lambda c: c.total_dist,
+            reverse=True,
+        )
+        if not team_cars:
+            return {"ok": False, "error": "No active team cars on track."}
+        ahead = team_cars[0]
+        behind = team_cars[1] if len(team_cars) > 1 else None
+
+        if t == "FREE":
+            self.team_tactics[team_id] = "FREE"
+            for c in team_cars:
+                c.team_order = "FREE"
+                c.swap_target_id = None
+                c.swap_pass_id = None
+            if event_cb:
+                event_cb("TEAM_ORDER", f"TEAM ORDERS ({ahead.team_short}): Drivers are FREE TO RACE cleanly.")
+            return {"ok": True, "tactic": "FREE"}
+
+        if t == "HOLD":
+            self.team_tactics[team_id] = "HOLD"
+            ahead.team_order = "FREE"
+            if behind:
+                behind.team_order = "HOLD"
+            if event_cb:
+                event_cb("TEAM_ORDER", f"TEAM ORDERS ({ahead.team_short}): HOLD STATIONS — protect double finish.")
+            return {"ok": True, "tactic": "HOLD"}
+
+        if t == "DRS_ESCORT":
+            self.team_tactics[team_id] = "DRS_ESCORT"
+            ahead.team_order = "FREE"
+            if behind:
+                behind.team_order = "HOLD"
+            if event_cb:
+                event_cb("TEAM_ORDER", f"TEAMWORK ({ahead.team_short}): DRS ESCORT active — pair locks into mutual tow & defense.")
+            return {"ok": True, "tactic": "DRS_ESCORT"}
+
+        if t == "BACK_UP":
+            self.team_tactics[team_id] = "BACK_UP"
+            ahead.team_order = "FREE"
+            if behind:
+                behind.team_order = "FREE"
+            if event_cb:
+                event_cb("TEAMWORK", f"TEAMWORK ({ahead.team_short}): {ahead.code} tasked with BACKING UP rivals into {behind.code if behind else 'pit window'}!")
+            return {"ok": True, "tactic": "BACK_UP"}
+
+        if t == "SPLIT_STRATEGY":
+            self.team_tactics[team_id] = "SPLIT_STRATEGY"
+            ahead.auto_strategy = False
+            ahead.pace_mode = "PUSH"
+            ahead.strategy_status = "Split Strat: Aggressive Undercut"
+            if behind:
+                behind.auto_strategy = False
+                behind.pace_mode = "CONSERVE"
+                alloc = getattr(self, "tire_allocations", {}).get(behind.driver_id, {})
+                if behind.compound != "HARD" and alloc.get("HARD", 0) > 0:
+                    behind.next_compound = "HARD"
+                behind.strategy_status = "Split Strat: Long Overcut"
+            if event_cb:
+                event_cb("TEAMWORK", f"SPLIT STRATEGY ({ahead.team_short}): {ahead.code} pushes short stint; {behind.code if behind else 'car 2'} runs long.")
+            return {"ok": True, "tactic": "SPLIT_STRATEGY"}
+
+        # SWAP (ordered team swap with chemistry & podium compliance check)
+        if not behind:
+            return {"ok": False, "error": "Need both cars active on track to execute a teammate swap."}
+        chem = self.team_chemistry.get(team_id, 72) + self.chemistry_deltas.get(team_id, 0)
+        low_compliance = ahead.pos <= 3 and (int(getattr(ahead, "morale", 75)) < 62 or chem < 52)
+        if team_id == self.player_team_id and low_compliance and not force:
+            if self.active_dilemma is None:
+                self._dilemma_seq += 1
+                self.active_dilemma = {
+                    "id": f"dil_{self._dilemma_seq}",
+                    "kind": "TEAM_ORDER_PUSHBACK",
+                    "team_id": team_id,
+                    "driver_id": ahead.driver_id,
+                    "driver_code": ahead.code,
+                    "title": f"DRIVER PUSHBACK ({ahead.code})",
+                    "prompt": f"#{ahead.number} {ahead.code} (P{ahead.pos}) pushes back on yielding to {behind.code}: 'Let us fight cleanly on track!'",
+                    "timer": 9.0,
+                    "max_timer": 9.0,
+                    "default": "B",
+                    "option_a": {"label": f"INSIST ON SWAP", "sub": f"{ahead.code} yields (-8 Chem)"},
+                    "option_b": {"label": "LET THEM RACE", "sub": "Preserve harmony (+4 Chem)"},
+                }
+            if event_cb:
+                event_cb("RADIO", f"DRIVER RADIO ({ahead.team_short} / #{ahead.number} {ahead.code}): 'No chance! Let us race for P{ahead.pos}!'")
+            return {"ok": True, "tactic": self.team_tactics.get(team_id, "FREE"), "pushback": True}
+
+        self.team_tactics[team_id] = "SWAP"
+        ahead.team_order = "YIELD"
+        behind.team_order = "FREE"
+        ahead.swap_target_id = behind.driver_id
+        behind.swap_pass_id = ahead.driver_id
+        ahead.morale = max(15, int(getattr(ahead, "morale", 75)) - 4)
+        if event_cb:
+            event_cb(
+                "TEAM_ORDER",
+                f"PIT WALL ({ahead.team_short}): '#{ahead.number} {ahead.code}, invert positions and let #{behind.number} {behind.code} through.'",
+            )
+        return {"ok": True, "tactic": "SWAP"}
 
     def _step_dilemmas(self, dt: float, event_cb) -> None:
         if not self.lights_out or self.finished:
@@ -3551,6 +3687,45 @@ class RaceSession:
                         car.target_d = max(-0.84, min(0.84, side * 0.78))
                         # Lift throttle so trailing teammate carries decisive passing momentum
                         target_v = min(target_v, max(36.0, teammate.v * 0.82))
+
+        # Coordinated Two-Car Team Tactics (DRS Escort & Back-Up Blocking)
+        t_tactic = self.team_tactics.get(car.team_id, "FREE")
+        if self.flag_state == "GREEN" and t_tactic in ("DRS_ESCORT", "BACK_UP"):
+            tm = next(
+                (c for c in self.cars if c.team_id == car.team_id and c.driver_id != car.driver_id and not c.dnf and not c.in_pits),
+                None,
+            )
+            if tm is not None:
+                if t_tactic == "DRS_ESCORT":
+                    gap_behind_tm = (tm.total_dist - car.total_dist) / max(car.v, 30.0)
+                    if 0.12 < gap_behind_tm < 1.15 and car.lap == tm.lap:
+                        # Trailing escort locks smoothly into tow (~0.45-0.75s) and defends against rivals behind
+                        if gap_behind_tm < 0.42:
+                            target_v = min(target_v, tm.v * 0.992)
+                        rival_close = any(
+                            o.team_id != car.team_id and not o.dnf and not o.in_pits
+                            and 0.0 < (car.total_dist - o.total_dist) / max(car.v, 30.0) < 1.15
+                            for o in self.cars
+                        )
+                        if rival_close and car.battery_mj > car.max_battery_mj * 0.25:
+                            car.ers_mode = "BOOST"
+                        elif gap_behind_tm < 0.95:
+                            car.ers_mode = "HARVEST"
+                elif t_tactic == "BACK_UP" and car.total_dist > tm.total_dist:
+                    gap_to_tm = (car.total_dist - tm.total_dist) / max(car.v, 30.0)
+                    rival_behind = next(
+                        (
+                            o for o in self.cars
+                            if o.team_id != car.team_id and not o.dnf and not o.in_pits
+                            and 0.0 < (car.total_dist - o.total_dist) / max(car.v, 30.0) < 1.25
+                        ),
+                        None,
+                    )
+                    if rival_behind is not None and gap_to_tm < 6.0 and smp["curv"] > 0.0045:
+                        # Hold inside defensive line & clip apex throttle to bunch rival back toward teammate
+                        target_v = min(target_v, target_v * 0.968)
+                        ins_s = float(smp.get("inside_sign", 1))
+                        car.target_d = max(-0.82, min(0.82, ins_s * 0.55))
 
         if in_yellow:
             target_v = min(target_v, 56.0)
@@ -5526,6 +5701,9 @@ class RaceSession:
         car.team_order = "FREE"
         car.swap_target_id = None
         teammate.swap_pass_id = None
+        if self.team_tactics.get(car.team_id) == "SWAP":
+            self.team_tactics[car.team_id] = "FREE"
+        self.chemistry_deltas[car.team_id] = self.chemistry_deltas.get(car.team_id, 0) + 2
         turn = self.track.nearest_corner(car.s) if hasattr(self.track, "nearest_corner") else 1
         event_cb(
             "TEAM_ORDER",
@@ -5582,6 +5760,12 @@ class RaceSession:
         c2.wing_damage_side = "LEFT" if c1.d < c2.d else "RIGHT"
         c1.repair_cost_m += round(dmg1 * 0.75, 2)
         c2.repair_cost_m += round(dmg2 * 0.75, 2)
+        if c1.team_id == c2.team_id:
+            self.chemistry_deltas[c1.team_id] = self.chemistry_deltas.get(c1.team_id, 0) - (4 if minor else 10)
+            event_cb(
+                "TEAM_ORDER",
+                f"TEAMMATE CONTACT ({c1.team_short}): #{c1.number} {c1.code} and #{c2.number} {c2.code} touch on track — garage tensions rise!",
+            )
 
         # Tire scrub and thermal spike
         c1.tire_wear = min(0.99, c1.tire_wear + (0.004 if minor else 0.010))

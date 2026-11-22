@@ -509,6 +509,7 @@ class ChampionshipWorld:
         self.academy_drivers = []
         self.rivalries = {}
         self.strategy_plans = {}
+        self.team_chemistry = {t["id"]: 72 for t in self.teams}
         self.active_scenario = None
         self._career_backup = None
 
@@ -565,6 +566,7 @@ class ChampionshipWorld:
             "staff": dict(getattr(self, "staff", {"tech_director": 0, "chief_mechanic": 0, "chief_meteorologist": 0})),
             "academy_drivers": list(getattr(self, "academy_drivers", [])),
             "rivalries": dict(getattr(self, "rivalries", {})),
+            "team_chemistry": dict(getattr(self, "team_chemistry", {})),
             "strategy_plans": copy.deepcopy(getattr(self, "strategy_plans", {})),
             "temp_ban_subs": [list(item) for item in getattr(self, "temp_ban_subs", [])],
             "hall_of_fame": self.hall_of_fame[-25:],
@@ -697,6 +699,11 @@ class ChampionshipWorld:
             self.academy_drivers = [str(x) for x in (ac_raw or []) if isinstance(x, str)][:2]
             riv_raw = data.get("rivalries")
             self.rivalries = {str(k): int(v) for k, v in (riv_raw or {}).items()} if isinstance(riv_raw, dict) else {}
+            chem_raw = data.get("team_chemistry")
+            self.team_chemistry = {
+                t["id"]: max(15, min(100, int((chem_raw or {}).get(t["id"], 72))))
+                for t in self.teams
+            }
             sp_raw = data.get("strategy_plans")
             self.strategy_plans = dict(sp_raw) if isinstance(sp_raw, dict) else {}
             self.temp_ban_subs = [
@@ -1286,6 +1293,7 @@ class ChampionshipWorld:
             rivalries=self.rivalries,
             staff_bonuses=self._staff_bonuses(),
             strategy_plans=self.strategy_plans,
+            team_chemistry=getattr(self, "team_chemistry", None),
         )
         self.phase = "SPRINT_RACE"
         self._push_event(
@@ -1437,6 +1445,7 @@ class ChampionshipWorld:
             rivalries=self.rivalries,
             staff_bonuses=self._staff_bonuses(),
             strategy_plans=self.strategy_plans,
+            team_chemistry=getattr(self, "team_chemistry", None),
         )
 
     def _start_race(self) -> None:
@@ -1545,6 +1554,18 @@ class ChampionshipWorld:
                     delta += 2 if i_m == 0 else -1
                 base_m = getattr(car, "morale", drv.get("morale", 75))
                 drv["morale"] = max(15, min(100, int(base_m + delta)))
+
+        # Sync Teammate Chemistry from in-race cooperation or collisions
+        chem_map = getattr(self, "team_chemistry", {})
+        chem_deltas = getattr(rs, "chemistry_deltas", {})
+        for t in self.teams:
+            tid_c = t["id"]
+            c_delta = int(chem_deltas.get(tid_c, 0))
+            both_finished = sum(1 for c in rs.standings if c.team_id == tid_c and not c.dnf) >= 2
+            if both_finished and c_delta >= 0:
+                c_delta += 2
+            chem_map[tid_c] = max(15, min(100, int(chem_map.get(tid_c, 72)) + c_delta))
+        self.team_chemistry = chem_map
 
         if self.board_state and self.board_state.get("team_id") == self.player_team_id:
             p_best = team_best_pos.get(self.player_team_id, 22)
@@ -2620,6 +2641,27 @@ class ChampionshipWorld:
             new_conf = min(100.0, round(cur_conf + gain, 1))
             self.driver_setup_confidence[driver_id] = new_conf
 
+            # Teammate Telemetry & Setup Sharing during Free Practice
+            if program != "ROOKIE_FP1" and new_conf >= 80.0:
+                tm_drv = next(
+                    (d for d in self.drivers if d.get("team_id") == self.player_team_id and d["id"] != driver_id and not d.get("legend")),
+                    None,
+                )
+                if tm_drv is not None:
+                    tm_id = tm_drv["id"]
+                    tm_conf = float(self.driver_setup_confidence.get(tm_id, 55.0))
+                    chem_val = int(getattr(self, "team_chemistry", {}).get(self.player_team_id, 72))
+                    cap_conf = min(88.0, new_conf - 4.0)
+                    if tm_conf < cap_conf:
+                        share = round(min(cap_conf - tm_conf, (new_conf - tm_conf) * (0.20 + 0.15 * (chem_val / 100.0))), 1)
+                        if share >= 1.5:
+                            self.driver_setup_confidence[tm_id] = min(100.0, round(tm_conf + share, 1))
+                            self.team_chemistry[self.player_team_id] = min(100, chem_val + 1)
+                            self._push_event(
+                                "RADIO",
+                                f"TELEMETRY SHARE ({self._teams_by_id()[self.player_team_id]['short']}): {drv['code']}'s baseline data lifts {tm_drv['code']} setup confidence +{share:.1f}%!",
+                            )
+
             bonuses = self.practice_bonuses.setdefault(
                 driver_id, {"quali_prep": False, "long_run_prep": False, "wet_prep": False}
             )
@@ -3084,6 +3126,17 @@ class ChampionshipWorld:
 
             if not self.race_session:
                 return {"ok": False, "error": "Pit Wall radio is active during Qualifying and Race sessions."}
+            if "team_tactic" in cmd:
+                res = self.race_session.set_team_tactic(
+                    self.player_team_id, str(cmd["team_tactic"]), event_cb=self._push_event
+                )
+                if res.get("ok"):
+                    dmap_t = self._drivers_by_id()
+                    for c_t in self.race_session.cars:
+                        if c_t.team_id == self.player_team_id and c_t.driver_id in dmap_t:
+                            dmap_t[c_t.driver_id]["morale"] = c_t.morale
+                    self._save_state()
+                return res
             car = self.race_session.cars_by_id.get(driver_id)
             if not car or car.team_id != self.player_team_id:
                 return {"ok": False, "error": "Can only issue Pit Wall orders to your own team's cars."}
@@ -3407,6 +3460,7 @@ class ChampionshipWorld:
             }
             self.teams.append(new_team)
             self.player_team_id = "custom"
+            self.team_chemistry["custom"] = 72
             self.board_state = self._build_board_objectives("custom")
             self._reset_season_tallies()
             self._begin_weekend()
@@ -4217,6 +4271,19 @@ class ChampionshipWorld:
                 "practice_state": p_state,
                 "lighting_phase": rs_ref.get_lighting_phase() if rs_ref else 0.0,
                 "active_dilemma": copy.deepcopy(getattr(rs_ref, "active_dilemma", None)) if rs_ref else None,
+                "team_tactic": rs_ref.team_tactics.get(self.player_team_id, "FREE") if rs_ref and hasattr(rs_ref, "team_tactics") else "FREE",
+                "team_chemistry": max(
+                    15,
+                    min(
+                        100,
+                        int(getattr(self, "team_chemistry", {}).get(self.player_team_id, 72))
+                        + (int(rs_ref.chemistry_deltas.get(self.player_team_id, 0)) if rs_ref and hasattr(rs_ref, "chemistry_deltas") else 0),
+                    ),
+                ),
+                "teammate_gap_s": (
+                    lambda p_list: round(abs(p_list[0].total_dist - p_list[1].total_dist) / max(32.0, p_list[0].v or 52.0), 2)
+                    if len(p_list) == 2 else None
+                )(sorted([c for c in (rs_ref.cars if rs_ref else []) if c.team_id == self.player_team_id and not c.dnf and not c.in_pits], key=lambda x: x.total_dist, reverse=True)),
                 "live_standings": self._build_live_championship(),
                 "custom_team_meta": {
                     "id": p_team["id"],
