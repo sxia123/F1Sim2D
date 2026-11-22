@@ -229,6 +229,40 @@ class TestTireHeatDegradation(unittest.TestCase):
         race._step_car(hard_car, None, None, False, 0.05, lambda *a: None)
         self.assertLess(soft_car.grip_snapshot, hard_car.grip_snapshot)
 
+    def test_push_mode_thermal_optimization_scales_with_driver_skill(self):
+        """In ATTACK/PUSH mode, skilled drivers modulate thermal load to stay faster & cooler than rookies."""
+        race = RaceSession(
+            self.track,
+            self.teams,
+            self.drivers[:2],
+            wetness=0.0,
+            rain_forecast=0.0,
+            player_team_id="mclaren",
+            starting_compounds={self.drivers[0]["id"]: "SOFT", self.drivers[1]["id"]: "SOFT"},
+            rain_scheduled=False,
+        )
+        elite = race.cars[0]
+        rookie = race.cars[1]
+        for c in (elite, rookie):
+            c.auto_strategy = False
+            c.pace_mode = "ATTACK"
+            c.tire_temp = 112.0  # Overheated past Soft opt_temp_max (106C)
+            c.tire_wear = 0.05
+            c.upgrades = dict(elite.upgrades)
+            c.car_perf_index = elite.car_perf_index
+            c.setup_confidence = 65.0
+            c.s = self.track.corners[0]["s_m"] if self.track.corners else 300.0
+            c.v = 45.0
+        elite.skills.update({"tire_mgmt": 96, "consistency": 95, "pace": 96})
+        rookie.skills.update({"tire_mgmt": 66, "consistency": 66, "pace": 96})
+
+        for _ in range(120):
+            race._step_car(elite, None, None, False, 0.05, lambda *a: None)
+            race._step_car(rookie, None, None, False, 0.05, lambda *a: None)
+
+        self.assertLess(elite.tire_temp, rookie.tire_temp)
+        self.assertGreater(elite.grip_snapshot, rookie.grip_snapshot)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3278,10 +3278,19 @@ class RaceSession:
         else:
             warmup_factor = 1.0
         setup_cfg = SETUP_LEVELS.get(car.setup_df, SETUP_LEVELS[0])
+        skill_norm = max(
+            0.0,
+            min(1.0, ((sk.get("tire_mgmt", 85) * 0.55 + sk.get("consistency", 85) * 0.30 + sk.get("pace", 85) * 0.15) - 65.0) / 33.0),
+        )
+        opt_max = comp_spec.get("opt_temp_max", 112.0)
+        over_opt = max(0.0, car.tire_temp - (opt_max - 1.8))
         if car.lift_coast and car.pace_mode in ("PUSH", "ATTACK"):
             pace_grip_mod = 1.006 if car.pace_mode == "PUSH" else 1.010
         else:
             pace_grip_mod = {"CONSERVE": 0.982, "BALANCED": 1.000, "PUSH": 1.014, "ATTACK": 1.024}.get(car.pace_mode, 1.0)
+            if car.pace_mode in ("PUSH", "ATTACK") and over_opt > 0.0:
+                grip_trim = min(0.012, over_opt * 0.0014 * (1.0 - 0.65 * skill_norm))
+                pace_grip_mod = max(1.002, pace_grip_mod - grip_trim)
         pace_wear_mod = {"CONSERVE": 0.76, "BALANCED": 1.00, "PUSH": 1.24, "ATTACK": 1.48}.get(car.pace_mode, 1.0)
         if car.lift_coast:
             pace_wear_mod *= {"ATTACK": 0.96, "PUSH": 0.94}.get(car.pace_mode, 0.88)
@@ -3970,6 +3979,14 @@ class RaceSession:
             "BALANCED": 0.00,
             "CONSERVE": -0.65,
         }.get(car.pace_mode, 0.0)
+        if car.pace_mode in ("PUSH", "ATTACK"):
+            # Skilled drivers modulate cornering/braking micro-inputs near opt_temp_max
+            # to optimize pace without blindly cooking the tyres into thermal fade.
+            over_opt_th = max(0.0, car.tire_temp - (comp_spec.get("opt_temp_max", 112.0) - 2.0))
+            if over_opt_th > 0.0:
+                feather_auth = 0.20 + 0.80 * skill_norm
+                stress_trim = min(driving_stress + 0.20, over_opt_th * 0.22 * feather_auth)
+                driving_stress = max(-0.20, driving_stress - stress_trim)
         if car.lift_coast:
             # Lift & coast relieves peak thermal load slightly rather than erasing PUSH/ATTACK heat
             driving_stress -= {"ATTACK": 0.18, "PUSH": 0.20}.get(car.pace_mode, 0.35)
