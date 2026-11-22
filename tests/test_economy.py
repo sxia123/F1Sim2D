@@ -69,12 +69,38 @@ class EconomyTests(unittest.TestCase):
         before_prize = next(i for i, t in enumerate(self.world.get_wcc_table()) if t["id"] == player["id"])
         from sim.data import WCC_PRIZE_POOL_M
         prize = WCC_PRIZE_POOL_M[before_prize] * 0.42
-        expected = 123.45 + season_allocation_m(player, len(get_season_tracks(before_year + 1)), prize)
+        next_races = len(get_season_tracks(before_year + 1))
+        fin = team_finances(player, self.world.drivers, next_races)
+        expected = round(
+            max(
+                20.0,
+                123.45
+                + season_allocation_m(player, next_races, prize)
+                - round(fin["annual_operations_m"], 2)
+                - round(fin["annual_payroll_m"], 2),
+            ),
+            2,
+        )
         with patch.object(self.world, "_adjust_driver_scores_from_performance"), \
              patch.object(self.world, "_run_ai_offseason_development"), \
              patch.object(self.world, "_begin_weekend"):
             self.world._start_next_season()
         self.assertAlmostEqual(player["budget_m"], expected)
+
+        # Mid-season races do not deduct recurring payroll/ops, while crash repairs still apply
+        self.world._prepare_race_grid()
+        rs = self.world.race_session
+        assert rs is not None
+        p_car = next(c for c in rs.cars if c.team_id == player["id"])
+        p_car.repair_cost_m = 2.5
+        b_before = player["budget_m"]
+        ledger_before = len(self.world.ledger)
+        self.world._conclude_race()
+        cats = [entry["category"] for entry in self.world.ledger[ledger_before:]]
+        self.assertNotIn("SALARY", cats)
+        self.assertNotIn("OPERATIONS", cats)
+        self.assertIn("REPAIR", cats)
+        self.assertLess(player["budget_m"], b_before + 20.0)
 
     def test_migration_preserves_development_cash_spent_and_custom_contracts(self):
         teams, drivers = copy.deepcopy(INITIAL_TEAMS), copy.deepcopy(INITIAL_DRIVERS)
@@ -98,12 +124,14 @@ class EconomyTests(unittest.TestCase):
         player = self.world._teams_by_id()[self.world.player_team_id]
         before = player["budget_m"]
         self.world._prepare_race_grid()
-        info = self.world._team_finances(player)
+        rs = self.world.race_session
+        assert rs is not None
+        p_car = next(c for c in rs.cars if c.team_id == player["id"])
+        p_car.repair_cost_m = 1.75
         self.world._conclude_race()
-        salary = next(row for row in self.world.ledger if row["category"] == "SALARY")
-        operations = next(row for row in self.world.ledger if row["category"] == "OPERATIONS")
-        self.assertAlmostEqual(salary["amount_m"], -info["annual_payroll_m"] / len(self.world.calendar), places=2)
-        self.assertAlmostEqual(operations["amount_m"], -info["annual_operations_m"] / len(self.world.calendar), places=2)
+        self.assertFalse(any(row["category"] in ("SALARY", "OPERATIONS") for row in self.world.ledger))
+        repair = next(row for row in self.world.ledger if row["category"] == "REPAIR")
+        self.assertAlmostEqual(repair["amount_m"], -1.75, places=2)
         delta = sum(row["amount_m"] for row in self.world.ledger if row["category"] != "CAREER")
         self.assertAlmostEqual(player["budget_m"] - before, delta, places=2)
 

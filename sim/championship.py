@@ -1505,12 +1505,9 @@ class ChampionshipWorld:
                 income += sp["bonus_payout_m"]
             pts_bonus = team_pts_earned[tid] * 0.14
 
-            finances = self._team_finances(team)
-            salaries_per_race = finances["payroll_per_race_m"]
             repairs = team_repairs[tid]
-            factory_ops = finances["operations_per_race_m"]
 
-            net = income + pts_bonus - salaries_per_race - repairs - factory_ops
+            net = income + pts_bonus - repairs
             team["budget_m"] = round(max(1.5, team["budget_m"] + net), 2)
 
             if tid == self.player_team_id:
@@ -1519,8 +1516,6 @@ class ChampionshipWorld:
                     f"R{self.current_round} {sp['name']} {'(+Target Bonus!)' if hit_bonus else '(Base)'} & Points",
                     income + pts_bonus,
                 )
-                self._log_ledger("SALARY", f"R{self.current_round} Driver Payroll", -salaries_per_race)
-                self._log_ledger("OPERATIONS", f"R{self.current_round} Factory Operations & Logistics", -factory_ops)
                 if repairs > 0.01:
                     self._log_ledger("REPAIR", f"R{self.current_round} Carbon-Fibre Crash Damage Repairs", -repairs)
 
@@ -2083,12 +2078,15 @@ class ChampionshipWorld:
         # championship distribution complete each team's annual funding envelope.
         prize_by_id = {row["id"]: WCC_PRIZE_POOL_M[min(i, len(WCC_PRIZE_POOL_M) - 1)] * 0.42
                        for i, row in enumerate(wcc_table)}
+        next_races = len(get_season_tracks(next_year))
         for team in self.teams:
-            funds_bonus_m = season_allocation_m(team, len(get_season_tracks(next_year)),
-                                                prize_by_id.get(team["id"], 0.0))
+            funds_bonus_m = season_allocation_m(team, next_races, prize_by_id.get(team["id"], 0.0))
             if is_new_regs:
                 funds_bonus_m += 100.0
-            team["budget_m"] = round(team["budget_m"] + funds_bonus_m, 2)
+            fin = team_finances(team, self.drivers, next_races)
+            annual_ops_m = round(fin["annual_operations_m"], 2)
+            annual_payroll_m = round(fin["annual_payroll_m"], 2)
+            team["budget_m"] = round(max(20.0, team["budget_m"] + funds_bonus_m - annual_ops_m - annual_payroll_m), 2)
             if team["id"] == self.player_team_id:
                 ledger_label = (
                     f"{next_year} New Regulations Technical R&D Grant"
@@ -2096,6 +2094,8 @@ class ChampionshipWorld:
                     else f"{next_year} Season Start Budget Allocation"
                 )
                 self._log_ledger("FUNDS", ledger_label, funds_bonus_m)
+                self._log_ledger("OPERATIONS", f"{next_year} Fixed Annual Factory Operations", -annual_ops_m)
+                self._log_ledger("SALARY", f"{next_year} Fixed Annual Driver Payroll", -annual_payroll_m)
 
         funds_announcement = (
             f"NEW REGULATIONS R&D BOOST: +$100.0M injected into all team budgets for {next_year} ({get_season_regulations(next_year)['short_name']})! Prior season funds fully carried over."

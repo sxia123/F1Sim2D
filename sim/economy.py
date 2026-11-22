@@ -47,9 +47,9 @@ def team_finances(team, drivers, race_count, rounds_remaining=None):
     operations = annual * ANNUAL_OPERATIONS_SHARE
     sponsor = next((s for s in SPONSORS if s["id"] == team.get("sponsor_id")), SPONSORS[0])
     remaining = races if rounds_remaining is None else max(0, min(races, rounds_remaining))
-    # Guaranteed commercial income offsets committed costs. Performance bonuses
-    # and championship prizes cannot be relied on to meet payroll.
-    reserve = 22.0 + max(0.0, (operations + payroll) / races - sponsor["base_per_race_m"]) * remaining
+    # Annual operations and payroll are settled as a fixed cost at season start,
+    # so only a crash-repair and contingency buffer is needed mid-season.
+    reserve = 22.0
     return {
         "annual_budget_m": round(annual, 2),
         "annual_operations_m": round(operations, 2),
