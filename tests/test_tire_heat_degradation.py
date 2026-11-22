@@ -204,6 +204,31 @@ class TestTireHeatDegradation(unittest.TestCase):
             f"On a straight, ATTACK should not instantly spike temperature by a flat offset (diff was {temp_diff:.2f}C)",
         )
 
+    def test_soft_tyre_mid_stint_fade_between_30_and_50_percent(self):
+        """Softs at 30-50% wear fade below fresh Mediums and Hards instead of staying rapid."""
+        from sim.data import TIRE_COMPOUNDS
+        race = RaceSession(
+            self.track,
+            self.teams,
+            self.drivers[:2],
+            wetness=0.0,
+            rain_forecast=0.0,
+            player_team_id="mclaren",
+            rain_scheduled=False,
+        )
+        soft_car = race.cars[0]
+        hard_car = race.cars[1]
+        soft_car.compound = "SOFT"
+        soft_car.tire_temp = TIRE_COMPOUNDS["SOFT"]["ideal_temp"]
+        soft_car.tire_wear = 0.35
+        hard_car.compound = "HARD"
+        hard_car.tire_temp = TIRE_COMPOUNDS["HARD"]["ideal_temp"]
+        hard_car.tire_wear = 0.02
+
+        race._step_car(soft_car, None, None, False, 0.05, lambda *a: None)
+        race._step_car(hard_car, None, None, False, 0.05, lambda *a: None)
+        self.assertLess(soft_car.grip_snapshot, hard_car.grip_snapshot)
+
 
 if __name__ == "__main__":
     unittest.main()

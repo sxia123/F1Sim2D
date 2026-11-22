@@ -3246,10 +3246,12 @@ class RaceSession:
             car.cliff_radio_triggered = True
             self.radio_dispatcher.trigger_tyre_cliff(car, event_cb, self.race_clock)
 
+        pre_loss = float(comp_spec.get("pre_cliff_loss", 0.11))
+        mid_fade = float(comp_spec.get("mid_fade", 0.0))
         if wear <= cliff:
-            wear_factor = 1.0 - wear * 0.11
+            wear_factor = 1.0 - wear * pre_loss - max(0.0, wear - 0.18) * mid_fade
         else:
-            wear_factor = (1.0 - cliff * 0.11) - (wear - cliff) * 0.85
+            wear_factor = (1.0 - cliff * pre_loss - max(0.0, cliff - 0.18) * mid_fade) - (wear - cliff) * 0.85
 
         w_min = comp_spec["optimal_wet_min"]
         w_max = comp_spec["optimal_wet_max"]

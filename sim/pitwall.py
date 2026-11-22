@@ -95,7 +95,10 @@ class RivalPitWall:
     def _lap_cost(self, compound, wear, wetness, damage=0.0):
         spec = TIRE_COMPOUNDS[compound]
         cliff = spec["cliff_wear"]
-        wear_grip = 1.0 - min(wear, cliff) * 0.11 - max(0.0, wear - cliff) * 0.85
+        pre_loss = float(spec.get("pre_cliff_loss", 0.11))
+        mid_fade = float(spec.get("mid_fade", 0.0))
+        w_pre = min(wear, cliff)
+        wear_grip = 1.0 - w_pre * pre_loss - max(0.0, w_pre - 0.18) * mid_fade - max(0.0, wear - cliff) * 0.85
         if wetness > spec["optimal_wet_max"]:
             weather = max(0.52, 1.0 - (wetness - spec["optimal_wet_max"]) * 0.72)
         elif wetness < spec["optimal_wet_min"]:

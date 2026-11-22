@@ -80,7 +80,7 @@ class RivalPitWallTests(unittest.TestCase):
         self.assertIn("neutralisation", call.reason)
 
     def test_rejoin_traffic_can_make_an_overcut_better_than_an_immediate_stop(self):
-        self.configure(self.car, lap=13, wear=0.35, age=12)
+        self.configure(self.car, lap=18, wear=0.50, age=17)
         self.assertIsNotNone(self.wall.plan(self.car))
         rejoin = self.car.total_dist - self.wall.pit_loss(self.car) * self.wall.mean_speed
         self.configure(self.rival)
