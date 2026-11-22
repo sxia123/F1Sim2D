@@ -2051,6 +2051,7 @@ class RaceSession:
         self._pair_contact_until: dict[tuple[str, str], float] = {}
         self.wet_declared: bool = wetness > 0.15
         self.pitwall = RivalPitWall(self)
+        self._next_pitwall_clock: float = 0.0
         for car in self.cars:
             self.pitwall.project_rejoin(car)
 
@@ -2513,7 +2514,9 @@ class RaceSession:
         self._step_stewards(dt, event_cb)
         self._step_dilemmas(dt, event_cb)
         self.radio_dispatcher.step(dt, self.race_clock, self.cars, self.track, self.wetness, self.flag_state, event_cb)
-        self.pitwall.step(event_cb)
+        if self.race_clock >= getattr(self, "_next_pitwall_clock", 0.0):
+            self._next_pitwall_clock = self.race_clock + 0.40
+            self.pitwall.step(event_cb)
 
         leader = self.standings[0] if self.standings else None
         leader_finished = leader.finished if leader else False

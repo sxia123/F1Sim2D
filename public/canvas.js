@@ -272,17 +272,17 @@ export class CircuitRenderer {
         this.renderTime = this.renderTick * 50.0;
         this.playbackRate = 1.0;
       } else {
-        // Continuous time-dilation: gently nudge playback rate by +/- 4% max.
-        // Never jump renderTick abruptly; guarantees 100% frame-to-frame continuity.
-        this.playbackRate = 1.0 + Math.max(-0.05, Math.min(0.05, tickDiff * 0.08));
+        // Continuous time-dilation: gently nudge playback rate without snapping.
+        this.playbackRate = 1.0 + Math.max(-0.14, Math.min(0.14, tickDiff * 0.12));
       }
     }
 
+    const jumpLimit = 350.0 * Math.max(1.0, (tick.sim_speed || 1.0) * 0.28);
     const seen = new Set();
     for (const c of tick.cars) {
       seen.add(c.id);
       let st = this.carInterp.get(c.id);
-      if (!st || Math.hypot(c.x - st.cx, c.y - st.cy) > 350.0) {
+      if (!st || Math.hypot(c.x - st.cx, c.y - st.cy) > jumpLimit) {
         st = {
           cx: c.x,
           cy: c.y,

@@ -359,6 +359,7 @@ class RivalPitWall:
                 nearest_behind = min(nearest_behind, -gap)
         spec = TIRE_COMPOUNDS[car.compound]
         hot = car.tire_temp > spec["opt_temp_max"] + 5.0
+        warm = car.tire_temp > spec["opt_temp_max"] + 2.0
         at_cliff = car.tire_wear > spec["cliff_wear"] - 0.05
         wrong_weather = race.wetness > spec["optimal_wet_max"] + 0.16
         neutral = race.flag_state in ("SC", "VSC", "YELLOW")
@@ -370,12 +371,17 @@ class RivalPitWall:
         elif car.box_this_lap or (race.total_laps - car.laps_completed <= 2 and min(nearest_ahead, nearest_behind) < 3.0):
             car.pace_mode = "ATTACK"
             car.ers_mode = "BOOST" if ratio > 0.30 else "AUTO"
-        elif min(nearest_ahead, nearest_behind) < 1.5:
+        elif min(nearest_ahead, nearest_behind) < 1.5 and not warm:
             car.pace_mode = "PUSH"
-            car.ers_mode = "OVERTAKE" if car.overtake_eligible and ratio > 0.35 else "BOOST" if ratio > 0.55 else "AUTO"
+            defending = nearest_behind < 0.9 and nearest_ahead > 1.2
+            car.ers_mode = (
+                "OVERTAKE" if (car.overtake_eligible and ratio > 0.32)
+                else "BOOST" if ((defending and ratio > 0.35) or ratio > 0.55)
+                else "AUTO"
+            )
         else:
             car.pace_mode = "BALANCED"
-            charge = ratio < 0.35 or (car.ers_mode == "HARVEST" and ratio < 0.60)
+            charge = ratio < 0.45 or (nearest_ahead > 2.2 and nearest_behind > 2.2 and ratio < 0.65) or (car.ers_mode == "HARVEST" and ratio < 0.65)
             car.ers_mode = "HARVEST" if charge else "AUTO"
         if old_pace != car.pace_mode and race.flag_state != "CHEQUERED" and not car.finished:
             if race.race_clock - getattr(car, "_last_pace_radio_clock", -99.0) >= 25.0:

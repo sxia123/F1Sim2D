@@ -833,9 +833,10 @@ class ChampionshipWorld:
                 return
 
             dt = min(real_dt, 0.1) * self.sim_speed
+            max_sub = 0.065 if self.sim_speed >= 8.0 else 0.05
             remaining = dt
             while remaining > 1e-5:
-                sub_dt = min(remaining, 0.05)
+                sub_dt = min(remaining, max_sub)
                 remaining -= sub_dt
                 self._step_sub(sub_dt)
 
