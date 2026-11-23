@@ -300,6 +300,17 @@ def _update_car_heading(
         car._has_initial_heading = True
 
 
+def _pit_exit_target_v(track: CompiledTrack, v_env: list[float], car_s: float) -> float:
+    """Target speed along a pit exit acceleration lane once past the limiter line."""
+    if not v_env:
+        return 55.0
+    n_env = len(v_env)
+    idx = int(car_s / max(0.5, track.ds_m)) % n_env
+    fwd_step = max(1, int(24.0 / max(0.5, track.ds_m)))
+    v_track = min(v_env[idx], v_env[(idx + fwd_step) % n_env])
+    return max(38.0, min(74.0, 0.92 * v_track))
+
+
 def _pit_exit_blend_target(
     track: CompiledTrack,
     car: "CarState",
@@ -1009,6 +1020,7 @@ class CarState:
         self.interval_ahead: float = 0.0
         self.finished: bool = False
         self.finish_time: float = 0.0
+        self.finish_prog: float = 0.0
         self.dnf: bool = False
         self.dnf_reason: str = ""
         self.dnf_timer: float = 0.0
@@ -1471,8 +1483,13 @@ class QualifyingSession:
                     prev_apron = car.pit_apron
                     car.pit_apron = max(0.0, car.pit_apron - dt * 2.4)
                     car._pit_apron_vel = -2.4 if prev_apron > 0.0 else 0.0
-                    car.v = PIT_SPEED_LIMIT_MS
                     rel_ex = (car.s - self.track.pit_entry_s) % L
+                    u_ex = max(0.0, min(1.0, rel_ex / max(1.0, self.track.pit_span_m)))
+                    if u_ex <= self.track.pit_speed_exit_u:
+                        car.v = PIT_SPEED_LIMIT_MS
+                    else:
+                        v_tgt = _pit_exit_target_v(self.track, self.v_env, car.s)
+                        car.v = min(v_tgt, max(PIT_SPEED_LIMIT_MS, car.v + 15.0 * dt))
                     ds_pit = car.v * dt * self.track.pit_distance_scale * speed_scale
                     remaining = max(0.0, self.track.pit_span_m - rel_ex)
                     travelled = min(ds_pit, remaining)
@@ -3193,6 +3210,7 @@ class RaceSession:
 
             if car.laps_completed >= self.total_laps or leader_finished:
                 car.finished = True
+                car.finish_prog = float(car.laps_completed)
                 if (
                     not self.is_sprint
                     and not self.wet_declared
@@ -4422,8 +4440,11 @@ class RaceSession:
             u_pit = max(0.0, min(1.0, rel / max(1.0, span)))
             if u_pit < self.track.pit_speed_entry_u:
                 dist_to_lim_m = max(0.0, (self.track.pit_speed_entry_u - u_pit) * self.track.pit_length_m)
-                v_ramp_cap = min(38.0, math.sqrt(PIT_SPEED_LIMIT_MS ** 2 + 2.0 * 14.0 * dist_to_lim_m))
-                car.v = max(PIT_SPEED_LIMIT_MS, min(car.v, v_ramp_cap))
+                v_ramp_cap = min(68.0, math.sqrt(PIT_SPEED_LIMIT_MS ** 2 + 2.0 * 14.0 * dist_to_lim_m))
+                if dist_to_lim_m > 75.0 and car.v < min(54.0, v_ramp_cap):
+                    car.v = min(v_ramp_cap, car.v + 11.0 * dt)
+                else:
+                    car.v = max(PIT_SPEED_LIMIT_MS, min(car.v, v_ramp_cap))
             else:
                 car.v = max(PIT_SPEED_LIMIT_MS, car.v - 35.0 * dt)
             ds = car.v * dt * self.track.pit_distance_scale
@@ -4609,7 +4630,11 @@ class RaceSession:
             if u_ex <= self.track.pit_speed_exit_u:
                 car.v = PIT_SPEED_LIMIT_MS
             else:
-                car.v = min(35.0, car.v + 12.0 * dt)
+                v_tgt = _pit_exit_target_v(self.track, self.v_env, car.s)
+                if car.v <= v_tgt:
+                    car.v = min(v_tgt, car.v + 15.0 * dt)
+                else:
+                    car.v = max(v_tgt, car.v - 18.0 * dt)
             ds = car.v*dt*self.track.pit_distance_scale
             remaining=max(0,self.track.pit_span_m-rel_ex)
             travelled=min(ds,remaining)
@@ -5961,15 +5986,22 @@ class RaceSession:
 
     def _update_standings(self, dt: float, event_cb) -> None:
         prev_pos = {c.driver_id: c.pos for c in self.standings}
+        L_m = max(1.0, self.track.length_m)
+
+        def _car_prog(c: CarState) -> float:
+            if c.finished:
+                prog = float(getattr(c, "finish_prog", 0.0) or 0.0)
+                return prog if prog > 0.0 else float(c.laps_completed)
+            return min(c.total_dist / L_m, float(self.total_laps) - 1e-6)
 
         def sort_key(c: CarState):
             if c.dnf:
-                return (3, -c.total_dist)
+                return (3, -c.laps_completed, -c.total_dist)
             if c.pit_phase == "PIT_START":
-                return (2, -c.total_dist)
+                return (2, 0.0, -c.total_dist)
             if c.finished:
-                return (0, c.finish_time)
-            return (1, -c.total_dist)
+                return (0, -_car_prog(c), c.finish_time)
+            return (0, -_car_prog(c), 0.0)
 
         self.standings.sort(key=sort_key)
 
@@ -6011,18 +6043,47 @@ class RaceSession:
                     )
             c.pos = new_p
 
-            if idx == 0 or c.dnf:
-                c.gap_to_leader = 0.0
-                c.interval_ahead = 0.0
-            elif c.finished and leader.finished:
-                c.gap_to_leader = round(c.finish_time - leader.finish_time, 3)
+        def _refresh_gaps() -> None:
+            est_lap_s = max(55.0, float(getattr(self.track, "base_lap_s", 80.0) or 80.0))
+            l_prog = _car_prog(leader)
+            leader_dist = l_prog * L_m if leader.finished else leader.total_dist
+            for idx, c in enumerate(self.standings):
+                if idx == 0 or c.dnf:
+                    c.gap_to_leader = 0.0
+                    c.interval_ahead = 0.0
+                    continue
                 prev_c = self.standings[idx - 1]
-                c.interval_ahead = round(c.finish_time - prev_c.finish_time, 3) if prev_c.finished else 0.0
-            else:
-                ref_v = max(c.v, 48.0)
-                c.gap_to_leader = round(max(0.0, (leader.total_dist - c.total_dist) / ref_v), 3)
-                prev_c = self.standings[idx - 1]
-                c.interval_ahead = round(max(0.0, (prev_c.total_dist - c.total_dist) / ref_v), 3)
+                if c.finished and leader.finished:
+                    c_prog = _car_prog(c)
+                    prev_prog = _car_prog(prev_c)
+                    if l_prog - c_prog < 1.0 - 1e-3:
+                        c.gap_to_leader = round(max(0.0, c.finish_time - leader.finish_time), 3)
+                    else:
+                        c.gap_to_leader = round(
+                            max(0.0, (l_prog - c_prog) * est_lap_s + max(0.0, c.finish_time - leader.finish_time)),
+                            3,
+                        )
+                    if prev_c.finished and abs(prev_prog - c_prog) < 1e-3:
+                        c.interval_ahead = round(max(0.0, c.finish_time - prev_c.finish_time), 3)
+                    else:
+                        c.interval_ahead = round(max(0.0, c.gap_to_leader - prev_c.gap_to_leader), 3)
+                else:
+                    rem_dist = max(0.0, leader_dist - c.total_dist)
+                    avg_v = max(48.0, L_m / est_lap_s)
+                    if rem_dist > 150.0:
+                        blend = min(1.0, (rem_dist - 150.0) / 250.0)
+                        ref_v = max(c.v, 48.0) * (1.0 - blend) + avg_v * blend
+                    else:
+                        ref_v = max(c.v, 48.0)
+                    rem_leader_s = rem_dist / ref_v
+                    if leader.finished:
+                        c.gap_to_leader = round(max(0.0, self.race_clock + rem_leader_s - leader.finish_time), 3)
+                        c.interval_ahead = round(max(0.0, c.gap_to_leader - prev_c.gap_to_leader), 3)
+                    else:
+                        c.gap_to_leader = round(rem_leader_s, 3)
+                        c.interval_ahead = round(max(0.0, (prev_c.total_dist - c.total_dist) / ref_v), 3)
+
+        _refresh_gaps()
 
         if leader.finished:
             if not getattr(self, "win_radio_triggered", False):
@@ -6033,11 +6094,13 @@ class RaceSession:
             if all_done or self.post_finish_timer > 18.0:
                 for c in self.cars:
                     if not c.dnf and not c.finished:
+                        c.finish_prog = _car_prog(c)
                         c.finished = True
-                        c.finish_time = round(self.race_clock + c.gap_to_leader + c.time_penalty_s, 3)
+                        c.finish_time = round(leader.finish_time + c.gap_to_leader + c.time_penalty_s, 3)
                 self.standings.sort(key=sort_key)
                 for idx, c in enumerate(self.standings):
                     c.pos = idx + 1
+                _refresh_gaps()
                 self.finished = True
 
 

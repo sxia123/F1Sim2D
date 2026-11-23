@@ -474,6 +474,152 @@ class TestAdvancedFeatures(unittest.TestCase):
             self.assertIsInstance(tick["team_chemistry"], int)
             self.assertIsNotNone(tick["teammate_gap_s"])
 
+    def test_lapped_cars_cannot_steal_p2_p3_behind_leader(self):
+        brk = TRACK_BY_ID["brazil"]
+        teams, drivers = clone_initial_roster()
+        tmap = {t["id"]: t for t in teams}
+        active = [d for d in drivers if d.get("team_id")]
+        rs = RaceSession(brk, tmap, active, 0.0, 0.0, "williams")
+        rs.total_laps = 5
+        rs.lights_out = True
+        rs.flag_state = "GREEN"
+        rs.race_clock = 400.0
+        L = brk.length_m
+
+        c_p1, c_p2, c_p3, c_l1, c_l2 = rs.standings[:5]
+        # P1 finishes all 5 laps
+        c_p1.laps_completed = 5
+        c_p1.total_dist = 5.02 * L  # includes cooldown distance
+        c_p1.s = 0.02 * L
+        c_p1.finished = True
+        c_p1.finish_prog = 5.0
+        c_p1.finish_time = 400.0
+
+        # P2 and P3 are on the lead lap, still approaching finish line (4.85 and 4.70 laps)
+        c_p2.laps_completed = 4
+        c_p2.total_dist = 4.85 * L
+        c_p2.s = 0.85 * L
+        c_p3.laps_completed = 4
+        c_p3.total_dist = 4.70 * L
+        c_p3.s = 0.70 * L
+
+        # L1 and L2 were 1 lap down and crossed start/finish right after P1!
+        # Give L1/L2 larger total_dist from cooldown to ensure cooldown doesn't inflate order
+        for idx_l, cl in enumerate((c_l1, c_l2)):
+            cl.laps_completed = 4
+            cl.total_dist = (4.05 + idx_l * 0.01) * L
+            cl.s = (0.05 + idx_l * 0.01) * L
+            cl.finished = True
+            cl.finish_prog = 4.0
+            cl.finish_time = 400.4 + idx_l * 0.5
+
+        # Push remaining cars behind so top 5 order is deterministic
+        for k, c in enumerate(rs.standings[5:]):
+            c.laps_completed = 3
+            c.total_dist = (3.5 - k * 0.05) * L
+            c.s = (0.5 - (k * 0.05) % 0.5) * L
+
+        rs._update_standings(0.1, lambda *a, **kw: None)
+        top5 = [c.driver_id for c in rs.standings[:5]]
+        self.assertEqual(top5, [c_p1.driver_id, c_p2.driver_id, c_p3.driver_id, c_l1.driver_id, c_l2.driver_id])
+        self.assertGreater(c_l1.gap_to_leader, 50.0)
+
+        # Also check lead-lap finisher P2 crossing slightly later beats lapped finishers
+        c_p2.laps_completed = 5
+        c_p2.total_dist = 5.01 * L
+        c_p2.finished = True
+        c_p2.finish_prog = 5.0
+        c_p2.finish_time = 412.0
+        rs._update_standings(0.1, lambda *a, **kw: None)
+        self.assertEqual([c.driver_id for c in rs.standings[:5]], [c_p1.driver_id, c_p2.driver_id, c_p3.driver_id, c_l1.driver_id, c_l2.driver_id])
+        self.assertAlmostEqual(c_p2.gap_to_leader, 12.0, places=2)
+
+    def test_custom_team_survives_custom_scenario_and_state_payload(self):
+        with tempfile.TemporaryDirectory() as td:
+            w = self._new_world(td)
+            res = w.create_custom_season({
+                "name": "YangWang",
+                "short": "YangWang",
+                "code": "YWG",
+                "color": "#10b981",
+                "secondary": "#34d399",
+                "engine": "Honda RBPT",
+                "icon": "shield",
+                "year": 2026,
+                "tier": "midfield",
+            })
+            self.assertTrue(res["ok"])
+            self.assertEqual(w.player_team_id, "custom")
+
+            fa1 = next(d for d in w.drivers if d["team_id"] is None and not d.get("legend"))
+            self.assertTrue(w.sign_free_agent(None, fa1["id"])["ok"])
+            self.assertTrue(w.execute_contract_negotiation("leclerc", 35.0, 2, release_driver_id=None)["ok"])
+
+            # Custom scenario should keep 'custom' alive without KeyError on state/tick payloads
+            cs = w.start_custom_scenario({"track_id": "brazil", "lap": 5, "weather": "DRY", "position": 3})
+            self.assertTrue(cs["ok"])
+            state_cs = w.build_full_state_payload()
+            tick_cs = w.build_live_tick_payload()
+            self.assertEqual(state_cs["player_team_id"], "custom")
+            self.assertEqual(tick_cs["player_team_id"], "custom")
+            for tid in {t["id"] for t in w.teams}:
+                self.assertEqual(sum(1 for d in w.drivers if d.get("team_id") == tid), 2)
+
+            # Prebuilt scenario must fall back cleanly without KeyError and restore 'custom' on exit
+            ps = w.start_scenario("interlagos_storm")
+            self.assertTrue(ps["ok"])
+            state_ps = w.build_full_state_payload()
+            self.assertIn(state_ps["player_team_id"], {t["id"] for t in w.teams})
+            w.exit_scenario()
+            self.assertEqual(w.player_team_id, "custom")
+
+    def test_sao_paulo_pit_lane_exit_accelerates_and_avoids_excessive_loss(self):
+        from sim.pitwall import RivalPitWall
+        from sim.physics import QualifyingSession
+
+        brk = TRACK_BY_ID["brazil"]
+        teams, drivers = clone_initial_roster()
+        tmap = {t["id"]: t for t in teams}
+        active = [d for d in drivers if d.get("team_id")]
+
+        rs = RaceSession(brk, tmap, active, 0.0, 0.0, "williams")
+        pw = RivalPitWall(rs)
+        rs.lights_out = True
+        rs.flag_state = "GREEN"
+        c = rs.cars[0]
+        for _ in range(300):
+            rs.step(0.05, lambda *_: None)
+        t_enter = None
+        for _ in range(2500):
+            if t_enter is None:
+                c.box_this_lap = True
+                c.next_compound = "HARD"
+            rs.step(0.05, lambda *_: None)
+            if c.in_pits and t_enter is None:
+                t_enter = rs.race_clock
+            elif t_enter is not None and not c.in_pits:
+                transit = rs.race_clock - t_enter
+                net_loss = transit - pw.mainline_pit_s
+                self.assertLess(transit, 41.0, f"brazil pit transit {transit:.1f}s too slow")
+                self.assertLess(net_loss, 23.0, f"brazil pit net loss {net_loss:.1f}s too high")
+                self.assertGreater(c.v, 50.0, f"brazil pit exit speed {c.v*3.6:.1f} kph too slow")
+                break
+        else:
+            self.fail("Brazil pit stop did not complete")
+
+        # Qualifying outlap must also accelerate past the Turn 1 exit speed-limit line
+        qs = QualifyingSession(brk, tmap, active, 0.0, False, player_team_id="williams")
+        q0 = qs.cars[0]
+        q0.quali_release_requested = True
+        v_ex_quali = 0.0
+        for _ in range(2000):
+            was = q0.in_pits
+            qs.step(0.05, lambda *_: None)
+            if was and not q0.in_pits:
+                v_ex_quali = q0.v
+                break
+        self.assertGreater(v_ex_quali, 50.0)
+
 
 if __name__ == "__main__":
     unittest.main()

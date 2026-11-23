@@ -3471,6 +3471,42 @@ class ChampionshipWorld:
             self._save_state()
             return {"ok": True, "season_year": self.season_year, "team": dict(new_team)}
 
+    def _restore_custom_team_for_scenario(self) -> None:
+        """Preserve the player's 12th custom constructor and its drivers into a freshly cloned scenario roster."""
+        if self.player_team_id != "custom":
+            return
+        bak = self._career_backup
+        if not isinstance(bak, dict):
+            self.player_team_id = "williams"
+            return
+        bak_teams = bak.get("teams") or []
+        bak_drivers = bak.get("drivers") or []
+        c_team = next((copy.deepcopy(t) for t in bak_teams if t.get("id") == "custom"), None)
+        c_drvs = [copy.deepcopy(d) for d in bak_drivers if d.get("team_id") == "custom"]
+        if not c_team or len(c_drvs) < 2:
+            self.player_team_id = "williams"
+            return
+
+        self.teams = [t for t in self.teams if t.get("id") != "custom"]
+        self.teams.append(c_team)
+        c_drv_ids = {d["id"] for d in c_drvs[:2]}
+        free_agents = [d for d in self.drivers if d.get("team_id") is None and d["id"] not in c_drv_ids]
+        by_id = {d["id"]: d for d in self.drivers}
+        displaced_teams: list[str] = []
+        for cd in c_drvs[:2]:
+            existing = by_id.get(cd["id"])
+            if existing is not None:
+                old_tid = existing.get("team_id")
+                if old_tid and old_tid != "custom":
+                    displaced_teams.append(old_tid)
+                existing["team_id"] = "custom"
+            else:
+                cd["team_id"] = "custom"
+                self.drivers.append(cd)
+        for tid in displaced_teams:
+            if sum(1 for d in self.drivers if d.get("team_id") == tid) < 2 and free_agents:
+                free_agents.pop(0)["team_id"] = tid
+
     def start_scenario(self, scenario_id: str) -> dict:
         """Launch a quick-play Pit-Wall tactical scenario without modifying the saved career."""
         from sim.physics import enforce_2d_car_separation
@@ -3494,6 +3530,8 @@ class ChampionshipWorld:
             self._legacy_calendar = False
             self.season_year = int(scen["season_year"])
             self.teams, self.drivers = clone_initial_roster()
+            if self.player_team_id not in self._teams_by_id():
+                self.player_team_id = "williams"
             for d in self.drivers:
                 d.setdefault("morale", 75)
             cal = get_season_tracks(self.season_year)
@@ -3685,6 +3723,9 @@ class ChampionshipWorld:
             self._legacy_calendar = False
             self.season_year = year
             self.teams, self.drivers = clone_initial_roster()
+            self._restore_custom_team_for_scenario()
+            if self.player_team_id not in self._teams_by_id():
+                self.player_team_id = "williams"
             for d in self.drivers:
                 d.setdefault("morale", 75)
             self.current_round = trk.round or 1
@@ -4208,7 +4249,7 @@ class ChampionshipWorld:
                     }
                 )
 
-            p_team = self._teams_by_id()[self.player_team_id]
+            p_team = self._teams_by_id().get(self.player_team_id) or self.teams[0]
             p_state = None
             if self.phase == "PRE_WEEKEND":
                 p_state = {
@@ -4308,7 +4349,7 @@ class ChampionshipWorld:
             self._ensure_component_pools()
             trk = self.current_track
             track_profile = track_upgrade_profile(trk)
-            p_team = self._teams_by_id()[self.player_team_id]
+            p_team = self._teams_by_id().get(self.player_team_id) or self.teams[0]
             bonuses = self._staff_bonuses()
             disc = bonuses["rd_discount"]
             upgrades_info = []

@@ -88,7 +88,7 @@ class RivalPitWall:
             (race.track.pit_speed_exit_u - race.track.pit_speed_entry_u) * race.track.pit_length_m,
         )
         ramp_m = max(0.0, race.track.pit_length_m - lim_m)
-        pit_drive_s = lim_m / 22.22 + ramp_m / 33.5
+        pit_drive_s = lim_m / 22.22 + ramp_m / 49.0
         return max(4.0, pit_drive_s + stop + repairs
                    + min(10.0, car.time_penalty_s) - self.mainline_pit_s * neutral)
 

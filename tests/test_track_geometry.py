@@ -207,7 +207,8 @@ class TrackGeometryTests(unittest.TestCase):
                     saw_exit = True
                     exit_dh_deg = dh
                     step_px = math.hypot(car.x - prev_x, car.y - prev_y)
-                    self.assertLess(step_px, 6.5, f"{tid} position jump {step_px:.2f}px at exit")
+                    expected_px = car.v * dt * t.px_per_m
+                    self.assertLess(abs(step_px - expected_px), 0.9, f"{tid} position jump {step_px:.2f}px (exp {expected_px:.2f}px) at exit")
                 elif saw_exit and car.pit_blend_active:
                     lat_v = abs(car.d - prev_d) * half_u_m / dt
                     max_blend_lat_v = max(max_blend_lat_v, lat_v)
